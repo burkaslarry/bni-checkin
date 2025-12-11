@@ -114,7 +114,7 @@ class AttendanceService(
                 now
             }
         }
-
+        
         val record = CheckInRecord(
             name = request.name,
             type = request.type.lowercase(),
