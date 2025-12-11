@@ -5,10 +5,17 @@ import { NotificationEntry } from "../components/ScanPanel";
 import { QRGeneratorPanel } from "../components/QRGeneratorPanel";
 import { RecordsPanel } from "../components/RecordsPanel";
 import { AdminManualEntryPanel } from "../components/AdminManualEntryPanel";
+import { EventManagementPanel } from "../components/EventManagementPanel";
 
-type AdminView = "home" | "generate" | "records" | "manual";
+type AdminView = "home" | "generate" | "records" | "manual" | "event";
 
 const navTargets: { id: AdminView; title: string; description: string; icon: string }[] = [
+  {
+    id: "event",
+    title: "活動管理",
+    description: "查看和管理目前活動",
+    icon: "📅"
+  },
   {
     id: "generate",
     title: "產生 QR 碼",
@@ -61,6 +68,8 @@ export default function AdminPage() {
 
   const renderView = () => {
     switch (activeView) {
+      case "event":
+        return <EventManagementPanel onNotify={handlePanelNotification} />;
       case "generate":
         return <QRGeneratorPanel onNotify={handlePanelNotification} />;
       case "records":

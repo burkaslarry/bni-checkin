@@ -167,6 +167,31 @@ export async function clearAllEventsAndAttendance(): Promise<{ status: string; m
   return handleResponse(response);
 }
 
+// Event data type
+export type EventData = {
+  id: number;
+  name: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  registrationStartTime: string;
+  onTimeCutoff: string;
+  createdAt: string;
+};
+
+// Get current event
+export async function getCurrentEvent(): Promise<EventData | null> {
+  try {
+    const response = await fetch(`${API_BASE}/api/events/current`, { mode: "cors" });
+    if (response.status === 404) {
+      return null;
+    }
+    return handleResponse(response);
+  } catch {
+    return null;
+  }
+}
+
 // Report page types
 export type AttendanceStatus = "on-time" | "late" | "absent";
 

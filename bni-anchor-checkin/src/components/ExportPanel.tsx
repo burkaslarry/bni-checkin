@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { exportRecords, getRecords, CheckInRecord } from "../api";
+import { exportRecords, getRecords, CheckInRecord, getReportData, ReportData } from "../api";
 
 type ExportPanelProps = {
   onNotify: (message: string, type: "success" | "error" | "info") => void;
@@ -12,14 +12,19 @@ export const ExportPanel = ({ onNotify }: ExportPanelProps) => {
   });
   const [isExporting, setIsExporting] = useState(false);
   const [records, setRecords] = useState<CheckInRecord[]>([]);
+  const [reportData, setReportData] = useState<ReportData | null>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(true);
 
   useEffect(() => {
     const fetchPreview = async () => {
       setIsLoadingPreview(true);
       try {
-        const data = await getRecords();
-        setRecords(data.records);
+        const [recordsData, report] = await Promise.all([
+          getRecords(),
+          getReportData().catch(() => null)
+        ]);
+        setRecords(recordsData.records);
+        setReportData(report);
       } catch {
         // Silent fail for preview
       } finally {
@@ -98,37 +103,66 @@ export const ExportPanel = ({ onNotify }: ExportPanelProps) => {
     onNotify(`✅ ${filename}.csv 已下載（本地生成）`, "success");
   };
 
-  const memberCount = records.filter((r) => r.type.toLowerCase() === "member").length;
   const guestCount = records.filter((r) => r.type.toLowerCase() === "guest").length;
+  
+  // Calculate attendance stats from report data
+  const onTimeCount = reportData?.attendees.filter(a => a.status === "on-time").length || 0;
+  const lateCount = reportData?.attendees.filter(a => a.status === "late").length || 0;
+  const absentCount = reportData?.absentees.length || 0;
+  const totalAttendees = onTimeCount + lateCount + guestCount;
 
   return (
     <section className="section export-panel">
       <div className="section-header">
-        <h2>📥 匯出資料</h2>
-        <p className="hint">將簽到記錄匯出為 CSV 格式</p>
+        <h2>📥 匯出出席報告</h2>
+        <p className="hint">將出席記錄匯出為 CSV 格式（包含狀態：準時/遲到/缺席）</p>
       </div>
 
       <div className="export-preview">
-        <h4>📊 匯出預覽</h4>
+        <h4>📊 出席統計</h4>
         {isLoadingPreview ? (
           <p className="hint">載入中...</p>
+        ) : reportData ? (
+          <div className="preview-stats">
+            <div className="preview-stat on-time">
+              <span className="stat-icon">✅</span>
+              <span className="stat-value">{onTimeCount}</span>
+              <span className="stat-label">準時</span>
+            </div>
+            <div className="preview-stat late">
+              <span className="stat-icon">⏰</span>
+              <span className="stat-value">{lateCount}</span>
+              <span className="stat-label">遲到</span>
+            </div>
+            <div className="preview-stat absent">
+              <span className="stat-icon">❌</span>
+              <span className="stat-value">{absentCount}</span>
+              <span className="stat-label">缺席</span>
+            </div>
+            <div className="preview-stat guest">
+              <span className="stat-icon">🎫</span>
+              <span className="stat-value">{guestCount}</span>
+              <span className="stat-label">來賓</span>
+            </div>
+          </div>
         ) : (
           <div className="preview-stats">
             <div className="preview-stat">
               <span className="stat-icon">📋</span>
               <span className="stat-value">{records.length}</span>
-              <span className="stat-label">總記錄</span>
+              <span className="stat-label">總簽到</span>
             </div>
-            <div className="preview-stat">
-              <span className="stat-icon">👤</span>
-              <span className="stat-value">{memberCount}</span>
-              <span className="stat-label">會員</span>
-            </div>
-            <div className="preview-stat">
-              <span className="stat-icon">🎫</span>
-              <span className="stat-value">{guestCount}</span>
-              <span className="stat-label">來賓</span>
-            </div>
+            <p className="hint" style={{ marginTop: "0.5rem", color: "var(--warn)" }}>
+              ⚠️ 尚未建立活動，無法顯示出席狀態
+            </p>
+          </div>
+        )}
+        
+        {reportData && (
+          <div className="total-summary">
+            <span>總出席: <strong>{totalAttendees}</strong> 人</span>
+            <span className="divider">|</span>
+            <span>總人數: <strong>{onTimeCount + lateCount + absentCount + guestCount}</strong> 人</span>
           </div>
         )}
       </div>
@@ -173,31 +207,49 @@ export const ExportPanel = ({ onNotify }: ExportPanelProps) => {
         <h4>📄 CSV 格式說明</h4>
         <div className="format-table">
           <div className="format-header">
-            <span>Name</span>
-            <span>Profession</span>
-            <span>Type</span>
-            <span>Check-in Time</span>
+            <span>姓名</span>
+            <span>專業領域</span>
+            <span>類別</span>
+            <span>出席狀態</span>
+            <span>簽到時間</span>
           </div>
-          <div className="format-example">
+          <div className="format-example on-time-row">
             <span>Jessica Cheung</span>
             <span>陪月服務</span>
             <span>member</span>
-            <span>2025-11-26T09:30:00</span>
+            <span>準時</span>
+            <span>06:55:30</span>
+          </div>
+          <div className="format-example late-row">
+            <span>John Wong</span>
+            <span>保險顧問</span>
+            <span>member</span>
+            <span>遲到</span>
+            <span>07:15:22</span>
+          </div>
+          <div className="format-example absent-row">
+            <span>Mary Chan</span>
+            <span>律師</span>
+            <span>member</span>
+            <span>缺席</span>
+            <span></span>
           </div>
         </div>
       </div>
 
       <div className="tips-section">
-        <h4>💡 使用提示</h4>
+        <h4>💡 出席狀態說明</h4>
         <ul className="tips-list">
           <li>
-            <strong>從伺服器匯出</strong>: 直接從後端下載最新資料
+            <strong>✅ 準時</strong>: 在截止時間前簽到
           </li>
           <li>
-            <strong>本地匯出</strong>: 使用已載入的資料生成 CSV
+            <strong>⏰ 遲到</strong>: 在截止時間後簽到
+          </li>
+          <li>
+            <strong>❌ 缺席</strong>: 未簽到
           </li>
           <li>CSV 檔案包含 UTF-8 BOM，Excel 可正確顯示中文</li>
-          <li>建議使用有意義的檔名，如活動日期或名稱</li>
         </ul>
       </div>
     </section>

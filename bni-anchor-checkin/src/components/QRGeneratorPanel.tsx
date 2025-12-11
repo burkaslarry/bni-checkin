@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { createEvent, clearAllEventsAndAttendance } from "../api";
+import { jsPDF } from "jspdf";
 
 type QRGeneratorPanelProps = {
   onNotify: (message: string, type: "success" | "error" | "info") => void;
@@ -28,6 +29,7 @@ export const QRGeneratorPanel = ({ onNotify }: QRGeneratorPanelProps) => {
   const [isCreating, setIsCreating] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [isSharingEmail, setIsSharingEmail] = useState(false);
 
   // Auto-calculate times when registration start time changes
   const handleRegistrationStartChange = useCallback((newTime: string) => {
@@ -129,6 +131,253 @@ export const QRGeneratorPanel = ({ onNotify }: QRGeneratorPanelProps) => {
     };
 
     img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgData)));
+  };
+
+  // Helper function to generate PDF as blob
+  const generatePDFBlob = (): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      if (!qrString || !qrData) {
+        reject(new Error("請先輸入活動資訊"));
+        return;
+      }
+      const svg = document.getElementById("qr-code-svg");
+      if (!svg) {
+        reject(new Error("QR code not found"));
+        return;
+      }
+
+      const svgData = new XMLSerializer().serializeToString(svg);
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      const img = new Image();
+
+      img.onload = () => {
+        canvas.width = 300;
+        canvas.height = 300;
+        ctx?.drawImage(img, 0, 0, 300, 300);
+        const qrImageData = canvas.toDataURL("image/png");
+
+        // Create PDF
+        const pdf = new jsPDF({
+          orientation: "portrait",
+          unit: "mm",
+          format: "a4"
+        });
+
+        // Add title
+        pdf.setFontSize(24);
+        pdf.setFont("helvetica", "bold");
+        pdf.text("BNI Anchor", 105, 30, { align: "center" });
+
+        // Add event name
+        pdf.setFontSize(16);
+        pdf.setFont("helvetica", "normal");
+        pdf.text(qrData.eventName, 105, 45, { align: "center" });
+
+        // Add date
+        pdf.setFontSize(14);
+        const formattedDate = new Date(qrData.eventDate).toLocaleDateString("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric"
+        });
+        pdf.text(`Date: ${formattedDate}`, 105, 55, { align: "center" });
+
+        // Add times
+        pdf.setFontSize(12);
+        pdf.text(`Registration: ${qrData.registrationStartTime}`, 105, 65, { align: "center" });
+        pdf.text(`Start Time: ${qrData.startTime}`, 105, 72, { align: "center" });
+        pdf.text(`On-time Cutoff: ${qrData.onTimeCutoff}`, 105, 79, { align: "center" });
+
+        // Add QR code (centered)
+        const qrSize = 100; // 100mm
+        const xPos = (210 - qrSize) / 2; // Center on A4 width (210mm)
+        pdf.addImage(qrImageData, "PNG", xPos, 95, qrSize, qrSize);
+
+        // Add footer
+        pdf.setFontSize(10);
+        pdf.setTextColor(128, 128, 128);
+        pdf.text("Scan this QR code to check in to the event", 105, 210, { align: "center" });
+
+        // Get PDF as blob
+        const pdfBlob = pdf.output("blob");
+        resolve(pdfBlob);
+      };
+
+      img.onerror = () => reject(new Error("Failed to load QR code image"));
+      img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgData)));
+    });
+  };
+
+  const handleDownloadPDF = async () => {
+    try {
+      const pdfBlob = await generatePDFBlob();
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement("a");
+      link.download = `BNI-Anchor-${qrData?.eventDate || "event"}.pdf`;
+      link.href = url;
+      link.click();
+      URL.revokeObjectURL(url);
+      onNotify("PDF 已下載", "success");
+    } catch (error) {
+      onNotify(error instanceof Error ? error.message : "PDF 生成失敗", "error");
+    }
+  };
+
+  const handleShareWhatsApp = async () => {
+    if (!qrData) {
+      onNotify("請先輸入活動資訊", "error");
+      return;
+    }
+    try {
+      // Generate PDF
+      const pdfBlob = await generatePDFBlob();
+      const pdfFile = new File([pdfBlob], `BNI-Anchor-${qrData.eventDate}.pdf`, { type: "application/pdf" });
+
+      const formattedDate = new Date(qrData.eventDate).toLocaleDateString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric"
+      });
+      const message = `🎯 BNI Anchor Event Check-in\n\n` +
+        `Event: ${qrData.eventName}\n` +
+        `Date: ${formattedDate}\n` +
+        `Registration: ${qrData.registrationStartTime}\n` +
+        `Start: ${qrData.startTime}\n` +
+        `On-time Cutoff: ${qrData.onTimeCutoff}\n\n` +
+        `Please scan the QR code in the attached PDF to check in!`;
+
+      // Try Web Share API first (supports file attachments on mobile/some browsers)
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+        try {
+          await navigator.share({
+            title: `BNI Anchor Event - ${formattedDate}`,
+            text: message,
+            files: [pdfFile]
+          });
+          onNotify("已透過系統分享功能分享 PDF", "success");
+          return;
+        } catch (shareError) {
+          // User cancelled or share failed, fall through to WhatsApp web
+          if ((shareError as Error).name !== "AbortError") {
+            console.log("Web Share API failed, falling back to WhatsApp web");
+          }
+        }
+      }
+
+      // Fallback: Download PDF and open WhatsApp web
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement("a");
+      link.download = `BNI-Anchor-${qrData.eventDate}.pdf`;
+      link.href = url;
+      link.click();
+      URL.revokeObjectURL(url);
+
+      const encodedMessage = encodeURIComponent(message + `\n\n📄 The QR code PDF has been downloaded. Please attach it when sharing!`);
+      
+      setTimeout(() => {
+        window.open(`https://wa.me/?text=${encodedMessage}`, "_blank");
+        onNotify("PDF 已下載，打開 WhatsApp 分享", "success");
+      }, 500);
+    } catch (error) {
+      onNotify(error instanceof Error ? error.message : "分享失敗", "error");
+    }
+  };
+
+  const handleShareEmail = async () => {
+    if (!qrData) {
+      onNotify("請先輸入活動資訊", "error");
+      return;
+    }
+    setIsSharingEmail(true);
+    try {
+      // Generate PDF
+      const pdfBlob = await generatePDFBlob();
+      const pdfFile = new File([pdfBlob], `BNI-Anchor-${qrData.eventDate}.pdf`, { type: "application/pdf" });
+
+      const formattedDate = new Date(qrData.eventDate).toLocaleDateString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric"
+      });
+      const subject = `BNI Anchor Event Check-in - ${formattedDate}`;
+      const body = `Dear Members,\n\n` +
+        `Please find the check-in details for our upcoming event:\n\n` +
+        `Event: ${qrData.eventName}\n` +
+        `Date: ${formattedDate}\n` +
+        `Registration: ${qrData.registrationStartTime}\n` +
+        `Start Time: ${qrData.startTime}\n` +
+        `On-time Cutoff: ${qrData.onTimeCutoff}\n\n` +
+        `Please scan the QR code in the attached PDF to check in at the event.\n\n` +
+        `Best regards,\n` +
+        `BNI Anchor Team`;
+
+      // Try Web Share API first (supports file attachments on mobile/some browsers)
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+        try {
+          await navigator.share({
+            title: subject,
+            text: body,
+            files: [pdfFile]
+          });
+          onNotify("已透過系統分享功能分享 PDF", "success");
+          return;
+        } catch (shareError) {
+          // User cancelled or share failed, fall through to mailto
+          if ((shareError as Error).name !== "AbortError") {
+            console.log("Web Share API failed, falling back to mailto");
+          }
+        }
+      }
+
+      // Fallback: Download PDF first, then open mailto
+      // Note: mailto: protocol cannot attach files, so we download first
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement("a");
+      link.download = `BNI-Anchor-${qrData.eventDate}.pdf`;
+      link.href = url;
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // Wait a bit longer to ensure download completes
+      onNotify(`PDF 正在下載: BNI-Anchor-${qrData.eventDate}.pdf`, "info");
+      
+      const encodedSubject = encodeURIComponent(subject);
+      const encodedBody = encodeURIComponent(
+        `Dear Members,\n\n` +
+        `Please find the check-in details for our upcoming event:\n\n` +
+        `Event: ${qrData.eventName}\n` +
+        `Date: ${formattedDate}\n` +
+        `Registration: ${qrData.registrationStartTime}\n` +
+        `Start Time: ${qrData.startTime}\n` +
+        `On-time Cutoff: ${qrData.onTimeCutoff}\n\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `📎 IMPORTANT: PDF ATTACHMENT REQUIRED\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+        `The QR code PDF file "BNI-Anchor-${qrData.eventDate}.pdf" has been downloaded to your computer.\n\n` +
+        `⚠️ Please attach this file to your email before sending.\n` +
+        `📁 Look in your Downloads folder for: BNI-Anchor-${qrData.eventDate}.pdf\n\n` +
+        `Attendees can scan the QR code in the PDF to check in at the event.\n\n` +
+        `Best regards,\n` +
+        `BNI Anchor Team`
+      );
+      
+      // Longer delay to ensure download completes and user sees the notification
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+        window.location.href = `mailto:?subject=${encodedSubject}&body=${encodedBody}`;
+        onNotify("PDF 已下載，郵件已開啟 - 請記得附加 PDF 檔案！", "success");
+        setIsSharingEmail(false);
+      }, 1500);
+    } catch (error) {
+      onNotify(error instanceof Error ? error.message : "分享失敗", "error");
+      setIsSharingEmail(false);
+    }
   };
 
   return (
@@ -261,11 +510,28 @@ export const QRGeneratorPanel = ({ onNotify }: QRGeneratorPanelProps) => {
             >
               {isCreating ? "⏳ 建立中..." : "🎯 建立活動"}
             </button>
+            <button className="button" type="button" onClick={handleDownloadPDF} style={{ backgroundColor: "#dc2626" }}>
+              📄 下載 PDF
+            </button>
             <button className="ghost-button" type="button" onClick={handleCopy}>
               📋 複製字串
             </button>
             <button className="ghost-button" type="button" onClick={handleDownload}>
               ⬇️ 下載 PNG
+            </button>
+          </div>
+          <div className="qr-actions" style={{ marginTop: "10px" }}>
+            <button className="button" type="button" onClick={handleShareWhatsApp} style={{ backgroundColor: "#25D366" }}>
+              📱 WhatsApp 分享
+            </button>
+            <button 
+              className="button" 
+              type="button" 
+              onClick={handleShareEmail} 
+              disabled={isSharingEmail}
+              style={{ backgroundColor: "#3b82f6", opacity: isSharingEmail ? 0.6 : 1 }}
+            >
+              {isSharingEmail ? "⏳ 準備中..." : "✉️ Email 分享"}
             </button>
           </div>
         </div>
