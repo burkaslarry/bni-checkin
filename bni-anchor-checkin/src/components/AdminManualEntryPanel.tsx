@@ -1,9 +1,12 @@
 import { useState, useEffect } from "react";
-import { checkIn, getMembers, MemberInfo } from "../api";
+import { checkIn, getMembers, MemberInfo, AttendeeRole } from "../api";
 
 type AdminManualEntryPanelProps = {
   onNotify: (message: string, type: "success" | "error" | "info") => void;
 };
+
+// Guest role options
+type GuestRole = "GUEST" | "VIP" | "SPEAKER";
 
 // Helper to format date for datetime-local input
 const formatDateTimeLocal = (date: Date): string => {
@@ -21,6 +24,8 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
   const [name, setName] = useState("");
   const [domain, setDomain] = useState("");
   const [isGuest, setIsGuest] = useState(false);
+  const [guestRole, setGuestRole] = useState<GuestRole>("GUEST");
+  const [referrer, setReferrer] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [customTime, setCustomTime] = useState(formatDateTimeLocal(new Date()));
 
@@ -52,6 +57,8 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
     setSelectedMember("");
     setName("");
     setDomain("");
+    setGuestRole("GUEST");
+    setReferrer("");
   }, [isGuest]);
 
   const handleSubmit = async () => {
@@ -77,15 +84,20 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
         name: submitName,
         type: isGuest ? "guest" : "member",
         domain: submitDomain,
-        currentTime: timeString
+        currentTime: timeString,
+        role: isGuest ? guestRole as AttendeeRole : "MEMBER",
+        referrer: isGuest && referrer.trim() ? referrer.trim() : undefined
       });
 
       if (result.status === "success") {
-        onNotify(`✅ ${submitName} 簽到成功！`, "success");
+        const roleLabel = isGuest ? (guestRole === "VIP" ? " (VIP)" : guestRole === "SPEAKER" ? " (講者)" : "") : "";
+        onNotify(`✅ ${submitName}${roleLabel} 簽到成功！`, "success");
         setName("");
         setSelectedMember("");
         setDomain("");
         setIsGuest(false);
+        setGuestRole("GUEST");
+        setReferrer("");
         setCustomTime(formatDateTimeLocal(new Date()));
       } else {
         throw new Error(result.message);
@@ -135,17 +147,60 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
 
       {/* Member dropdown or Guest text input */}
       {isGuest ? (
-      <div className="form-group">
-        <label htmlFor="admin-name">姓名 Name *</label>
-        <input
-          id="admin-name"
-          className="input-field"
-            placeholder="請輸入嘉賓姓名..."
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          autoComplete="off"
-        />
-      </div>
+        <>
+          <div className="form-group">
+            <label htmlFor="admin-name">姓名 Name *</label>
+            <input
+              id="admin-name"
+              className="input-field"
+              placeholder="請輸入嘉賓姓名..."
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              autoComplete="off"
+            />
+          </div>
+
+          {/* Role Selection for Guests */}
+          <div className="form-group">
+            <label>嘉賓身份 Role</label>
+            <div className="role-selector">
+              <button
+                type="button"
+                className={`role-option ${guestRole === "GUEST" ? "active" : ""}`}
+                onClick={() => setGuestRole("GUEST")}
+              >
+                👤 一般來賓
+              </button>
+              <button
+                type="button"
+                className={`role-option vip ${guestRole === "VIP" ? "active" : ""}`}
+                onClick={() => setGuestRole("VIP")}
+              >
+                ⭐ VIP
+              </button>
+              <button
+                type="button"
+                className={`role-option speaker ${guestRole === "SPEAKER" ? "active" : ""}`}
+                onClick={() => setGuestRole("SPEAKER")}
+              >
+                🎤 講者
+              </button>
+            </div>
+          </div>
+
+          {/* Referrer for Guests */}
+          <div className="form-group">
+            <label htmlFor="admin-referrer">邀請人 Referrer (選填)</label>
+            <input
+              id="admin-referrer"
+              className="input-field"
+              placeholder="邀請此來賓的會員..."
+              value={referrer}
+              onChange={(e) => setReferrer(e.target.value)}
+              autoComplete="off"
+            />
+          </div>
+        </>
       ) : (
         <div className="form-group">
           <label htmlFor="admin-member-select">選擇會員 Select Member *</label>
@@ -194,7 +249,7 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
         <p className="hint">可選擇自訂時間，預設為當前時間</p>
       </div>
 
-      <div className="preview-card">
+      <div className={`preview-card ${isGuest && guestRole === "VIP" ? "vip-preview" : isGuest && guestRole === "SPEAKER" ? "speaker-preview" : ""}`}>
         <h4>📋 簽到預覽</h4>
         <div className="preview-row">
           <span className="preview-label">姓名:</span>
@@ -206,10 +261,18 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
         </div>
         <div className="preview-row">
           <span className="preview-label">類型:</span>
-          <span className={`type-badge ${isGuest ? "guest" : "member"}`}>
-            {isGuest ? "🎫 嘉賓" : "👤 會員"}
+          <span className={`type-badge ${isGuest ? guestRole.toLowerCase() : "member"}`}>
+            {isGuest 
+              ? (guestRole === "VIP" ? "⭐ VIP" : guestRole === "SPEAKER" ? "🎤 講者" : "👤 來賓")
+              : "👤 會員"}
           </span>
         </div>
+        {isGuest && referrer && (
+          <div className="preview-row">
+            <span className="preview-label">邀請人:</span>
+            <span className="preview-value">{referrer}</span>
+          </div>
+        )}
         <div className="preview-row">
           <span className="preview-label">簽到時間:</span>
           <span className="preview-value">

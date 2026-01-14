@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { checkIn } from "../api";
+import { checkIn, AttendeeRole } from "../api";
 
 interface BarcodeDetectorOptions {
   formats?: string[];
@@ -18,6 +18,9 @@ type GuestCheckinPanelProps = {
   onNotify: (message: string, type: "success" | "error" | "info") => void;
 };
 
+// Guest role options for selection
+type GuestRole = "GUEST" | "VIP" | "SPEAKER";
+
 export const GuestCheckinPanel = ({ onNotify }: GuestCheckinPanelProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -25,6 +28,8 @@ export const GuestCheckinPanel = ({ onNotify }: GuestCheckinPanelProps) => {
   
   const [guestName, setGuestName] = useState("");
   const [domain, setDomain] = useState("");
+  const [guestRole, setGuestRole] = useState<GuestRole>("GUEST");
+  const [referrer, setReferrer] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [scanStatus, setScanStatus] = useState<"idle" | "scanning" | "success" | "error">("idle");
   const [supportsDetector, setSupportsDetector] = useState(false);
@@ -147,13 +152,18 @@ export const GuestCheckinPanel = ({ onNotify }: GuestCheckinPanelProps) => {
         name: guestName.trim(),
         type: "guest",
         domain: domain.trim(),
-        currentTime: localTimeString
+        currentTime: localTimeString,
+        role: guestRole as AttendeeRole,
+        referrer: referrer.trim() || undefined
       });
 
       if (result.status === "success") {
-        onNotify(`✅ ${guestName} 簽到成功！`, "success");
+        const roleLabel = guestRole === "VIP" ? "VIP 嘉賓" : guestRole === "SPEAKER" ? "講者" : "來賓";
+        onNotify(`✅ ${guestName} (${roleLabel}) 簽到成功！`, "success");
         setGuestName("");
         setDomain("");
+        setReferrer("");
+        setGuestRole("GUEST");
         setLastScanned("");
         setScanStatus("idle");
       } else {
@@ -235,17 +245,68 @@ export const GuestCheckinPanel = ({ onNotify }: GuestCheckinPanelProps) => {
         />
       </div>
 
+      {/* Role Selection */}
+      <div className="form-group">
+        <label>嘉賓身份 Role</label>
+        <div className="role-selector">
+          <button
+            type="button"
+            className={`role-option ${guestRole === "GUEST" ? "active" : ""}`}
+            onClick={() => setGuestRole("GUEST")}
+          >
+            👤 一般來賓
+          </button>
+          <button
+            type="button"
+            className={`role-option vip ${guestRole === "VIP" ? "active" : ""}`}
+            onClick={() => setGuestRole("VIP")}
+          >
+            ⭐ VIP 嘉賓
+          </button>
+          <button
+            type="button"
+            className={`role-option speaker ${guestRole === "SPEAKER" ? "active" : ""}`}
+            onClick={() => setGuestRole("SPEAKER")}
+          >
+            🎤 講者
+          </button>
+        </div>
+      </div>
+
+      {/* Referrer (Optional) */}
+      <div className="form-group">
+        <label htmlFor="guest-referrer">邀請人 Referrer (選填)</label>
+        <input
+          id="guest-referrer"
+          className="input-field"
+          type="text"
+          placeholder="邀請此來賓的會員..."
+          value={referrer}
+          onChange={(e) => setReferrer(e.target.value)}
+          autoComplete="off"
+        />
+      </div>
+
       {/* Preview & Submit */}
       {(guestName.trim() || domain.trim()) && (
-        <div className="checkin-preview">
+        <div className={`checkin-preview ${guestRole === "VIP" ? "vip-preview" : guestRole === "SPEAKER" ? "speaker-preview" : ""}`}>
           <div className="preview-info">
-            <span className="preview-icon">🎫</span>
+            <span className="preview-icon">
+              {guestRole === "VIP" ? "⭐" : guestRole === "SPEAKER" ? "🎤" : "🎫"}
+            </span>
             <div>
               <strong>{guestName || "—"}</strong>
               <div className="hint">{domain || "—"}</div>
-              <span className="type-badge guest">來賓</span>
+              <span className={`type-badge ${guestRole.toLowerCase()}`}>
+                {guestRole === "VIP" ? "⭐ VIP 嘉賓" : guestRole === "SPEAKER" ? "🎤 講者" : "👤 來賓"}
+              </span>
             </div>
           </div>
+          {referrer && (
+            <p className="hint referrer-info">
+              邀請人: {referrer}
+            </p>
+          )}
           <p className="hint">
             簽到時間: {new Date().toLocaleString("zh-TW")}
           </p>

@@ -1,6 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { getReportData, getReportWebSocketUrl, ReportData, ReportAttendance } from "../api";
+import { getReportData, getReportWebSocketUrl, ReportData, ReportAttendance, AttendeeRole } from "../api";
+
+type FilterType = "all" | "members" | "guests" | "vip";
 
 export default function ReportPage() {
   const navigate = useNavigate();
@@ -10,6 +12,7 @@ export default function ReportPage() {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [wsConnected, setWsConnected] = useState(false);
+  const [filter, setFilter] = useState<FilterType>("all");
   const wsRef = useRef<WebSocket | null>(null);
   const pollIntervalRef = useRef<number | null>(null);
 
@@ -112,22 +115,70 @@ export default function ReportPage() {
     });
   };
 
+  // Filter attendees based on selected filter
+  const filteredAttendees = useMemo(() => {
+    if (!reportData) return [];
+    
+    return reportData.attendees.filter((record) => {
+      const role = record.role || "MEMBER";
+      switch (filter) {
+        case "members":
+          return role === "MEMBER";
+        case "guests":
+          return role === "GUEST" || role === "VIP" || role === "SPEAKER";
+        case "vip":
+          return role === "VIP" || role === "SPEAKER";
+        default:
+          return true;
+      }
+    });
+  }, [reportData, filter]);
+
+  // Get role badge component
+  const getRoleBadge = (role?: AttendeeRole) => {
+    if (!role || role === "MEMBER") return null;
+    
+    const badges: Record<string, { icon: string; label: string; className: string }> = {
+      VIP: { icon: "⭐", label: "VIP", className: "role-badge vip" },
+      GUEST: { icon: "👤", label: "Guest", className: "role-badge guest" },
+      SPEAKER: { icon: "🎤", label: "Speaker", className: "role-badge speaker" },
+    };
+    
+    const badge = badges[role];
+    if (!badge) return null;
+    
+    return (
+      <span className={badge.className}>
+        {badge.icon} {badge.label}
+      </span>
+    );
+  };
+
   const renderAttendee = (record: ReportAttendance) => {
     const isLate = record.status === "late";
+    const role = record.role || "MEMBER";
+    const isVIP = role === "VIP" || role === "SPEAKER";
+    const isGuest = role === "GUEST";
+    
     return (
       <div 
-        key={record.memberName} 
-        className={`attendee-item ${isLate ? "late" : "on-time"}`}
+        key={`${record.memberName}-${role}`} 
+        className={`attendee-item ${isLate ? "late" : "on-time"} ${isVIP ? "vip-highlight" : ""} ${isGuest ? "guest-highlight" : ""}`}
       >
-        <span className="attendee-name" style={isLate ? { color: "#fb923c" } : {}}>
-          {record.memberName}
-        </span>
-        {record.checkInTime && (
-          <span className="attendee-time">
-            {record.checkInTime}
+        <div className="attendee-info">
+          <span className="attendee-name" style={isLate ? { color: "#fb923c" } : {}}>
+            {record.memberName}
           </span>
-        )}
-        {isLate && <span className="late-badge">遲到</span>}
+          {getRoleBadge(record.role)}
+        </div>
+        <div className="attendee-meta">
+          {record.checkInTime && (
+            <span className="attendee-time">
+              {record.checkInTime}
+            </span>
+          )}
+          {isLate && <span className="late-badge">遲到</span>}
+        </div>
       </div>
     );
   };
@@ -217,25 +268,103 @@ export default function ReportPage() {
         )}
       </div>
 
+      {/* Stats Dashboard */}
+      {reportData?.stats && (
+        <div className="stats-dashboard">
+          <div className="stat-item total">
+            <span className="stat-number">{reportData.stats.totalAttendees}</span>
+            <span className="stat-label">總出席</span>
+          </div>
+          <div className="stat-item on-time">
+            <span className="stat-number">{reportData.stats.onTimeCount}</span>
+            <span className="stat-label">準時</span>
+          </div>
+          <div className="stat-item late">
+            <span className="stat-number">{reportData.stats.lateCount}</span>
+            <span className="stat-label">遲到</span>
+          </div>
+          <div className="stat-item absent">
+            <span className="stat-number">{reportData.stats.absentCount}</span>
+            <span className="stat-label">缺席</span>
+          </div>
+          {(reportData.stats.vipCount > 0 || reportData.stats.guestCount > 0) && (
+            <>
+              <div className="stat-divider"></div>
+              <div className="stat-item vip">
+                <span className="stat-number">
+                  {reportData.stats.vipArrivedCount}/{reportData.stats.vipCount}
+                </span>
+                <span className="stat-label">⭐ VIP 到場</span>
+              </div>
+              <div className="stat-item guest">
+                <span className="stat-number">{reportData.stats.guestCount}</span>
+                <span className="stat-label">👤 嘉賓</span>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Filter Buttons */}
+      <div className="filter-bar">
+        <span className="filter-label">篩選:</span>
+        <div className="filter-buttons">
+          <button
+            className={`filter-btn ${filter === "all" ? "active" : ""}`}
+            onClick={() => setFilter("all")}
+          >
+            全部
+          </button>
+          <button
+            className={`filter-btn ${filter === "members" ? "active" : ""}`}
+            onClick={() => setFilter("members")}
+          >
+            會員
+          </button>
+          <button
+            className={`filter-btn ${filter === "guests" ? "active" : ""}`}
+            onClick={() => setFilter("guests")}
+          >
+            嘉賓
+          </button>
+          <button
+            className={`filter-btn ${filter === "vip" ? "active" : ""}`}
+            onClick={() => setFilter("vip")}
+          >
+            ⭐ VIP
+          </button>
+        </div>
+      </div>
+
       <main className="report-content">
         <div className="report-columns">
           {/* Attendees Column */}
           <div className="report-column attendees-column">
             <div className="column-header">
               <h2>✅ 出席 Attendees</h2>
-              <span className="count-badge">
-                {reportData?.attendees.length || 0}
-              </span>
+              <div className="count-badges">
+                <span className="count-badge">
+                  {filteredAttendees.length}
+                  {filter !== "all" && ` / ${reportData?.attendees.length || 0}`}
+                </span>
+                {filter !== "all" && (
+                  <span className="filter-indicator">
+                    {filter === "members" && "會員"}
+                    {filter === "guests" && "嘉賓"}
+                    {filter === "vip" && "VIP"}
+                  </span>
+                )}
+              </div>
             </div>
             <div className="column-content">
-              {reportData?.attendees.length === 0 ? (
+              {filteredAttendees.length === 0 ? (
                 <div className="empty-state">
                   <span className="empty-icon">👤</span>
-                  <p>尚無簽到記錄</p>
+                  <p>{filter === "all" ? "尚無簽到記錄" : `沒有符合的${filter === "members" ? "會員" : filter === "guests" ? "嘉賓" : "VIP"}`}</p>
                 </div>
               ) : (
                 <div className="attendee-list">
-                  {reportData?.attendees.map(renderAttendee)}
+                  {filteredAttendees.map(renderAttendee)}
                 </div>
               )}
             </div>

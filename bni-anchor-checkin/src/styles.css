@@ -1755,6 +1755,337 @@ td {
   color: var(--muted);
 }
 
+/* ===== Stats Dashboard ===== */
+.stats-dashboard {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1rem 2rem;
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.75rem 1.25rem;
+  background: var(--panel);
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  min-width: 80px;
+}
+
+.stat-item.total {
+  border-color: rgba(56, 189, 248, 0.4);
+  background: rgba(56, 189, 248, 0.1);
+}
+
+.stat-item.total .stat-number {
+  color: var(--accent);
+}
+
+.stat-item.on-time {
+  border-color: rgba(34, 197, 94, 0.4);
+}
+
+.stat-item.on-time .stat-number {
+  color: var(--success);
+}
+
+.stat-item.late {
+  border-color: rgba(251, 146, 60, 0.4);
+}
+
+.stat-item.late .stat-number {
+  color: var(--warn);
+}
+
+.stat-item.absent {
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.stat-item.absent .stat-number {
+  color: var(--error);
+}
+
+.stat-item.vip {
+  border-color: rgba(217, 167, 95, 0.5);
+}
+
+.stat-item.vip .stat-number {
+  color: #d9a75f;
+}
+
+.stat-item.guest {
+  border-color: rgba(148, 163, 184, 0.4);
+}
+
+.stat-item.guest .stat-number {
+  color: #94a3b8;
+}
+
+.stat-item .stat-number {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.stat-item .stat-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-top: 0.25rem;
+  white-space: nowrap;
+}
+
+.stat-divider {
+  width: 1px;
+  background: var(--border);
+  margin: 0 0.5rem;
+}
+
+/* ===== Filter Bar ===== */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 0.75rem 2rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid var(--border);
+}
+
+.filter-label {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.filter-bar .filter-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.filter-bar .filter-btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  border-radius: 999px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.filter-bar .filter-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.filter-bar .filter-btn.active {
+  background: rgba(56, 189, 248, 0.15);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ===== Role Badges ===== */
+.role-badge {
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  margin-left: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.role-badge.vip {
+  background: transparent;
+  color: #d9a75f;
+  border: 1px solid rgba(217, 167, 95, 0.6);
+}
+
+.role-badge.guest {
+  background: transparent;
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+}
+
+.role-badge.speaker {
+  background: transparent;
+  color: #60a5fa;
+  border: 1px solid rgba(96, 165, 250, 0.5);
+}
+
+/* ===== VIP/Guest Highlighted Items ===== */
+.attendee-item.vip-highlight {
+  border-color: rgba(217, 167, 95, 0.5);
+  border-left: 3px solid #d9a75f;
+}
+
+.attendee-item.guest-highlight {
+  border-color: rgba(148, 163, 184, 0.4);
+}
+
+.attendee-item .attendee-info {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  gap: 0.5rem;
+}
+
+.attendee-item .attendee-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* ===== Count Badges Enhancement ===== */
+.count-badges {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.filter-indicator {
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  background: rgba(56, 189, 248, 0.2);
+  color: var(--accent);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+/* ===== Role Selector for Guest Check-in ===== */
+.role-selector {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
+.role-option {
+  flex: 1;
+  min-width: 100px;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.role-option:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.role-option.active {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.role-option.vip.active {
+  background: rgba(217, 167, 95, 0.1);
+  border-color: #d9a75f;
+  color: #d9a75f;
+}
+
+.role-option.speaker.active {
+  background: rgba(96, 165, 250, 0.1);
+  border-color: #60a5fa;
+  color: #60a5fa;
+}
+
+/* VIP/Speaker Preview Styles */
+.checkin-preview.vip-preview {
+  border-color: rgba(217, 167, 95, 0.5);
+  border-left: 3px solid #d9a75f;
+}
+
+.checkin-preview.speaker-preview {
+  border-color: rgba(96, 165, 250, 0.5);
+  border-left: 3px solid #60a5fa;
+}
+
+.type-badge.vip {
+  background: transparent;
+  color: #d9a75f;
+  border: 1px solid rgba(217, 167, 95, 0.5);
+}
+
+.type-badge.speaker {
+  background: transparent;
+  color: #60a5fa;
+  border: 1px solid rgba(96, 165, 250, 0.5);
+}
+
+.referrer-info {
+  margin-top: 0.5rem;
+  padding: 0.35rem 0.75rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 0.5rem;
+  font-size: 0.85rem;
+}
+
+/* ===== Responsive Stats Dashboard ===== */
+@media (max-width: 768px) {
+  .stats-dashboard {
+    padding: 0.75rem 1rem;
+    gap: 0.5rem;
+  }
+  
+  .stat-item {
+    padding: 0.5rem 0.75rem;
+    min-width: 60px;
+  }
+  
+  .stat-item .stat-number {
+    font-size: 1.25rem;
+  }
+  
+  .stat-item .stat-label {
+    font-size: 0.65rem;
+  }
+  
+  .stat-divider {
+    display: none;
+  }
+  
+  .filter-bar {
+    padding: 0.5rem 1rem;
+  }
+  
+  .filter-bar .filter-btn {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-dashboard {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  
+  .stat-item {
+    flex: 0 0 calc(33.33% - 0.5rem);
+  }
+  
+  .role-selector {
+    flex-direction: column;
+  }
+  
+  .role-option {
+    min-width: unset;
+  }
+}
+
 .loading-container,
 .error-container {
   display: flex;

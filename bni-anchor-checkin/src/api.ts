@@ -16,13 +16,22 @@ export type CheckInRecord = {
   type: string;
   timestamp: string;
   receivedAt: string;
+  role?: AttendeeRole;
+  tags?: string[];
+  referrer?: string;
 };
+
+// Role types for attendees
+export type AttendeeRole = "MEMBER" | "GUEST" | "VIP" | "SPEAKER";
 
 export type CheckInRequest = {
   name: string;
   type: string;
   currentTime: string;
   domain?: string;
+  role?: AttendeeRole;
+  tags?: string[];
+  referrer?: string;
 };
 
 export type MemberInfo = {
@@ -199,6 +208,21 @@ export type ReportAttendance = {
   memberName: string;
   status: AttendanceStatus;
   checkInTime?: string;
+  role?: AttendeeRole;
+  tags?: string[];
+  sessionId?: string;
+};
+
+// Statistics for the report dashboard
+export type ReportStats = {
+  totalAttendees: number;
+  onTimeCount: number;
+  lateCount: number;
+  absentCount: number;
+  guestCount: number;
+  vipCount: number;
+  vipArrivedCount: number;
+  speakerCount: number;
 };
 
 export type ReportData = {
@@ -208,6 +232,28 @@ export type ReportData = {
   onTimeCutoff: string;
   attendees: ReportAttendance[];
   absentees: ReportAttendance[];
+  stats?: ReportStats;
+};
+
+// AI Insight types for future integration
+export type AIInsightRequest = {
+  eventId: number;
+  analysisType: "interest" | "retention" | "target_audience";
+};
+
+export type InsightItem = {
+  title: string;
+  description: string;
+  confidence: number;
+  dataPoints: Record<string, unknown>;
+};
+
+export type AIInsightResponse = {
+  eventId: number;
+  analysisType: string;
+  generatedAt: string;
+  insights: InsightItem[];
+  recommendations: string[];
 };
 
 // Get report data for the current/latest event
@@ -222,5 +268,40 @@ export async function getReportData(): Promise<ReportData> {
 export function getReportWebSocketUrl(): string {
   const wsBase = API_BASE.replace(/^http/, "ws");
   return `${wsBase}/ws/report`;
+}
+
+// ===== AI Insights API (Phase 2) =====
+
+// Generate AI insights for an event
+export async function generateAIInsights(
+  request: AIInsightRequest
+): Promise<AIInsightResponse> {
+  const response = await fetch(`${API_BASE}/api/insights/generate`, {
+    method: "POST",
+    headers: jsonHeaders,
+    body: JSON.stringify(request),
+    mode: "cors"
+  });
+  return handleResponse(response);
+}
+
+// Get previously generated insights for an event
+export async function getEventInsights(
+  eventId: number
+): Promise<AIInsightResponse[]> {
+  const response = await fetch(`${API_BASE}/api/insights/${eventId}`, {
+    mode: "cors"
+  });
+  return handleResponse(response);
+}
+
+// Export AI-ready data for external processing
+export async function exportAIReadyData(
+  eventId: number
+): Promise<Record<string, unknown>> {
+  const response = await fetch(`${API_BASE}/api/insights/data-export/${eventId}`, {
+    mode: "cors"
+  });
+  return handleResponse(response);
 }
 
