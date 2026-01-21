@@ -1,0 +1,385 @@
+import { useState, useCallback } from "react";
+import type { Guest, Member, MatchResult } from "../types/seating";
+import { assignGuestToTable } from "../lib/assignGuestToTable";
+import { sampleMembers, sampleGuests } from "../lib/sampleData";
+import { SeatingDashboard } from "./SeatingDashboard";
+
+type StrategicPlanningPanelProps = {
+  onNotify: (message: string, type: "success" | "error" | "info") => void;
+  eventId?: number;
+};
+
+const strengthStyles: Record<MatchResult["matchStrength"], string> = {
+  High: "strength-badge high",
+  Medium: "strength-badge medium",
+  Low: "strength-badge low",
+};
+
+const ringStyles: Record<MatchResult["matchStrength"], string> = {
+  High: "table-ring-high",
+  Medium: "table-ring-medium",
+  Low: "table-ring-low",
+};
+
+export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningPanelProps) => {
+  // Guest form state
+  const [guestName, setGuestName] = useState("");
+  const [guestProfession, setGuestProfession] = useState("");
+  const [guestTargetProfession, setGuestTargetProfession] = useState("");
+  const [guestBottlenecks, setGuestBottlenecks] = useState("");
+  const [guestRemarks, setGuestRemarks] = useState("");
+
+  // Members state
+  const [members, setMembers] = useState<Member[]>(sampleMembers);
+  const [showMemberForm, setShowMemberForm] = useState(false);
+  const [newMemberName, setNewMemberName] = useState("");
+  const [newMemberProfession, setNewMemberProfession] = useState("");
+  const [newMemberTable, setNewMemberTable] = useState(1);
+
+  // Match result state
+  const [matchResult, setMatchResult] = useState<(MatchResult & { provider?: string }) | null>(null);
+  const [currentGuest, setCurrentGuest] = useState<Guest | null>(null);
+  const [isMatching, setIsMatching] = useState(false);
+
+  const tables = members.reduce<Record<number, Member[]>>((acc, member) => {
+    acc[member.tableNumber] ??= [];
+    acc[member.tableNumber].push(member);
+    return acc;
+  }, {});
+
+  const tableNumbers = Object.keys(tables)
+    .map((value) => Number(value))
+    .sort((a, b) => a - b);
+
+  const handleMatch = async () => {
+    if (!guestName.trim() || !guestProfession.trim() || !guestTargetProfession.trim()) {
+      onNotify("請填寫來賓的姓名、職業和目標職業", "error");
+      return;
+    }
+
+    const guest: Guest = {
+      id: `guest-${Date.now()}`,
+      name: guestName.trim(),
+      profession: guestProfession.trim(),
+      targetProfession: guestTargetProfession.trim(),
+      bottlenecks: guestBottlenecks
+        .split(",")
+        .map((b) => b.trim())
+        .filter((b) => b.length > 0),
+      remarks: guestRemarks.trim() || undefined,
+    };
+
+    setIsMatching(true);
+    setCurrentGuest(guest);
+    try {
+      const result = await assignGuestToTable(guest, members);
+      setMatchResult(result);
+      onNotify(
+        `配對完成！${result.provider === "keyword" ? "使用關鍵字配對" : `使用 ${result.provider?.toUpperCase()} AI 配對`}`,
+        "success"
+      );
+    } catch (error) {
+      onNotify(
+        "配對失敗: " + (error instanceof Error ? error.message : "未知錯誤"),
+        "error"
+      );
+    } finally {
+      setIsMatching(false);
+    }
+  };
+
+  const handleAddMember = () => {
+    if (!newMemberName.trim() || !newMemberProfession.trim()) {
+      onNotify("請填寫會員姓名和職業", "error");
+      return;
+    }
+
+    const newMember: Member = {
+      id: `member-${Date.now()}`,
+      name: newMemberName.trim(),
+      profession: newMemberProfession.trim(),
+      tableNumber: newMemberTable,
+    };
+
+    setMembers([...members, newMember]);
+    setNewMemberName("");
+    setNewMemberProfession("");
+    setNewMemberTable(1);
+    setShowMemberForm(false);
+    onNotify("會員已添加", "success");
+  };
+
+  const handleRemoveMember = (memberId: string) => {
+    setMembers(members.filter((m) => m.id !== memberId));
+    onNotify("會員已移除", "info");
+  };
+
+  const handleLoadSampleGuest = () => {
+    const sample = sampleGuests[Math.floor(Math.random() * sampleGuests.length)];
+    setGuestName(sample.name);
+    setGuestProfession(sample.profession);
+    setGuestTargetProfession(sample.targetProfession);
+    setGuestBottlenecks(sample.bottlenecks.join(", "));
+    setGuestRemarks(sample.remarks || "");
+    onNotify("已載入範例來賓資料", "info");
+  };
+
+  const handleReset = () => {
+    setGuestName("");
+    setGuestProfession("");
+    setGuestTargetProfession("");
+    setGuestBottlenecks("");
+    setGuestRemarks("");
+    setMatchResult(null);
+    setCurrentGuest(null);
+    onNotify("已重置表單", "info");
+  };
+
+  const assignedTable = matchResult?.assignedTableNumber ?? null;
+
+  return (
+    <section className="section strategic-planning-panel">
+      <div className="section-header">
+        <h2>🎯 Strategic Seating Matchmaker</h2>
+        <p className="hint">
+          為來賓配對最佳座位 {eventId && `(活動 ID: ${eventId})`}
+        </p>
+      </div>
+
+      {/* Guest Input Form */}
+      <div className="guest-form-card">
+        <div className="form-header">
+          <h3>來賓資料 Guest Profile</h3>
+          <div className="form-actions">
+            <button
+              type="button"
+              className="ghost-button small"
+              onClick={handleLoadSampleGuest}
+            >
+              📝 載入範例
+            </button>
+            <button
+              type="button"
+              className="ghost-button small"
+              onClick={handleReset}
+            >
+              🔄 重置
+            </button>
+          </div>
+        </div>
+
+        <div className="form-grid">
+          <div className="form-group">
+            <label htmlFor="guest-name">姓名 Name *</label>
+            <input
+              id="guest-name"
+              className="input-field"
+              placeholder="例如: 劉建國"
+              value={guestName}
+              onChange={(e) => setGuestName(e.target.value)}
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="guest-profession">職業 Profession *</label>
+            <input
+              id="guest-profession"
+              className="input-field"
+              placeholder="例如: 創業家 Entrepreneur"
+              value={guestProfession}
+              onChange={(e) => setGuestProfession(e.target.value)}
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="guest-target">目標職業 Target Profession *</label>
+            <input
+              id="guest-target"
+              className="input-field"
+              placeholder="例如: 建築承包商 Contractor"
+              value={guestTargetProfession}
+              onChange={(e) => setGuestTargetProfession(e.target.value)}
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="guest-bottlenecks">
+              瓶頸 Bottlenecks (用逗號分隔)
+            </label>
+            <input
+              id="guest-bottlenecks"
+              className="input-field"
+              placeholder="例如: 缺乏承包商, 需要設計合作夥伴"
+              value={guestBottlenecks}
+              onChange={(e) => setGuestBottlenecks(e.target.value)}
+            />
+          </div>
+
+          <div className="form-group full-width">
+            <label htmlFor="guest-remarks">備註 Remarks</label>
+            <textarea
+              id="guest-remarks"
+              className="input-field"
+              rows={2}
+              placeholder="任何額外資訊..."
+              value={guestRemarks}
+              onChange={(e) => setGuestRemarks(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <button
+          type="button"
+          className="button match-btn"
+          onClick={handleMatch}
+          disabled={isMatching}
+        >
+          {isMatching ? "⏳ 配對中..." : "🎯 開始配對"}
+        </button>
+      </div>
+
+      {/* Match Result */}
+      {matchResult && currentGuest && (
+        <div className="match-result-card">
+          <div className="result-header">
+            <h3>配對結果 Match Result</h3>
+            <span className={strengthStyles[matchResult.matchStrength]}>
+              {matchResult.matchStrength} Match
+            </span>
+          </div>
+          <div className="result-content">
+            <div className="result-row">
+              <strong>已分配桌號:</strong>
+              <span className="assigned-table">
+                {assignedTable ?? "未分配"}
+              </span>
+            </div>
+            <div className="result-note">{matchResult.matchNote}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Tables Display */}
+      <div className="tables-section">
+        <div className="section-header">
+          <h3>座位表 Seating Chart</h3>
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={() => setShowMemberForm(!showMemberForm)}
+          >
+            {showMemberForm ? "✖ 取消" : "➕ 添加會員"}
+          </button>
+        </div>
+
+        {showMemberForm && (
+          <div className="member-form-card">
+            <div className="form-grid">
+              <div className="form-group">
+                <label htmlFor="new-member-name">會員姓名</label>
+                <input
+                  id="new-member-name"
+                  className="input-field"
+                  placeholder="例如: 張三豐"
+                  value={newMemberName}
+                  onChange={(e) => setNewMemberName(e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="new-member-profession">職業</label>
+                <input
+                  id="new-member-profession"
+                  className="input-field"
+                  placeholder="例如: 室內設計師"
+                  value={newMemberProfession}
+                  onChange={(e) => setNewMemberProfession(e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="new-member-table">桌號</label>
+                <input
+                  id="new-member-table"
+                  className="input-field"
+                  type="number"
+                  min={1}
+                  value={newMemberTable}
+                  onChange={(e) => setNewMemberTable(Number(e.target.value))}
+                />
+              </div>
+            </div>
+            <button
+              type="button"
+              className="button"
+              onClick={handleAddMember}
+            >
+              ✓ 添加會員
+            </button>
+          </div>
+        )}
+
+        <div className="tables-grid">
+          {tableNumbers.map((tableNumber) => {
+            const tableMembers = tables[tableNumber];
+            const isAssigned = assignedTable === tableNumber;
+            const strength = matchResult?.matchStrength ?? "Low";
+            return (
+              <div
+                key={tableNumber}
+                className={`table-card ${isAssigned ? ringStyles[strength] : ""}`}
+              >
+                <div className="table-header">
+                  <h4>Table {tableNumber}</h4>
+                  <span className="seat-count">
+                    {tableMembers.length}/8 seats
+                  </span>
+                </div>
+                <ul className="member-list">
+                  {tableMembers.map((member) => (
+                    <li key={member.id} className="member-item">
+                      <div className="member-info">
+                        <div className="member-name">{member.name}</div>
+                        <div className="member-profession">
+                          {member.profession}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="ghost-button danger-btn small"
+                        onClick={() => handleRemoveMember(member.id)}
+                      >
+                        ✖
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                {isAssigned && matchResult && (
+                  <div className="assigned-badge">
+                    ✓ 來賓已分配至此桌
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Configuration Info */}
+      <div className="config-info">
+        <h4>⚙️ API 配置說明</h4>
+        <p className="hint">
+          請在專案根目錄建立 <code>.env.local</code> 檔案並添加以下環境變數：
+        </p>
+        <div className="config-example">
+          <code>
+            VITE_DEEPSEEK_API_KEY=your_deepseek_key<br />
+            VITE_DEEPSEEK_MODEL=deepseek-v3<br />
+            VITE_GEMINI_API_KEY=your_gemini_key
+          </code>
+        </div>
+        <p className="hint">
+          系統會優先使用 DeepSeek AI，失敗時自動切換至 Gemini，兩者都失敗則使用關鍵字匹配。
+        </p>
+      </div>
+    </section>
+  );
+};

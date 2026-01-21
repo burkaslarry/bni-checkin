@@ -3,9 +3,10 @@ import { getCurrentEvent, clearAllEventsAndAttendance, EventData } from "../api"
 
 type EventManagementPanelProps = {
   onNotify: (message: string, type: "success" | "error" | "info") => void;
+  onNavigateToStrategic?: () => void;
 };
 
-export const EventManagementPanel = ({ onNotify }: EventManagementPanelProps) => {
+export const EventManagementPanel = ({ onNotify, onNavigateToStrategic }: EventManagementPanelProps) => {
   const [currentEvent, setCurrentEvent] = useState<EventData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -100,6 +101,16 @@ export const EventManagementPanel = ({ onNotify }: EventManagementPanelProps) =>
               >
                 📊 查看即時報告
               </a>
+              {onNavigateToStrategic && (
+                <button
+                  className="button strategic-btn"
+                  type="button"
+                  onClick={onNavigateToStrategic}
+                  style={{ backgroundColor: "#8b5cf6" }}
+                >
+                  🎯 Strategic Seating
+                </button>
+              )}
               <button
                 className="ghost-button refresh-btn"
                 type="button"

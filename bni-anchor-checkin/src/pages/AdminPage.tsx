@@ -6,8 +6,9 @@ import { QRGeneratorPanel } from "../components/QRGeneratorPanel";
 import { RecordsPanel } from "../components/RecordsPanel";
 import { AdminManualEntryPanel } from "../components/AdminManualEntryPanel";
 import { EventManagementPanel } from "../components/EventManagementPanel";
+import { StrategicPlanningPanel } from "../components/StrategicPlanningPanel";
 
-type AdminView = "home" | "generate" | "records" | "manual" | "event";
+type AdminView = "home" | "generate" | "records" | "manual" | "event" | "strategic";
 
 const navTargets: { id: AdminView; title: string; description: string; icon: string }[] = [
   {
@@ -15,6 +16,12 @@ const navTargets: { id: AdminView; title: string; description: string; icon: str
     title: "活動管理",
     description: "查看和管理目前活動",
     icon: "📅"
+  },
+  {
+    id: "strategic",
+    title: "Strategic Seating",
+    description: "為來賓配對最佳座位",
+    icon: "🎯"
   },
   {
     id: "generate",
@@ -69,7 +76,14 @@ export default function AdminPage() {
   const renderView = () => {
     switch (activeView) {
       case "event":
-        return <EventManagementPanel onNotify={handlePanelNotification} />;
+        return (
+          <EventManagementPanel 
+            onNotify={handlePanelNotification} 
+            onNavigateToStrategic={() => setActiveView("strategic")}
+          />
+        );
+      case "strategic":
+        return <StrategicPlanningPanel onNotify={handlePanelNotification} />;
       case "generate":
         return <QRGeneratorPanel onNotify={handlePanelNotification} />;
       case "records":
