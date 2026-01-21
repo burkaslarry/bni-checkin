@@ -139,6 +139,29 @@ button:disabled {
   color: var(--muted);
 }
 
+.input-field:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.input-field.input-error {
+  border-color: var(--error);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.input-field.input-error:focus {
+  border-color: var(--error);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+.error-text {
+  display: block;
+  color: var(--error);
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+  font-weight: 500;
+}
+
 .scan-panel {
   display: flex;
   flex-direction: column;

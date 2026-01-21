@@ -40,6 +40,7 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
   const [matchResult, setMatchResult] = useState<(MatchResult & { provider?: "deepseek" | "gemini" | "keyword" | null }) | null>(null);
   const [currentGuest, setCurrentGuest] = useState<Guest | null>(null);
   const [isMatching, setIsMatching] = useState(false);
+  const [showValidation, setShowValidation] = useState(false);
 
   const tables = members.reduce<Record<number, Member[]>>((acc, member) => {
     acc[member.tableNumber] ??= [];
@@ -52,8 +53,17 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
     .sort((a, b) => a - b);
 
   const handleMatch = async () => {
-    if (!guestName.trim() || !guestProfession.trim() || !guestTargetProfession.trim()) {
-      onNotify("請填寫來賓的姓名、職業和目標職業", "error");
+    // Improved validation with specific field checks
+    setShowValidation(true);
+    const missingFields: string[] = [];
+    if (!guestName.trim()) missingFields.push("姓名 Name");
+    if (!guestProfession.trim()) missingFields.push("職業 Profession");
+    if (!guestTargetProfession.trim()) missingFields.push("目標職業 Target Profession");
+    
+    if (missingFields.length > 0) {
+      onNotify(`請填寫以下欄位: ${missingFields.join(", ")}`, "error");
+      // Scroll to top to show error
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
@@ -121,6 +131,8 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
     setGuestTargetProfession(sample.targetProfession);
     setGuestBottlenecks(sample.bottlenecks.join(", "));
     setGuestRemarks(sample.remarks || "");
+    setMatchResult(null);
+    setShowValidation(false);
     onNotify("已載入範例來賓資料", "info");
   };
 
@@ -132,6 +144,7 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
     setGuestRemarks("");
     setMatchResult(null);
     setCurrentGuest(null);
+    setShowValidation(false);
     onNotify("已重置表單", "info");
   };
 
@@ -173,33 +186,51 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
             <label htmlFor="guest-name">姓名 Name *</label>
             <input
               id="guest-name"
-              className="input-field"
+              className={`input-field ${showValidation && !guestName.trim() ? 'input-error' : ''}`}
               placeholder="例如: 劉建國"
               value={guestName}
-              onChange={(e) => setGuestName(e.target.value)}
+              onChange={(e) => {
+                setGuestName(e.target.value);
+                if (showValidation && e.target.value.trim()) setShowValidation(false);
+              }}
             />
+            {showValidation && !guestName.trim() && (
+              <span className="error-text">⚠️ 此欄位為必填</span>
+            )}
           </div>
 
           <div className="form-group">
             <label htmlFor="guest-profession">職業 Profession *</label>
             <input
               id="guest-profession"
-              className="input-field"
+              className={`input-field ${showValidation && !guestProfession.trim() ? 'input-error' : ''}`}
               placeholder="例如: 創業家 Entrepreneur"
               value={guestProfession}
-              onChange={(e) => setGuestProfession(e.target.value)}
+              onChange={(e) => {
+                setGuestProfession(e.target.value);
+                if (showValidation && e.target.value.trim()) setShowValidation(false);
+              }}
             />
+            {showValidation && !guestProfession.trim() && (
+              <span className="error-text">⚠️ 此欄位為必填</span>
+            )}
           </div>
 
           <div className="form-group">
             <label htmlFor="guest-target">目標職業 Target Profession *</label>
             <input
               id="guest-target"
-              className="input-field"
+              className={`input-field ${showValidation && !guestTargetProfession.trim() ? 'input-error' : ''}`}
               placeholder="例如: 建築承包商 Contractor"
               value={guestTargetProfession}
-              onChange={(e) => setGuestTargetProfession(e.target.value)}
+              onChange={(e) => {
+                setGuestTargetProfession(e.target.value);
+                if (showValidation && e.target.value.trim()) setShowValidation(false);
+              }}
             />
+            {showValidation && !guestTargetProfession.trim() && (
+              <span className="error-text">⚠️ 此欄位為必填</span>
+            )}
           </div>
 
           <div className="form-group">
