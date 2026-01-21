@@ -37,7 +37,7 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
   const [newMemberTable, setNewMemberTable] = useState(1);
 
   // Match result state
-  const [matchResult, setMatchResult] = useState<(MatchResult & { provider?: string }) | null>(null);
+  const [matchResult, setMatchResult] = useState<(MatchResult & { provider?: "deepseek" | "gemini" | "keyword" | null }) | null>(null);
   const [currentGuest, setCurrentGuest] = useState<Guest | null>(null);
   const [isMatching, setIsMatching] = useState(false);
 

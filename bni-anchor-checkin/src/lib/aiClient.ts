@@ -5,7 +5,7 @@ const DEEPSEEK_API_KEY = import.meta.env.VITE_DEEPSEEK_API_KEY || "";
 const DEEPSEEK_MODEL = import.meta.env.VITE_DEEPSEEK_MODEL || "deepseek-v3";
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
 
-type AIProvider = "deepseek" | "gemini" | null;
+type AIProvider = "deepseek" | "gemini" | "keyword" | null;
 
 const buildPrompt = (guest: Guest, tables: TableGroup[]): string => {
   const tableDescriptions = tables
