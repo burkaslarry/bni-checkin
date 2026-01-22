@@ -283,9 +283,7 @@ export async function generateAIInsights(
     mode: "cors"
   });
   return handleResponse(response);
-}
-
-// Get previously generated insights for an event
+}// Get previously generated insights for an event
 export async function getEventInsights(
   eventId: number
 ): Promise<AIInsightResponse[]> {

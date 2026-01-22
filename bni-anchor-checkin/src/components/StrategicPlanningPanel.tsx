@@ -53,12 +53,11 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
     .sort((a, b) => a - b);
 
   const handleMatch = async () => {
-    // Improved validation with specific field checks
+    // Improved validation with specific field checks (Target Profession is now optional)
     setShowValidation(true);
     const missingFields: string[] = [];
     if (!guestName.trim()) missingFields.push("姓名 Name");
     if (!guestProfession.trim()) missingFields.push("職業 Profession");
-    if (!guestTargetProfession.trim()) missingFields.push("目標職業 Target Profession");
     
     if (missingFields.length > 0) {
       onNotify(`請填寫以下欄位: ${missingFields.join(", ")}`, "error");
@@ -71,7 +70,7 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
       id: `guest-${Date.now()}`,
       name: guestName.trim(),
       profession: guestProfession.trim(),
-      targetProfession: guestTargetProfession.trim(),
+      targetProfession: guestTargetProfession.trim() || undefined,
       bottlenecks: guestBottlenecks
         .split(",")
         .map((b) => b.trim())
@@ -128,7 +127,7 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
     const sample = sampleGuests[Math.floor(Math.random() * sampleGuests.length)];
     setGuestName(sample.name);
     setGuestProfession(sample.profession);
-    setGuestTargetProfession(sample.targetProfession);
+    setGuestTargetProfession(sample.targetProfession || "");
     setGuestBottlenecks(sample.bottlenecks.join(", "));
     setGuestRemarks(sample.remarks || "");
     setMatchResult(null);
@@ -217,20 +216,14 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
           </div>
 
           <div className="form-group">
-            <label htmlFor="guest-target">目標職業 Target Profession *</label>
+            <label htmlFor="guest-target">目標職業 Target Profession</label>
             <input
               id="guest-target"
-              className={`input-field ${showValidation && !guestTargetProfession.trim() ? 'input-error' : ''}`}
-              placeholder="例如: 建築承包商 Contractor"
+              className="input-field"
+              placeholder="例如: 建築承包商 Contractor（選填）"
               value={guestTargetProfession}
-              onChange={(e) => {
-                setGuestTargetProfession(e.target.value);
-                if (showValidation && e.target.value.trim()) setShowValidation(false);
-              }}
+              onChange={(e) => setGuestTargetProfession(e.target.value)}
             />
-            {showValidation && !guestTargetProfession.trim() && (
-              <span className="error-text">⚠️ 此欄位為必填</span>
-            )}
           </div>
 
           <div className="form-group">

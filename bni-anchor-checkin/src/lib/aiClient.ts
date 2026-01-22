@@ -20,7 +20,7 @@ const buildPrompt = (guest: Guest, tables: TableGroup[]): string => {
 Guest Profile:
 - Name: ${guest.name}
 - Profession: ${guest.profession}
-- Target Profession: ${guest.targetProfession}
+${guest.targetProfession ? `- Target Profession: ${guest.targetProfession}` : ""}
 - Bottlenecks: ${guest.bottlenecks.join(", ")}
 ${guest.remarks ? `- Remarks: ${guest.remarks}` : ""}
 

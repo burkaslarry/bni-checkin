@@ -5,7 +5,9 @@ export const rankTablesByKeyword = (
   guest: Guest,
   tables: TableGroup[]
 ): RankedTable[] => {
-  const targetKeywords = guest.targetProfession.toLowerCase().split(/\s+/);
+  const targetKeywords = guest.targetProfession 
+    ? guest.targetProfession.toLowerCase().split(/\s+/)
+    : [];
   const bottleneckKeywords = guest.bottlenecks
     .join(" ")
     .toLowerCase()
@@ -17,7 +19,7 @@ export const rankTablesByKeyword = (
       .map((m) => m.profession.toLowerCase())
       .join(" ");
 
-    // Check target profession match
+    // Check target profession match (if specified)
     targetKeywords.forEach((keyword) => {
       if (professions.includes(keyword)) score += 3;
     });
@@ -35,11 +37,13 @@ export const rankTablesByKeyword = (
     if (score >= 8) matchStrength = "High";
     else if (score >= 4) matchStrength = "Medium";
 
-    const matchedProfessions = table.members
-      .filter((m) =>
-        targetKeywords.some((kw) => m.profession.toLowerCase().includes(kw))
-      )
-      .map((m) => m.profession);
+    const matchedProfessions = targetKeywords.length > 0
+      ? table.members
+          .filter((m) =>
+            targetKeywords.some((kw) => m.profession.toLowerCase().includes(kw))
+          )
+          .map((m) => m.profession)
+      : [];
 
     const reason =
       matchedProfessions.length > 0

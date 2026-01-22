@@ -76,9 +76,7 @@ export function validateGuestData(guest: Guest): string[] {
   if (!guest.profession || guest.profession.trim() === "") {
     errors.push("Guest profession is required");
   }
-  if (!guest.targetProfession || guest.targetProfession.trim() === "") {
-    errors.push("Target profession is required");
-  }
+  // Target profession is now optional
   if (!Array.isArray(guest.bottlenecks)) {
     errors.push("Bottlenecks must be an array");
   }

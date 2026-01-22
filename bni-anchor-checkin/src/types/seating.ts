@@ -4,7 +4,7 @@ export type Guest = {
   id: string;
   name: string;
   profession: string;
-  targetProfession: string;
+  targetProfession?: string;
   bottlenecks: string[];
   remarks?: string;
 };
