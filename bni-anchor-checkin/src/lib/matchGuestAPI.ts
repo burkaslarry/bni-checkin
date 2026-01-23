@@ -109,9 +109,6 @@ export function validateMembersData(members: Member[]): string[] {
     if (!member.profession || member.profession.trim() === "") {
       errors.push(`Member ${index}: Profession is required`);
     }
-    if (typeof member.tableNumber !== "number" || member.tableNumber < 1) {
-      errors.push(`Member ${index}: Table number must be >= 1`);
-    }
   });
 
   return errors;

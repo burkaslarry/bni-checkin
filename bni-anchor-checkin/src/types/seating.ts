@@ -1,4 +1,4 @@
-// Strategic Seating Matchmaker Types
+// Strategic Networking Matchmaker Types
 
 export type Guest = {
   id: string;
@@ -13,28 +13,21 @@ export type Member = {
   id: string;
   name: string;
   profession: string;
-  tableNumber: number;
 };
 
 export type MatchStrength = "High" | "Medium" | "Low";
 
-export type RankedTable = {
-  tableNumber: number;
+// Recommended member combination for the guest
+export type MemberMatch = {
+  member: Member;
   matchStrength: MatchStrength;
   reason: string;
-  score?: number;
 };
 
 export type MatchResult = {
-  assignedTableNumber: number | null;
   matchStrength: MatchStrength;
   matchNote: string;
-  rankedTables: RankedTable[];
-};
-
-export type TableGroup = {
-  tableNumber: number;
-  members: Member[];
+  recommendedMembers: MemberMatch[];
 };
 
 // API request/response types for seating

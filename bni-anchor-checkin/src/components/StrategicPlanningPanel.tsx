@@ -1,8 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import type { Guest, Member, MatchResult } from "../types/seating";
-import { assignGuestToTable } from "../lib/assignGuestToTable";
+import { matchGuestWithMembers } from "../lib/assignGuestToTable";
 import { sampleGuests } from "../lib/sampleData";
-import { SeatingDashboard } from "./SeatingDashboard";
 import { getMembers } from "../api";
 
 type StrategicPlanningPanelProps = {
@@ -16,12 +15,6 @@ const strengthStyles: Record<MatchResult["matchStrength"], string> = {
   Low: "strength-badge low",
 };
 
-const ringStyles: Record<MatchResult["matchStrength"], string> = {
-  High: "table-ring-high",
-  Medium: "table-ring-medium",
-  Low: "table-ring-low",
-};
-
 export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningPanelProps) => {
   // Guest form state
   const [guestName, setGuestName] = useState("");
@@ -33,10 +26,6 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
   // Members state
   const [members, setMembers] = useState<Member[]>([]);
   const [isLoadingMembers, setIsLoadingMembers] = useState(true);
-  const [showMemberForm, setShowMemberForm] = useState(false);
-  const [newMemberName, setNewMemberName] = useState("");
-  const [newMemberProfession, setNewMemberProfession] = useState("");
-  const [newMemberTable, setNewMemberTable] = useState(1);
 
   // Match result state
   const [matchResult, setMatchResult] = useState<(MatchResult & { provider?: "deepseek" | "gemini" | "keyword" | null }) | null>(null);
@@ -51,13 +40,11 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
         setIsLoadingMembers(true);
         const data = await getMembers();
         
-        // Convert MemberInfo[] to Member[] with auto-assigned table numbers
-        // Distribute members evenly across 8 tables
+        // Convert MemberInfo[] to Member[]
         const convertedMembers: Member[] = data.members.map((memberInfo, index) => ({
           id: `member-${index}`,
           name: memberInfo.name,
           profession: memberInfo.domain,
-          tableNumber: (index % 8) + 1  // Distribute across tables 1-8
         }));
         
         setMembers(convertedMembers);
@@ -71,16 +58,6 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
 
     loadMembers();
   }, [onNotify]);
-
-  const tables = members.reduce<Record<number, Member[]>>((acc, member) => {
-    acc[member.tableNumber] ??= [];
-    acc[member.tableNumber].push(member);
-    return acc;
-  }, {});
-
-  const tableNumbers = Object.keys(tables)
-    .map((value) => Number(value))
-    .sort((a, b) => a - b);
 
   const handleMatch = async () => {
     // Improved validation with specific field checks (Target Profession is now optional)
@@ -111,7 +88,7 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
     setIsMatching(true);
     setCurrentGuest(guest);
     try {
-      const result = await assignGuestToTable(guest, members);
+      const result = await matchGuestWithMembers(guest, members);
       setMatchResult(result);
       onNotify(
         `配對完成！${result.provider === "keyword" ? "使用關鍵字配對" : `使用 ${result.provider?.toUpperCase()} AI 配對`}`,
@@ -125,32 +102,6 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
     } finally {
       setIsMatching(false);
     }
-  };
-
-  const handleAddMember = () => {
-    if (!newMemberName.trim() || !newMemberProfession.trim()) {
-      onNotify("請填寫會員姓名和職業", "error");
-      return;
-    }
-
-    const newMember: Member = {
-      id: `member-${Date.now()}`,
-      name: newMemberName.trim(),
-      profession: newMemberProfession.trim(),
-      tableNumber: newMemberTable,
-    };
-
-    setMembers([...members, newMember]);
-    setNewMemberName("");
-    setNewMemberProfession("");
-    setNewMemberTable(1);
-    setShowMemberForm(false);
-    onNotify("會員已添加", "success");
-  };
-
-  const handleRemoveMember = (memberId: string) => {
-    setMembers(members.filter((m) => m.id !== memberId));
-    onNotify("會員已移除", "info");
   };
 
   const handleLoadSampleGuest = () => {
@@ -177,14 +128,12 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
     onNotify("已重置表單", "info");
   };
 
-  const assignedTable = matchResult?.assignedTableNumber ?? null;
-
   return (
     <section className="section strategic-planning-panel">
       <div className="section-header">
-        <h2>🎯 Strategic Seating Matchmaker</h2>
+        <h2>🎯 Strategic Networking Matchmaker</h2>
         <p className="hint">
-          為來賓配對最佳座位 {eventId && `(活動 ID: ${eventId})`}
+          為來賓推薦最佳配對會員 {eventId && `(活動 ID: ${eventId})`}
         </p>
         {isLoadingMembers && (
           <p className="hint" style={{ color: 'var(--accent)' }}>
@@ -320,7 +269,7 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
         </button>
       </div>
 
-      {/* Match Result */}
+      {/* Match Result Summary */}
       {matchResult && currentGuest && (
         <div className="match-result-card">
           <div className="result-header">
@@ -330,65 +279,47 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
             </span>
           </div>
           <div className="result-content">
-            <div className="result-row">
-              <strong>已分配桌號:</strong>
-              <span className="assigned-table">
-                {assignedTable ?? "未分配"}
-              </span>
-            </div>
             <div className="result-note">{matchResult.matchNote}</div>
           </div>
         </div>
       )}
 
-      {/* Matched Members Display */}
-      {matchResult && matchResult.rankedTables && matchResult.rankedTables.length > 0 && (
+      {/* Recommended Member Combinations */}
+      {matchResult && matchResult.recommendedMembers && matchResult.recommendedMembers.length > 0 && (
         <div className="matched-members-section">
           <div className="section-header">
-            <h3>💼 推薦配對會員 Recommended Members</h3>
-            <p className="hint">根據來賓需求匹配的會員列表</p>
+            <h3>💼 推薦配對組合 Recommended Combinations</h3>
+            <p className="hint">
+              {currentGuest?.name} ({currentGuest?.profession}) 可以同以下會員配對交流：
+            </p>
           </div>
 
-          <div className="matched-tables-list">
-            {matchResult.rankedTables.slice(0, 5).map((rankedTable) => {
-              const tableMembers = tables[rankedTable.tableNumber] || [];
-              const isAssigned = assignedTable === rankedTable.tableNumber;
-              
-              return (
-                <div
-                  key={rankedTable.tableNumber}
-                  className={`matched-table-card ${isAssigned ? 'is-assigned' : ''}`}
-                >
-                  <div className="matched-table-header">
-                    <div className="table-info">
-                      <h4>桌號 Table {rankedTable.tableNumber}</h4>
-                      <span className={strengthStyles[rankedTable.matchStrength]}>
-                        {rankedTable.matchStrength} Match
-                      </span>
-                    </div>
-                    {isAssigned && (
-                      <span className="assigned-indicator">✓ 已分配</span>
-                    )}
-                  </div>
-                  
-                  <div className="match-reason">
-                    <strong>配對原因:</strong> {rankedTable.reason}
-                  </div>
-
-                  <div className="member-list-compact">
-                    <strong>桌內會員 ({tableMembers.length} 位):</strong>
-                    <ul>
-                      {tableMembers.map((member) => (
-                        <li key={member.id} className="compact-member-item">
-                          <span className="member-name">{member.name}</span>
-                          <span className="member-profession">{member.profession}</span>
-                        </li>
-                      ))}
-                    </ul>
+          <div className="member-combinations-list">
+            {matchResult.recommendedMembers.map((memberMatch, index) => (
+              <div
+                key={memberMatch.member.id}
+                className="combination-card"
+              >
+                <div className="combination-header">
+                  <div className="combination-number">#{index + 1}</div>
+                  <div className="member-info-header">
+                    <h4 className="member-name">{memberMatch.member.name}</h4>
+                    <span className={strengthStyles[memberMatch.matchStrength]}>
+                      {memberMatch.matchStrength} Match
+                    </span>
                   </div>
                 </div>
-              );
-            })}
+                
+                <div className="member-profession">
+                  {memberMatch.member.profession}
+                </div>
+
+                <div className="match-reason">
+                  <strong>配對原因：</strong>
+                  <p>{memberMatch.reason}</p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}

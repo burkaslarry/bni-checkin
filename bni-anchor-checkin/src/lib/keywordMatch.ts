@@ -1,10 +1,10 @@
-import type { Guest, RankedTable, TableGroup } from "../types/seating";
+import type { Guest, Member, MemberMatch } from "../types/seating";
 
 // Simple keyword-based matching as fallback
-export const rankTablesByKeyword = (
+export const matchMembersByKeyword = (
   guest: Guest,
-  tables: TableGroup[]
-): RankedTable[] => {
+  members: Member[]
+): MemberMatch[] => {
   const targetKeywords = guest.targetProfession 
     ? guest.targetProfession.toLowerCase().split(/\s+/)
     : [];
@@ -13,62 +13,63 @@ export const rankTablesByKeyword = (
     .toLowerCase()
     .split(/\s+/);
 
-  const scored = tables.map((table) => {
+  const scored = members.map((member) => {
     let score = 0;
-    const professions = table.members
-      .map((m) => m.profession.toLowerCase())
-      .join(" ");
+    const profession = member.profession.toLowerCase();
 
     // Check target profession match (if specified)
     targetKeywords.forEach((keyword) => {
-      if (professions.includes(keyword)) score += 3;
+      if (profession.includes(keyword)) score += 5;
     });
 
     // Check bottleneck resolution potential
     bottleneckKeywords.forEach((keyword) => {
-      if (professions.includes(keyword)) score += 2;
+      if (profession.includes(keyword)) score += 3;
     });
 
-    // Prefer tables with space
-    const seatsAvailable = 8 - table.members.length;
-    score += seatsAvailable;
-
-    let matchStrength: RankedTable["matchStrength"] = "Low";
+    let matchStrength: "High" | "Medium" | "Low" = "Low";
     if (score >= 8) matchStrength = "High";
-    else if (score >= 4) matchStrength = "Medium";
+    else if (score >= 3) matchStrength = "Medium";
 
-    const matchedProfessions = targetKeywords.length > 0
-      ? table.members
-          .filter((m) =>
-            targetKeywords.some((kw) => m.profession.toLowerCase().includes(kw))
-          )
-          .map((m) => m.profession)
-      : [];
+    // Build reason based on matches
+    const targetMatches = targetKeywords.filter((kw) => profession.includes(kw));
+    const bottleneckMatches = bottleneckKeywords.filter((kw) => profession.includes(kw));
 
-    const reason =
-      matchedProfessions.length > 0
-        ? `Contains ${matchedProfessions.join(", ")} which aligns with your target profession`
-        : `${seatsAvailable} seats available, general networking opportunity`;
+    let reason = "";
+    if (targetMatches.length > 0 && bottleneckMatches.length > 0) {
+      reason = `${member.name} (${member.profession}) 的專業領域符合你的目標對接需求，並且可能協助解決你的瓶頸。`;
+    } else if (targetMatches.length > 0) {
+      reason = `${member.name} (${member.profession}) 是你的目標對接對象，值得深入交流。`;
+    } else if (bottleneckMatches.length > 0) {
+      reason = `${member.name} (${member.profession}) 可能協助解決你提到的瓶頸問題。`;
+    } else {
+      reason = `${member.name} (${member.profession}) 可提供一般人脈拓展機會。`;
+    }
 
     return {
-      tableNumber: table.tableNumber,
+      member,
       matchStrength,
       reason,
       score,
     };
   });
 
-  return scored.sort((a, b) => b.score - a.score);
+  // Return top 10 matches, sorted by score
+  return scored
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 10);
 };
 
 export const buildKeywordNote = (
   guest: Guest,
-  rankedTables: RankedTable[]
+  memberMatches: MemberMatch[]
 ): string => {
-  if (rankedTables.length === 0) {
-    return "No suitable tables found. Please add more members or tables.";
+  if (memberMatches.length === 0) {
+    return "未找到合適的配對會員。建議提供更多具體的目標或瓶頸資訊。";
   }
 
-  const best = rankedTables[0];
-  return `(Keyword Matching) Placed at Table ${best.tableNumber} because ${best.reason}`;
+  const highMatches = memberMatches.filter(m => m.matchStrength === "High").length;
+  const mediumMatches = memberMatches.filter(m => m.matchStrength === "Medium").length;
+  
+  return `(關鍵字配對) 找到 ${memberMatches.length} 位推薦會員：${highMatches} 位高度匹配、${mediumMatches} 位中度匹配。建議優先與高度匹配的會員交流。`;
 };

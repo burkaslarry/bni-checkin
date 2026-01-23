@@ -1,90 +1,58 @@
-import type { Guest, MatchResult, Member, RankedTable } from "../types/seating";
-import { rankTablesWithAI } from "./aiClient";
-import { rankTablesByKeyword, buildKeywordNote } from "./keywordMatch";
+import type { Guest, MatchResult, Member } from "../types/seating";
+import { matchMembersWithAI } from "./aiClient";
+import { matchMembersByKeyword, buildKeywordNote } from "./keywordMatch";
 
-const MAX_TABLE_SIZE = 8;
-
-const groupMembersByTable = (members: Member[]) => {
-  const map = new Map<number, Member[]>();
-  for (const member of members) {
-    const list = map.get(member.tableNumber) ?? [];
-    list.push(member);
-    map.set(member.tableNumber, list);
-  }
-  return [...map.entries()]
-    .map(([tableNumber, tableMembers]) => ({
-      tableNumber,
-      members: tableMembers,
-    }))
-    .sort((a, b) => a.tableNumber - b.tableNumber);
-};
-
-const pickAssignedTable = (
-  rankedTables: RankedTable[],
-  tableSizes: Map<number, number>
-) => {
-  for (const ranked of rankedTables) {
-    const size = tableSizes.get(ranked.tableNumber) ?? 0;
-    if (size < MAX_TABLE_SIZE) return ranked;
-  }
-  return null;
-};
-
-export async function assignGuestToTable(
+/**
+ * Match guest with recommended members for networking
+ * No table assignment - pure member-to-member recommendations
+ */
+export async function matchGuestWithMembers(
   guest: Guest,
   members: Member[]
 ): Promise<MatchResult & { provider?: "deepseek" | "gemini" | "keyword" | null }> {
-  const tables = groupMembersByTable(members);
-  const tableSizes = new Map(
-    tables.map((table) => [table.tableNumber, table.members.length])
-  );
-
-  // Try AI matching first
-  const aiResult = await rankTablesWithAI(guest, tables);
-  let rankedTables = aiResult.ranked;
+  
+  // Try AI matching first (DeepSeek or Gemini)
+  const aiResult = await matchMembersWithAI(guest, members);
+  let recommendedMembers = aiResult.matches;
   let matchNote = "";
   let provider = aiResult.provider;
 
   // Fallback to keyword matching if AI fails
-  if (!rankedTables || rankedTables.length === 0) {
-    rankedTables = rankTablesByKeyword(guest, tables);
-    matchNote = buildKeywordNote(guest, rankedTables);
+  if (!recommendedMembers || recommendedMembers.length === 0) {
+    recommendedMembers = matchMembersByKeyword(guest, members);
+    matchNote = buildKeywordNote(guest, recommendedMembers);
     provider = "keyword";
   }
 
-  const assigned = rankedTables ? pickAssignedTable(rankedTables, tableSizes) : null;
-
-  // Handle full tables
-  if (!assigned && rankedTables?.length) {
-    const smallest = [...tableSizes.entries()].sort((a, b) => a[1] - b[1])[0];
-    matchNote =
-      matchNote ||
-      "All tables are full. Please open a new table or expand seating.";
-    return {
-      assignedTableNumber: smallest ? smallest[0] : null,
-      matchStrength: rankedTables[0]?.matchStrength ?? "Low",
-      matchNote,
-      rankedTables,
-      provider,
-    };
+  // Determine overall match strength
+  const highCount = recommendedMembers.filter(m => m.matchStrength === "High").length;
+  const mediumCount = recommendedMembers.filter(m => m.matchStrength === "Medium").length;
+  
+  let overallMatchStrength: "High" | "Medium" | "Low" = "Low";
+  if (highCount >= 2) {
+    overallMatchStrength = "High";
+  } else if (highCount >= 1 || mediumCount >= 3) {
+    overallMatchStrength = "Medium";
   }
 
   // Generate match note if not already set
-  if (assigned && !matchNote) {
+  if (!matchNote) {
     const providerLabel = 
-      provider === "deepseek" ? "[DeepSeek AI]" :
-      provider === "gemini" ? "[Gemini AI]" :
-      "[Keyword Match]";
-    matchNote = `${providerLabel} Placed at Table ${assigned.tableNumber} because ${assigned.reason}`;
+      provider === "deepseek" ? "🤖 DeepSeek AI" :
+      provider === "gemini" ? "🤖 Gemini AI" :
+      "🔍 關鍵字配對";
+    
+    if (recommendedMembers.length === 0) {
+      matchNote = `${providerLabel}: 未找到高度匹配的會員。建議提供更具體的目標職業或瓶頸資訊。`;
+    } else {
+      matchNote = `${providerLabel}: 找到 ${recommendedMembers.length} 位推薦會員（${highCount} 位高度匹配、${mediumCount} 位中度匹配）。建議優先與高度匹配的會員深入交流。`;
+    }
   }
 
   return {
-    assignedTableNumber: assigned?.tableNumber ?? null,
-    matchStrength: assigned?.matchStrength ?? "Low",
-    matchNote:
-      matchNote ||
-      "No strong match found. Consider adding more members or tables.",
-    rankedTables: rankedTables ?? [],
+    matchStrength: overallMatchStrength,
+    matchNote,
+    recommendedMembers,
     provider,
   };
 }

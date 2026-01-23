@@ -1,4 +1,4 @@
-import type { Guest, RankedTable, TableGroup } from "../types/seating";
+import type { Guest, Member, MemberMatch } from "../types/seating";
 
 // Environment variables (from .env.local or Vite config)
 const DEEPSEEK_API_KEY = import.meta.env.VITE_DEEPSEEK_API_KEY || "";
@@ -7,15 +7,18 @@ const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
 
 type AIProvider = "deepseek" | "gemini" | "keyword" | null;
 
-const buildPrompt = (guest: Guest, tables: TableGroup[]): string => {
-  const tableDescriptions = tables
-    .map((t) => {
-      const professions = t.members.map((m) => `${m.name} (${m.profession})`).join(", ");
-      return `Table ${t.tableNumber}: ${professions} (${t.members.length}/8 seats)`;
-    })
+type AIMatchResponse = {
+  memberName: string;
+  matchStrength: "High" | "Medium" | "Low";
+  reason: string;
+};
+
+const buildPrompt = (guest: Guest, members: Member[]): string => {
+  const memberList = members
+    .map((m) => `- ${m.name} (${m.profession})`)
     .join("\n");
 
-  return `You are an elite strategic seating consultant for a BNI-style business networking event. Your mission is to create HIGH-VALUE connections that lead to immediate referrals and long-term partnerships.
+  return `You are an elite strategic networking consultant for a BNI-style business event. Your mission is to identify HIGH-VALUE connections that lead to immediate referrals and long-term partnerships.
 
 【來賓檔案 Guest Profile】
 姓名: ${guest.name}
@@ -24,39 +27,41 @@ ${guest.targetProfession ? `目標對接: ${guest.targetProfession}` : ""}
 瓶頸/需求: ${guest.bottlenecks.length > 0 ? guest.bottlenecks.join(", ") : "未指定"}
 ${guest.remarks ? `價值交換: ${guest.remarks}` : ""}
 
-【可用座位 Available Tables】
-${tableDescriptions}
+【可配對會員列表 Available Members】
+${memberList}
 
 【核心配對原則 Core Matching Principles】
-1. **價值互補 (Value Complementarity)**: 優先配對能解決來賓「瓶頸」的專業人士
+1. **價值互補 (Value Complementarity)**: 優先推薦能解決來賓「瓶頸」的專業人士
 2. **目標對接 (Target Alignment)**: 如果來賓有明確的「目標職業」，尋找該領域或能引薦該領域的會員
-3. **資源交換 (Resource Exchange)**: 關注備註中的「價值提供」，配對能產生雙向價值的人脈
+3. **資源交換 (Resource Exchange)**: 關注備註中的「價值提供」，推薦能產生雙向價值的人脈
 4. **行業互補 (Industry Synergy)**: 尋找上下游產業鏈、異業合作機會
-5. **座位可用性 (Seat Availability)**: 優先選擇有空位的桌次 (<8人)
 
 【配對策略 Matching Strategy】
-- **High Match**: 桌上有2位以上會員能直接解決來賓瓶頸，或其職業正是來賓的目標對接對象
-- **Medium Match**: 桌上有1位會員能提供相關協助，或行業高度相關
-- **Low Match**: 桌上會員可提供一般人脈拓展，但無直接業務契合點
+- **High Match**: 會員能直接解決來賓瓶頸，或其職業正是來賓的目標對接對象
+- **Medium Match**: 會員能提供相關協助，或行業高度相關
+- **Low Match**: 會員可提供一般人脈拓展，但無直接業務契合點
 
 【輸出要求 Output Format】
-請為每張桌次評分並排序（最佳配對在前），以 JSON 格式回應：
+請推薦最適合與來賓配對的會員（最多10位），並說明配對原因。以 JSON 格式回應：
 
 [
   {
-    "tableNumber": 2,
+    "memberName": "會員姓名",
     "matchStrength": "High",
-    "reason": "桌上有 [會員名稱] ([職業]) 能直接解決來賓的 [具體瓶頸]，並且 [會員名稱2] 在 [目標行業] 有豐富人脈，可提供精準引薦。"
+    "reason": "[會員姓名] ([職業]) 能直接解決來賓的 [具體瓶頸]，或在 [目標領域] 有豐富資源，可提供精準引薦和業務合作機會。"
   },
   ...
 ]
 
-**重要提醒**: 請確保每個 reason 具體說明「誰」能提供「什麼價值」給來賓，而非泛泛而談。`;
+**重要提醒**: 
+- 只推薦真正有價值的配對（不一定要推薦全部會員）
+- 每個 reason 必須具體說明該會員能提供什麼價值給來賓
+- 按照配對價值排序（最佳在前）`;
 };
 
 const callDeepSeek = async (
   prompt: string
-): Promise<RankedTable[] | null> => {
+): Promise<AIMatchResponse[] | null> => {
   if (!DEEPSEEK_API_KEY) return null;
 
   try {
@@ -70,7 +75,7 @@ const callDeepSeek = async (
         model: DEEPSEEK_MODEL,
         messages: [{ role: "user", content: prompt }],
         temperature: 0.7,
-        max_tokens: 1000,
+        max_tokens: 2000,
       }),
     });
 
@@ -81,14 +86,14 @@ const callDeepSeek = async (
     const jsonMatch = content.match(/\[[\s\S]*\]/);
     if (!jsonMatch) throw new Error("No JSON found in DeepSeek response");
 
-    return JSON.parse(jsonMatch[0]) as RankedTable[];
+    return JSON.parse(jsonMatch[0]) as AIMatchResponse[];
   } catch (error) {
     console.error("DeepSeek API failed:", error);
     return null;
   }
 };
 
-const callGemini = async (prompt: string): Promise<RankedTable[] | null> => {
+const callGemini = async (prompt: string): Promise<AIMatchResponse[] | null> => {
   if (!GEMINI_API_KEY) return null;
 
   try {
@@ -114,31 +119,56 @@ const callGemini = async (prompt: string): Promise<RankedTable[] | null> => {
     const jsonMatch = content.match(/\[[\s\S]*\]/);
     if (!jsonMatch) throw new Error("No JSON found in Gemini response");
 
-    return JSON.parse(jsonMatch[0]) as RankedTable[];
+    return JSON.parse(jsonMatch[0]) as AIMatchResponse[];
   } catch (error) {
     console.error("Gemini API failed:", error);
     return null;
   }
 };
 
-export const rankTablesWithAI = async (
+export const matchMembersWithAI = async (
   guest: Guest,
-  tables: TableGroup[]
-): Promise<{ ranked: RankedTable[]; provider: AIProvider }> => {
-  const prompt = buildPrompt(guest, tables);
+  members: Member[]
+): Promise<{ matches: MemberMatch[]; provider: AIProvider }> => {
+  const prompt = buildPrompt(guest, members);
 
   // Try DeepSeek first
   const deepseekResult = await callDeepSeek(prompt);
   if (deepseekResult && deepseekResult.length > 0) {
-    return { ranked: deepseekResult, provider: "deepseek" };
+    // Convert AI response to MemberMatch format
+    const matches: MemberMatch[] = deepseekResult
+      .map((aiMatch) => {
+        const member = members.find((m) => m.name === aiMatch.memberName);
+        if (!member) return null;
+        return {
+          member,
+          matchStrength: aiMatch.matchStrength,
+          reason: aiMatch.reason,
+        };
+      })
+      .filter((match): match is MemberMatch => match !== null);
+    
+    return { matches, provider: "deepseek" };
   }
 
   // Fallback to Gemini
   const geminiResult = await callGemini(prompt);
   if (geminiResult && geminiResult.length > 0) {
-    return { ranked: geminiResult, provider: "gemini" };
+    const matches: MemberMatch[] = geminiResult
+      .map((aiMatch) => {
+        const member = members.find((m) => m.name === aiMatch.memberName);
+        if (!member) return null;
+        return {
+          member,
+          matchStrength: aiMatch.matchStrength,
+          reason: aiMatch.reason,
+        };
+      })
+      .filter((match): match is MemberMatch => match !== null);
+    
+    return { matches, provider: "gemini" };
   }
 
   // Both failed
-  return { ranked: [], provider: null };
+  return { matches: [], provider: null };
 };
