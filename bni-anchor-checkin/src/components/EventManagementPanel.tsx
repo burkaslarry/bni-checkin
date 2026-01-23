@@ -4,9 +4,10 @@ import { getCurrentEvent, clearAllEventsAndAttendance, EventData } from "../api"
 type EventManagementPanelProps = {
   onNotify: (message: string, type: "success" | "error" | "info") => void;
   onNavigateToStrategic?: () => void;
+  onNavigateToGenerate?: () => void;
 };
 
-export const EventManagementPanel = ({ onNotify, onNavigateToStrategic }: EventManagementPanelProps) => {
+export const EventManagementPanel = ({ onNotify, onNavigateToStrategic, onNavigateToGenerate }: EventManagementPanelProps) => {
   const [currentEvent, setCurrentEvent] = useState<EventData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -27,6 +28,17 @@ export const EventManagementPanel = ({ onNotify, onNavigateToStrategic }: EventM
   useEffect(() => {
     fetchCurrentEvent();
   }, [fetchCurrentEvent]);
+
+  // Auto-redirect to generate page if no event exists
+  useEffect(() => {
+    if (!loading && !currentEvent && onNavigateToGenerate) {
+      const timer = setTimeout(() => {
+        onNotify("尚未建立活動，正在導向新增活動頁面...", "info");
+        onNavigateToGenerate();
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [loading, currentEvent, onNavigateToGenerate, onNotify]);
 
   const handleDeleteAll = async () => {
     setIsDeleting(true);

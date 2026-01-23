@@ -19,6 +19,7 @@ const formatDateTimeLocal = (date: Date): string => {
 };
 
 export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) => {
+  const [mode, setMode] = useState<"single" | "batch">("single");
   const [members, setMembers] = useState<MemberInfo[]>([]);
   const [selectedMember, setSelectedMember] = useState("");
   const [name, setName] = useState("");
@@ -28,6 +29,10 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
   const [referrer, setReferrer] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [customTime, setCustomTime] = useState(formatDateTimeLocal(new Date()));
+  
+  // Batch check-in state
+  const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set());
+  const [batchSubmitting, setBatchSubmitting] = useState(false);
 
   // Fetch members list
   useEffect(() => {
@@ -121,6 +126,67 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
   const isFormValid = isGuest 
     ? (name.trim().length > 0 && domain.trim().length > 0)
     : (selectedMember.length > 0 && domain.trim().length > 0);
+
+  // Batch check-in handlers
+  const toggleMemberSelection = (memberName: string) => {
+    setSelectedMembers(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(memberName)) {
+        newSet.delete(memberName);
+      } else {
+        newSet.add(memberName);
+      }
+      return newSet;
+    });
+  };
+
+  const selectAllMembers = () => {
+    setSelectedMembers(new Set(members.map(m => m.name)));
+  };
+
+  const clearAllSelections = () => {
+    setSelectedMembers(new Set());
+  };
+
+  const handleBatchCheckIn = async () => {
+    if (selectedMembers.size === 0) {
+      onNotify("請至少選擇一位會員", "error");
+      return;
+    }
+
+    setBatchSubmitting(true);
+    let successCount = 0;
+    let failCount = 0;
+    const selectedTime = new Date(customTime);
+    const timeString = `${selectedTime.getFullYear()}-${String(selectedTime.getMonth() + 1).padStart(2, '0')}-${String(selectedTime.getDate()).padStart(2, '0')}T${String(selectedTime.getHours()).padStart(2, '0')}:${String(selectedTime.getMinutes()).padStart(2, '0')}:${String(selectedTime.getSeconds()).padStart(2, '0')}`;
+
+    for (const memberName of selectedMembers) {
+      try {
+        const member = members.find(m => m.name === memberName);
+        if (!member) continue;
+
+        await checkIn({
+          name: memberName,
+          type: "member",
+          domain: member.domain,
+          currentTime: timeString,
+          role: "MEMBER"
+        });
+        successCount++;
+      } catch {
+        failCount++;
+      }
+    }
+
+    setBatchSubmitting(false);
+    clearAllSelections();
+    
+    if (failCount === 0) {
+      onNotify(`✅ 批量簽到成功！已簽到 ${successCount} 位會員`, "success");
+    } else {
+      onNotify(`⚠️ 批量簽到完成：成功 ${successCount} 位，失敗 ${failCount} 位`, "info");
+    }
+  };
   
   const displayName = isGuest ? name : selectedMember;
   const selectedMemberInfo = members.find(m => m.name === selectedMember);
@@ -132,7 +198,26 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
         <p className="hint">直接新增簽到記錄</p>
       </div>
 
+      {/* Mode Toggle */}
+      <div className="mode-toggle-group">
+        <button
+          type="button"
+          className={`mode-toggle-btn ${mode === "single" ? "active" : ""}`}
+          onClick={() => setMode("single")}
+        >
+          單筆簽到
+        </button>
+        <button
+          type="button"
+          className={`mode-toggle-btn ${mode === "batch" ? "active" : ""}`}
+          onClick={() => setMode("batch")}
+        >
+          批量簽到
+        </button>
+      </div>
 
+      {mode === "single" ? (
+        <>
       <div className="form-group checkbox-group">
         <label className="checkbox-label">
           <input
@@ -289,6 +374,78 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
       >
         {isSubmitting ? "處理中..." : "✅ 確認新增"}
       </button>
+        </>
+      ) : (
+        <>
+          {/* Batch Check-in Mode */}
+          <div className="form-group">
+            <label htmlFor="batch-time">簽到時間 Check-in Time</label>
+            <input
+              id="batch-time"
+              type="datetime-local"
+              className="input-field"
+              value={customTime}
+              onChange={(e) => setCustomTime(e.target.value)}
+            />
+          </div>
+
+          <div className="batch-controls">
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={selectAllMembers}
+              disabled={members.length === 0}
+            >
+              ✓ 全選
+            </button>
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={clearAllSelections}
+              disabled={selectedMembers.size === 0}
+            >
+              ✕ 清除
+            </button>
+            <span className="selection-count">
+              已選擇 {selectedMembers.size} / {members.length} 位會員
+            </span>
+          </div>
+
+          <div className="batch-member-list">
+            {members.length === 0 ? (
+              <div className="empty-state">
+                <p className="hint">載入會員名單中...</p>
+              </div>
+            ) : (
+              members.map((member) => (
+                <label
+                  key={member.name}
+                  className={`batch-member-item ${selectedMembers.has(member.name) ? "selected" : ""}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedMembers.has(member.name)}
+                    onChange={() => toggleMemberSelection(member.name)}
+                  />
+                  <div className="member-info">
+                    <span className="member-name">{member.name}</span>
+                    <span className="member-domain">{member.domain}</span>
+                  </div>
+                </label>
+              ))
+            )}
+          </div>
+
+          <button
+            className="button submit-button"
+            type="button"
+            onClick={handleBatchCheckIn}
+            disabled={selectedMembers.size === 0 || batchSubmitting}
+          >
+            {batchSubmitting ? "批量處理中..." : `✅ 批量簽到 (${selectedMembers.size} 位)`}
+          </button>
+        </>
+      )}
     </section>
   );
 };

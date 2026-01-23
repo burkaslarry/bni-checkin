@@ -383,7 +383,7 @@ export const QRGeneratorPanel = ({ onNotify }: QRGeneratorPanelProps) => {
   return (
     <section className="section qr-generator-panel">
       <div className="section-header">
-        <h2>🔳 產生活動 QR 碼</h2>
+        <h2>🔳 新增活動和二維碼</h2>
         <p className="hint">產生活動簽到用 QR Code</p>
       </div>
 

@@ -291,9 +291,7 @@ export async function getEventInsights(
     mode: "cors"
   });
   return handleResponse(response);
-}
-
-// Export AI-ready data for external processing
+}// Export AI-ready data for external processing
 export async function exportAIReadyData(
   eventId: number
 ): Promise<Record<string, unknown>> {

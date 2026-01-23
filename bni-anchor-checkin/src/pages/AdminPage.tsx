@@ -80,6 +80,7 @@ export default function AdminPage() {
           <EventManagementPanel 
             onNotify={handlePanelNotification} 
             onNavigateToStrategic={() => setActiveView("strategic")}
+            onNavigateToGenerate={() => setActiveView("generate")}
           />
         );
       case "strategic":

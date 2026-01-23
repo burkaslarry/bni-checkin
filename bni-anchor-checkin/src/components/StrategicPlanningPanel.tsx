@@ -283,109 +283,57 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
         </div>
       )}
 
-      {/* Tables Display */}
-      <div className="tables-section">
-        <div className="section-header">
-          <h3>座位表 Seating Chart</h3>
-          <button
-            type="button"
-            className="ghost-button"
-            onClick={() => setShowMemberForm(!showMemberForm)}
-          >
-            {showMemberForm ? "✖ 取消" : "➕ 添加會員"}
-          </button>
-        </div>
-
-        {showMemberForm && (
-          <div className="member-form-card">
-            <div className="form-grid">
-              <div className="form-group">
-                <label htmlFor="new-member-name">會員姓名</label>
-                <input
-                  id="new-member-name"
-                  className="input-field"
-                  placeholder="例如: 張三豐"
-                  value={newMemberName}
-                  onChange={(e) => setNewMemberName(e.target.value)}
-                />
-              </div>
-              <div className="form-group">
-                <label htmlFor="new-member-profession">職業</label>
-                <input
-                  id="new-member-profession"
-                  className="input-field"
-                  placeholder="例如: 室內設計師"
-                  value={newMemberProfession}
-                  onChange={(e) => setNewMemberProfession(e.target.value)}
-                />
-              </div>
-              <div className="form-group">
-                <label htmlFor="new-member-table">桌號</label>
-                <input
-                  id="new-member-table"
-                  className="input-field"
-                  type="number"
-                  min={1}
-                  value={newMemberTable}
-                  onChange={(e) => setNewMemberTable(Number(e.target.value))}
-                />
-              </div>
-            </div>
-            <button
-              type="button"
-              className="button"
-              onClick={handleAddMember}
-            >
-              ✓ 添加會員
-            </button>
+      {/* Matched Members Display */}
+      {matchResult && matchResult.rankedTables && matchResult.rankedTables.length > 0 && (
+        <div className="matched-members-section">
+          <div className="section-header">
+            <h3>💼 推薦配對會員 Recommended Members</h3>
+            <p className="hint">根據來賓需求匹配的會員列表</p>
           </div>
-        )}
 
-        <div className="tables-grid">
-          {tableNumbers.map((tableNumber) => {
-            const tableMembers = tables[tableNumber];
-            const isAssigned = assignedTable === tableNumber;
-            const strength = matchResult?.matchStrength ?? "Low";
-            return (
-              <div
-                key={tableNumber}
-                className={`table-card ${isAssigned ? ringStyles[strength] : ""}`}
-              >
-                <div className="table-header">
-                  <h4>Table {tableNumber}</h4>
-                  <span className="seat-count">
-                    {tableMembers.length}/8 seats
-                  </span>
-                </div>
-                <ul className="member-list">
-                  {tableMembers.map((member) => (
-                    <li key={member.id} className="member-item">
-                      <div className="member-info">
-                        <div className="member-name">{member.name}</div>
-                        <div className="member-profession">
-                          {member.profession}
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        className="ghost-button danger-btn small"
-                        onClick={() => handleRemoveMember(member.id)}
-                      >
-                        ✖
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-                {isAssigned && matchResult && (
-                  <div className="assigned-badge">
-                    ✓ 來賓已分配至此桌
+          <div className="matched-tables-list">
+            {matchResult.rankedTables.slice(0, 5).map((rankedTable) => {
+              const tableMembers = tables[rankedTable.tableNumber] || [];
+              const isAssigned = assignedTable === rankedTable.tableNumber;
+              
+              return (
+                <div
+                  key={rankedTable.tableNumber}
+                  className={`matched-table-card ${isAssigned ? 'is-assigned' : ''}`}
+                >
+                  <div className="matched-table-header">
+                    <div className="table-info">
+                      <h4>桌號 Table {rankedTable.tableNumber}</h4>
+                      <span className={strengthStyles[rankedTable.matchStrength]}>
+                        {rankedTable.matchStrength} Match
+                      </span>
+                    </div>
+                    {isAssigned && (
+                      <span className="assigned-indicator">✓ 已分配</span>
+                    )}
                   </div>
-                )}
-              </div>
-            );
-          })}
+                  
+                  <div className="match-reason">
+                    <strong>配對原因:</strong> {rankedTable.reason}
+                  </div>
+
+                  <div className="member-list-compact">
+                    <strong>桌內會員 ({tableMembers.length} 位):</strong>
+                    <ul>
+                      {tableMembers.map((member) => (
+                        <li key={member.id} className="compact-member-item">
+                          <span className="member-name">{member.name}</span>
+                          <span className="member-profession">{member.profession}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Configuration Info */}
       <div className="config-info">
