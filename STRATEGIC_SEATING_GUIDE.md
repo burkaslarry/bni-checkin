@@ -1,381 +1,228 @@
-# Strategic Seating Matchmaker V2 - Complete Implementation Guide
+# 🎯 Strategic Seating Matchmaker 使用指南
 
-## Overview
+## 📝 如何填寫來賓資料以獲得精準配對
 
-The Strategic Seating Matchmaker is an AI-powered system designed for BNI-style networking events that intelligently assigns guests to tables based on their professional profiles, target professions, and bottlenecks. Version 2 introduces a fixed seating model with enhanced UI/UX, comprehensive testing, and robust error handling.
+### 🌟 配對成功的黃金法則
 
-## Features
-
-### Core Functionality
-- **AI-Powered Matching**: Uses DeepSeek-V3/R1 API (primary) and Google Gemini 1.5 Pro (fallback) for semantic matching
-- **Keyword Fallback**: Simple string-based matching algorithm when both AI APIs fail
-- **Constraint Enforcement**: Max 8 people per table, prefers tables with available seats
-- **Ranked Results**: Provides top alternative table options with match quality scores
-- **Match History**: Tracks and exports previous seating assignments
-
-### UI/UX Components
-- **Guest Input Form**: Collect guest profile data (name, profession, target profession, bottlenecks)
-- **Seating Dashboard**: Visual representation of table assignments with capacity indicators
-- **Match Confirmation**: Displays reasoning and alternative options
-- **Capacity Overview**: Real-time table occupancy visualization
-- **History Management**: View and export previous matches as CSV
-
-### Admin Integration
-- Accessible from Admin Page under "Strategic Seating" menu
-- Can be triggered after event creation
-- Integrates with existing member management system
-
-## Project Structure
-
-```
-bni-anchor-checkin/
-├── src/
-│   ├── types/
-│   │   └── seating.ts              # Core TypeScript interfaces
-│   ├── lib/
-│   │   ├── aiClient.ts             # AI API calls (DeepSeek, Gemini)
-│   │   ├── assignGuestToTable.ts   # Main matching logic
-│   │   ├── keywordMatch.ts         # Fallback keyword matching
-│   │   ├── matchGuestAPI.ts        # API service and validation
-│   │   └── sampleData.ts           # Sample guests and members
-│   ├── components/
-│   │   ├── StrategicPlanningPanel.tsx  # Main panel with forms
-│   │   └── SeatingDashboard.tsx         # Dashboard visualization
-│   ├── pages/
-│   │   └── AdminPage.tsx           # Integration point
-│   ├── __tests__/
-│   │   ├── assignGuestToTable.test.ts    # Matching logic tests
-│   │   ├── matchGuestAPI.test.ts         # API validation tests
-│   │   └── integration.helpers.ts        # Test utilities
-│   ├── styles.css                  # All styling including dashboard
-│   ├── App.tsx                      # Router setup
-│   └── main.tsx
-├── env.example                      # Example environment variables
-├── package.json                     # Updated with test scripts
-├── tsconfig.json
-├── vite.config.ts
-└── vitest.config.ts                # Test configuration
-```
-
-## Data Models
-
-### Guest
-```typescript
-type Guest = {
-  id: string;
-  name: string;
-  profession: string;
-  targetProfession: string;
-  bottlenecks: string[];
-  remarks?: string;
-};
-```
-
-### Member
-```typescript
-type Member = {
-  id: string;
-  name: string;
-  profession: string;
-  tableNumber: number; // 1-indexed
-};
-```
-
-### MatchResult
-```typescript
-type MatchResult = {
-  assignedTableNumber: number | null;
-  matchStrength: "High" | "Medium" | "Low";
-  matchNote: string;
-  rankedTables: RankedTable[];
-};
-```
-
-## API Configuration
-
-### Environment Variables
-Create `.env.local` in the project root:
-
-```env
-# DeepSeek API (Primary - Recommended for HK)
-VITE_DEEPSEEK_API_KEY=your_deepseek_api_key_here
-VITE_DEEPSEEK_MODEL=deepseek-v3
-
-# Google Gemini API (Fallback)
-VITE_GEMINI_API_KEY=your_gemini_api_key_here
-
-# Backend API
-VITE_API_BASE=http://localhost:10000
-```
-
-### Getting API Keys
-
-**DeepSeek API:**
-1. Visit https://platform.deepseek.com
-2. Sign up and create API key
-3. Current model: deepseek-v3 or deepseek-r1
-
-**Google Gemini API:**
-1. Visit https://ai.google.dev
-2. Create API key from Google AI Studio
-3. Model: gemini-1.5-pro
-
-## Implementation Details
-
-### Matching Algorithm Flow
-
-1. **Group Members by Table**: Organize all members into table groups
-2. **Send to AI API**:
-   - Build detailed prompt with guest profile and table info
-   - Include constraint info (max 8 per table)
-   - Request ranking by "Referral Potential" and "Problem Solving"
-3. **Parse AI Response**: Extract JSON array of ranked tables
-4. **Select Best Available Table**: Pick highest-ranked table with available seats
-5. **Fallback to Keyword Matching**: If both AI APIs fail, use simple keyword matching
-6. **Generate Match Note**: Explain assignment reasoning
-
-### Keyword Matching Algorithm
-
-If AI is unavailable, the system uses basic scoring:
-- Target profession match: +3 points per keyword match
-- Bottleneck resolution: +2 points per keyword match
-- Available seats: +1 point per seat
-- Tables scored 8+ → "High", 4-7 → "Medium", <4 → "Low"
-
-### Constraints
-
-- **Max Table Size**: 8 people per table
-- **Preference**: Favor tables with available seats
-- **Fallback**: If all tables full, assign to smallest table with notification
-
-## Usage Guide
-
-### For Admins
-
-1. **Navigate to Admin Page**: Click "Strategic Seating" menu item
-2. **Enter Guest Profile**:
-   - Name: Guest's full name
-   - Profession: Their current profession
-   - Target Profession: Professional category they're seeking
-   - Bottlenecks: Comma-separated pain points
-   - Remarks (Optional): Additional context
-3. **Click "🎯 開始配對"**: Trigger matching algorithm
-4. **Review Results**: See assigned table and alternatives
-5. **Confirm Assignment**: Click ✓ to save to history
-
-### For Event Planners
-
-- **Sample Data**: Click "📝 載入範例" to test with example guest
-- **Add Members**: Click "➕ 添加會員" to add members to tables
-- **View History**: Click "📊 History" to see previous assignments
-- **Export Data**: Click "💾 Export" to download CSV of assignments
-
-## Testing
-
-### Run Tests
-
-```bash
-# Install dependencies
-npm install
-
-# Run all tests
-npm test
-
-# Run tests with UI
-npm run test:ui
-
-# Generate coverage report
-npm run test:coverage
-```
-
-### Test Coverage
-
-- **assignGuestToTable.test.ts**: 
-  - Core matching logic
-  - Constraint enforcement
-  - Fallback mechanisms
-  - Edge cases
-  - Performance benchmarks
-
-- **matchGuestAPI.test.ts**:
-  - Guest validation
-  - Members validation
-  - Request validation
-  - Error handling
-
-- **Integration tests** available in `integration.helpers.ts`
-
-## Local Development
-
-### Prerequisites
-- Node.js 18+
-- npm or yarn
-- API keys for DeepSeek or Gemini (optional, falls back to keyword matching)
-
-### Setup
-
-```bash
-cd bni-anchor-checkin
-
-# Install dependencies
-npm install
-
-# Create .env.local with API keys
-cp env.example .env.local
-# Edit .env.local with your API keys
-
-# Start development server
-npm run dev
-
-# Navigate to: http://localhost:5173/admin
-# Click "Strategic Seating" menu
-```
-
-### Development Workflow
-
-1. Make changes to components or logic
-2. Run tests: `npm test`
-3. Check console for errors: Open DevTools (F12)
-4. Test UI: Manually enter data and verify matching
-5. Build: `npm run build`
-
-## Features Walkthrough
-
-### Guest Assignment Flow
-```
-1. Enter Guest Profile
-   ↓
-2. Click "🎯 開始配對"
-   ↓
-3. System calls AI API (DeepSeek/Gemini)
-   ├─ If success: Use AI ranking
-   └─ If failure: Use keyword fallback
-   ↓
-4. Select best available table
-   ├─ Check if table has seats
-   └─ Pick next best if full
-   ↓
-5. Display Result Card
-   ├─ Assigned table
-   ├─ Match strength
-   ├─ Reasoning
-   └─ Alternative options
-   ↓
-6. Click ✓ to confirm and record
-   ↓
-7. View in Seating Chart
-   ├─ Table highlighted
-   ├─ Key connections shown
-   └─ Capacity updated
-   ↓
-8. (Optional) View/Export History
-```
-
-### Key UI Components
-
-**Match Confirmation Card**
-- Shows guest name, profession, target
-- Assigned table with color-coded strength
-- Detailed reasoning from AI
-- Top 3 alternative options
-
-**Seating Chart**
-- Grid of table cards
-- Each table shows members and professions
-- Assigned table has special highlight
-- Shows "KEY CONNECTIONS" for new guest
-
-**Capacity Overview**
-- Progress bars for each table
-- Color coding: Green (≤75%), Orange (75-99%), Red (100%)
-- Seat count display
-
-**History Panel**
-- Timeline of recent assignments
-- Quick export to CSV
-- Timestamp, guest name, assigned table
-
-## Troubleshooting
-
-### AI API Failures
-
-**Problem**: Matching always falls back to keyword matching
-
-**Solution**:
-1. Check `.env.local` file exists and has API keys
-2. Verify API keys are correct and have quota
-3. Check browser console (F12) for specific error messages
-4. Temporarily disable API keys to test fallback logic
-
-### Table Assignment Issues
-
-**Problem**: Guest not assigned to expected table
-
-**Solution**:
-1. Check member list - ensure you have added members
-2. Verify table numbers are sequential (1, 2, 3...)
-3. Check for "all tables full" message
-4. Review "Alternative Options" for ranked order
-
-### Test Failures
-
-**Problem**: Tests fail when running `npm test`
-
-**Solution**:
-1. Clear node_modules: `rm -rf node_modules && npm install`
-2. Check Node version: Should be 18+ 
-3. Run specific test: `npm test -- assignGuestToTable.test.ts`
-4. Check test output for detailed error messages
-
-## Performance Notes
-
-- Keyword matching: <100ms
-- DeepSeek API: 1-3 seconds (typical)
-- Gemini API: 1-2 seconds (typical)
-- Batch processing 10+ guests: System handles efficiently
-
-## Browser Compatibility
-
-- Chrome/Chromium: ✅ Fully supported
-- Firefox: ✅ Fully supported
-- Safari: ✅ Fully supported
-- Edge: ✅ Fully supported
-- Mobile browsers: ✅ Responsive design
-
-## Security Considerations
-
-- API keys stored in `.env.local` (never committed to git)
-- `.gitignore` includes `.env.local`
-- No sensitive data stored in localStorage
-- All API calls over HTTPS
-
-## Future Enhancements
-
-- Multi-event seating planning
-- Dietary restrictions and preferences
-- Conflict detection (competitors at same table)
-- Seating optimization for networking efficiency
-- Real-time adjustments during event
-- Integration with QR code check-in system
-- Statistical analysis of match success rates
-
-## Support & Issues
-
-For bugs or feature requests:
-1. Check existing GitHub issues
-2. Create detailed bug report with:
-   - Steps to reproduce
-   - Expected vs actual behavior
-   - Browser/OS info
-   - Screenshot if applicable
-3. Include test data examples
-
-## License
-
-Same as parent BNI Anchor Checkin project
+Strategic Seating 系統使用 **DeepSeek AI** 進行智能配對，配對品質取決於資料的精準度。遵循以下原則可獲得 **High Match**：
 
 ---
 
-**Last Updated**: January 2026
-**Version**: 2.0.0 (Fixed Seating Model)
-**Status**: Production Ready
+## 1️⃣ 職業 (Profession) - 必填 ⭐
+
+### ❌ 錯誤示範
+- ❌ 創業家
+- ❌ 金融業
+- ❌ 顧問
+
+### ✅ 正確填寫
+- ✅ 中小企業資安合規顧問
+- ✅ 高淨值客戶財富管理師
+- ✅ 連鎖餐飲業數位轉型顧問
+- ✅ 家族辦公室財富管理師
+
+**填寫技巧**：
+- 包含「服務對象」+「專業領域」
+- 避免模糊稱謂，具體到細分市場
+- 讓人一眼看懂你的專業定位
+
+---
+
+## 2️⃣ 目標職業 (Target Profession) - 選填但重要 🎯
+
+這是系統配對的核心！不要寫「行業」，要寫「具體對象」。
+
+### ❌ 錯誤示範
+- ❌ 建築承包商
+- ❌ 金融業
+- ❌ 律師
+
+### ✅ 正確填寫
+- ✅ 房地產開發商的 IT 採購決策者
+- ✅ 正在進行數位轉型的中小企業老闆
+- ✅ 擁有大量企業客戶的保險經紀人或會計師（作為轉介紹夥伴）
+- ✅ 法律事務所合夥人、移民顧問、或正在尋求海外資產配置的企業主
+
+**填寫技巧**：
+- 寫出「誰的」+「什麼角色」
+- 聚焦決策者而非執行者
+- 可以列出多個相關對象（用頓號或斜線分隔）
+
+---
+
+## 3️⃣ 瓶頸 (Bottlenecks) - 配對關鍵 🔑
+
+這是系統尋找「互補者」的依據。要具體說明你缺什麼、誰能幫你。
+
+### ❌ 錯誤示範
+- ❌ 缺客戶
+- ❌ 需要設計合作
+- ❌ 想要業務拓展
+
+### ✅ 正確填寫
+- ✅ 缺乏進入政府標案的管道，需要有相關經驗的顧問
+- ✅ 產品技術強但缺乏市場推廣渠道，尋找行銷代理合作
+- ✅ 客戶常遇到資安合規 (ISO 27001) 問題，我無法獨立完成審計
+- ✅ 缺乏與高端法律服務的異業結盟，需要能處理跨國稅務的合作夥伴
+
+**填寫技巧**：
+- 具體指出「卡在哪」
+- 說明「誰能解決」
+- 可以多寫幾個，用逗號分隔
+
+---
+
+## 4️⃣ 備註 (Remarks) - 價值交換 ⭐⭐⭐
+
+**這是最重要的！** 使用「我有-我想找-我能提供」公式：
+
+### 🎯 萬能對接公式
+
+```
+我有 [資源/專業]，我想找 [目標對象]，我可以提供 [給對方的價值]。
+```
+
+### 💡 範例 1: 資安專家
+
+```
+我有超過 10 年的企業防駭經驗，專注於 AI 驅動的資安防禦。
+我想對接連鎖零售業或電商老闆。
+我可以為桌友提供免費的初步資安風險評估，並分享如何透過資安升級降低保費。
+如果你有客戶擔心數據洩漏，我可以作為你的技術後盾。
+```
+
+### 💡 範例 2: 財富管理師
+
+```
+我手上有超過 50 位具備海外投資需求的準客戶，正在尋找專業律師合作。
+我能分享最新的家族辦公室設立趨勢、全球資產配置策略，並提供客戶轉介紹。
+我的客戶平均資產在 500 萬美元以上，適合需要高端客源的專業人士。
+```
+
+### 💡 範例 3: 數位轉型顧問
+
+```
+我專注於協助年營收 1000 萬-1 億的傳統企業進行數位化升級。
+我可以提供免費的數位成熟度評估（價值 3 萬），並分享 10 個實際成功案例。
+如果你的客戶正在為流程效率、庫存管理、或客戶管理系統煩惱，
+我能提供即時解決方案，並樂意分潤或建立長期合作關係。
+```
+
+**填寫技巧**：
+- 說明你的「資源池」有多大
+- 展示你的「專業深度」
+- 明確「能給對方什麼」
+- 避免模糊的「希望認識朋友」
+
+---
+
+## 🎯 完整範例：如何獲得 High Match
+
+```
+姓名: Kazel Lau
+職業: 中小企業資安合規顧問 (SME Cybersecurity Compliance Consultant)
+目標職業: 連鎖零售業老闆、電商平台創辦人、或擁有大量企業客戶的保險經紀人
+瓶頸: 缺乏進入連鎖零售業的管道, 需要能處理ISO 27001認證的合作夥伴
+備註: 
+我有超過10年的企業防駭經驗，專注於AI驅動的資安防禦。
+我手上有準備好的免費資安風險評估方案，可為桌友的客戶提供初步檢測。
+如果你有客戶擔心數據洩漏或想降低網路保險費，我可以作為你的技術後盾，
+並提供業界最新的資安趨勢分享。
+```
+
+**為什麼這樣寫有效？**
+- ✅ 職業精準（不是籠統的"資安"）
+- ✅ 目標對象具體（3種相關人士）
+- ✅ 瓶頸清晰（系統能找到解決方案的人）
+- ✅ 價值明確（免費評估 + 技術支援 + 降低保費）
+
+---
+
+## 🤖 系統如何運作
+
+### DeepSeek AI 配對原則
+
+1. **價值互補 (Value Complementarity)**
+   - 優先配對能解決來賓「瓶頸」的專業人士
+
+2. **目標對接 (Target Alignment)**
+   - 尋找「目標職業」欄位中提到的人，或能引薦這些人的會員
+
+3. **資源交換 (Resource Exchange)**
+   - 關注備註中的「價值提供」，配對能產生雙向價值的人脈
+
+4. **行業互補 (Industry Synergy)**
+   - 尋找上下游產業鏈、異業合作機會
+
+5. **座位可用性 (Seat Availability)**
+   - 優先選擇有空位的桌次
+
+### 配對等級說明
+
+- **High Match**: 桌上有 2 位以上會員能直接解決來賓瓶頸，或其職業正是目標對接對象
+- **Medium Match**: 桌上有 1 位會員能提供相關協助，或行業高度相關
+- **Low Match**: 桌上會員可提供一般人脈拓展，但無直接業務契合點
+
+---
+
+## 🔧 設置 DeepSeek API
+
+### 1. 獲取 API Key
+
+訪問 [DeepSeek Platform](https://platform.deepseek.com/)，註冊並獲取 API Key。
+
+### 2. 配置環境變數
+
+在 `bni-anchor-checkin/.env.local` 中添加：
+
+```bash
+VITE_DEEPSEEK_API_KEY=sk-your-api-key-here
+VITE_DEEPSEEK_MODEL=deepseek-v3
+```
+
+### 3. 重啟前端
+
+```bash
+cd bni-anchor-checkin
+npm run dev
+```
+
+### 4. 驗證 API 運作
+
+使用「載入範例」按鈕測試，應該看到使用 DeepSeek AI 配對的提示。
+
+---
+
+## 💡 實用技巧
+
+### 📝 填寫前的自我提問
+
+1. **職業**: 如果只有 10 個字介紹自己，我會怎麼說？
+2. **目標職業**: 我最想在這場活動中認識誰？他們的職位是什麼？
+3. **瓶頸**: 我現在最需要誰的幫助？具體缺什麼？
+4. **備註**: 我能給對方什麼實質價值？（免費服務？客戶轉介？專業知識？）
+
+### 🎯 避免常見錯誤
+
+- ❌ 不要只寫行業名稱（"金融"、"科技"）
+- ❌ 不要寫模糊目標（"想認識企業家"）
+- ❌ 不要空著瓶頸不填（這是配對關鍵！）
+- ❌ 不要在備註寫"希望多交朋友"（要說你能給什麼）
+
+### ✅ 成功案例
+
+某位資安顧問按照上述方式填寫後：
+- 原本 Match Result: **Medium Match**
+- 優化後 Match Result: **High Match**
+- 桌上有 2 位零售業老闆 + 1 位有企業客戶的保險經紀人
+- 當場獲得 3 個合作洽談機會
+
+---
+
+## 📞 支援
+
+如有任何問題，請聯繫系統管理員或參考 [README.md](./README.md)
+
+---
+
+**記住**：越具體的資料 = 越精準的配對 = 越高的商業價值！🚀
