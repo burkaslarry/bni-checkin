@@ -16,9 +16,11 @@ const callDeepSeekViaBackend = async (
   guest: Guest,
   members: Member[]
 ): Promise<AIMatchResponse[] | null> => {
-  console.log("🤖 Calling Backend DeepSeek API...");
-  console.log("📊 Guest:", guest.name, guest.profession);
-  console.log("📊 Members count:", members.length);
+  console.log("🤖 [Frontend] Calling Backend DeepSeek API...");
+  console.log("📊 [Frontend] Guest:", guest.name, guest.profession);
+  console.log("📊 [Frontend] Target:", guest.targetProfession);
+  console.log("📊 [Frontend] Bottlenecks:", guest.bottlenecks);
+  console.log("📊 [Frontend] Members count:", members.length);
 
   try {
     const requestBody = {
@@ -33,6 +35,9 @@ const callDeepSeekViaBackend = async (
       }))
     };
 
+    console.log("📤 [Frontend] Sending request to:", `${BACKEND_API_URL}/api/matching/members`);
+    console.log("📤 [Frontend] Request body preview:", JSON.stringify(requestBody).substring(0, 200) + "...");
+
     const response = await fetch(`${BACKEND_API_URL}/api/matching/members`, {
       method: "POST",
       headers: {
@@ -41,21 +46,39 @@ const callDeepSeekViaBackend = async (
       body: JSON.stringify(requestBody),
     });
 
+    console.log("📥 [Frontend] Response status:", response.status);
+
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("❌ Backend API HTTP error:", response.status, errorText);
+      console.error("❌ [Frontend] Backend API HTTP error:", response.status, errorText);
       throw new Error(`Backend API error: ${response.status}`);
     }
 
     const data = await response.json();
-    console.log("✅ Backend response received:", data);
+    console.log("✅ [Frontend] Backend response received:", data);
+    console.log("📄 [Frontend] Matches string preview:", data.matches.substring(0, 200) + "...");
+    
+    // Check if response contains error
+    if (data.matches.includes('"error"')) {
+      console.error("❌ [Frontend] Backend returned error:", data.matches);
+      return null;
+    }
     
     // Parse the matches JSON string
     const matches = JSON.parse(data.matches) as AIMatchResponse[];
-    console.log(`✅ Parsed ${matches.length} member matches from Backend`);
+    console.log(`✅ [Frontend] Parsed ${matches.length} member matches from Backend`);
+    
+    // Log first match for debugging
+    if (matches.length > 0) {
+      console.log("📋 [Frontend] First match example:", matches[0]);
+    }
+    
     return matches;
   } catch (error) {
-    console.error("❌ Backend DeepSeek API failed:", error);
+    console.error("❌ [Frontend] Backend DeepSeek API failed:", error);
+    if (error instanceof Error) {
+      console.error("❌ [Frontend] Error details:", error.message, error.stack);
+    }
     return null;
   }
 };

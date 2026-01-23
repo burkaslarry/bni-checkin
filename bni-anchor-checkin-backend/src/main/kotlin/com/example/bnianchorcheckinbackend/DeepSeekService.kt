@@ -147,9 +147,16 @@ class DeepSeekService(
      * 返回 JSON 格式的匹配結果
      */
     fun matchMembersWithAI(request: MemberMatchRequest): String {
+        println("🤖 [DeepSeekService] Starting matchMembersWithAI")
+        println("📊 [DeepSeekService] Guest: ${request.guestName} (${request.guestProfession})")
+        println("📊 [DeepSeekService] Members count: ${request.members.size}")
+        
         if (apiKey.isBlank()) {
+            println("❌ [DeepSeekService] API key is blank!")
             return """{"error": "DeepSeek API key not configured"}"""
         }
+        
+        println("✅ [DeepSeekService] API key configured: ${apiKey.take(10)}...")
         
         val memberList = request.members.joinToString("\n") { "- ${it.name} (${it.profession})" }
         
@@ -162,7 +169,10 @@ class DeepSeekService(
             memberList = memberList
         )
         
+        println("📝 [DeepSeekService] Prompt length: ${prompt.length} chars")
+        
         return try {
+            // Try without response_format first (deepseek-reasoner might not support it)
             val deepSeekRequest = DeepSeekRequest(
                 model = "deepseek-reasoner",
                 messages = listOf(
@@ -173,10 +183,11 @@ class DeepSeekService(
                 ),
                 temperature = 0.7,
                 max_tokens = 2000,
-                response_format = ResponseFormat(type = "json_object")
+                response_format = null  // Don't force JSON format for deepseek-reasoner
             )
             
             val requestBody = objectMapper.writeValueAsString(deepSeekRequest)
+            println("📤 [DeepSeekService] Sending request to: $apiUrl")
             
             val httpRequest = HttpRequest.newBuilder()
                 .uri(URI.create(apiUrl))
@@ -186,23 +197,38 @@ class DeepSeekService(
                 .build()
             
             val response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString())
+            println("📥 [DeepSeekService] Response status: ${response.statusCode()}")
             
             if (response.statusCode() == 200) {
-                val deepSeekResponse = objectMapper.readValue(response.body(), DeepSeekResponse::class.java)
-                val content = deepSeekResponse.choices.firstOrNull()?.message?.content 
-                    ?: """{"error": "No response from DeepSeek API"}"""
+                val responseBody = response.body()
+                println("✅ [DeepSeekService] Response received (${responseBody.length} chars)")
                 
-                // Extract JSON from response
+                val deepSeekResponse = objectMapper.readValue(responseBody, DeepSeekResponse::class.java)
+                val content = deepSeekResponse.choices.firstOrNull()?.message?.content 
+                    ?: run {
+                        println("❌ [DeepSeekService] No content in response")
+                        return """{"error": "No response from DeepSeek API"}"""
+                    }
+                
+                println("📄 [DeepSeekService] Content preview: ${content.take(200)}...")
+                
+                // Extract JSON array from response
                 val jsonMatch = Regex("""\[[\s\S]*\]""").find(content)
                 if (jsonMatch != null) {
+                    println("✅ [DeepSeekService] JSON extracted successfully")
                     jsonMatch.value
                 } else {
+                    println("⚠️ [DeepSeekService] No JSON array found, returning full content")
                     content
                 }
             } else {
-                """{"error": "DeepSeek API error: ${response.statusCode()}"}"""
+                val errorBody = response.body()
+                println("❌ [DeepSeekService] API error ${response.statusCode()}: $errorBody")
+                """{"error": "DeepSeek API error: ${response.statusCode()}", "details": "$errorBody"}"""
             }
         } catch (e: Exception) {
+            println("❌ [DeepSeekService] Exception: ${e.javaClass.simpleName} - ${e.message}")
+            e.printStackTrace()
             """{"error": "Error calling DeepSeek API: ${e.message}"}"""
         }
     }
@@ -216,7 +242,7 @@ class DeepSeekService(
         memberList: String
     ): String {
         return """
-You are an elite strategic networking consultant for a BNI-style business event. Your mission is to identify HIGH-VALUE connections that lead to immediate referrals and long-term partnerships.
+You are an elite strategic networking consultant for a business event. Your mission is to identify HIGH-VALUE connections that lead to immediate referrals and long-term partnerships.
 
 【來賓檔案 Guest Profile】
 姓名: $guestName
