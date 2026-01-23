@@ -1,8 +1,9 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import type { Guest, Member, MatchResult } from "../types/seating";
 import { assignGuestToTable } from "../lib/assignGuestToTable";
-import { sampleMembers, sampleGuests } from "../lib/sampleData";
+import { sampleGuests } from "../lib/sampleData";
 import { SeatingDashboard } from "./SeatingDashboard";
+import { getMembers } from "../api";
 
 type StrategicPlanningPanelProps = {
   onNotify: (message: string, type: "success" | "error" | "info") => void;
@@ -30,7 +31,8 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
   const [guestRemarks, setGuestRemarks] = useState("");
 
   // Members state
-  const [members, setMembers] = useState<Member[]>(sampleMembers);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [isLoadingMembers, setIsLoadingMembers] = useState(true);
   const [showMemberForm, setShowMemberForm] = useState(false);
   const [newMemberName, setNewMemberName] = useState("");
   const [newMemberProfession, setNewMemberProfession] = useState("");
@@ -41,6 +43,34 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
   const [currentGuest, setCurrentGuest] = useState<Guest | null>(null);
   const [isMatching, setIsMatching] = useState(false);
   const [showValidation, setShowValidation] = useState(false);
+
+  // Load real members from backend
+  useEffect(() => {
+    const loadMembers = async () => {
+      try {
+        setIsLoadingMembers(true);
+        const data = await getMembers();
+        
+        // Convert MemberInfo[] to Member[] with auto-assigned table numbers
+        // Distribute members evenly across 8 tables
+        const convertedMembers: Member[] = data.members.map((memberInfo, index) => ({
+          id: `member-${index}`,
+          name: memberInfo.name,
+          profession: memberInfo.domain,
+          tableNumber: (index % 8) + 1  // Distribute across tables 1-8
+        }));
+        
+        setMembers(convertedMembers);
+      } catch (error) {
+        onNotify("無法載入會員名單", "error");
+        setMembers([]);
+      } finally {
+        setIsLoadingMembers(false);
+      }
+    };
+
+    loadMembers();
+  }, [onNotify]);
 
   const tables = members.reduce<Record<number, Member[]>>((acc, member) => {
     acc[member.tableNumber] ??= [];
@@ -156,6 +186,16 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
         <p className="hint">
           為來賓配對最佳座位 {eventId && `(活動 ID: ${eventId})`}
         </p>
+        {isLoadingMembers && (
+          <p className="hint" style={{ color: 'var(--accent)' }}>
+            ⏳ 正在載入會員資料... ({members.length} 位已載入)
+          </p>
+        )}
+        {!isLoadingMembers && members.length > 0 && (
+          <p className="hint" style={{ color: 'var(--success)' }}>
+            ✓ 已載入 {members.length} 位會員資料
+          </p>
+        )}
       </div>
 
       {/* Guest Input Form */}
@@ -256,9 +296,15 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
           type="button"
           className="button match-btn"
           onClick={handleMatch}
-          disabled={isMatching}
+          disabled={isMatching || isLoadingMembers || members.length === 0}
         >
-          {isMatching ? "⏳ 配對中..." : "🎯 開始配對"}
+          {isLoadingMembers 
+            ? "⏳ 載入會員中..." 
+            : isMatching 
+              ? "⏳ 配對中..." 
+              : members.length === 0
+                ? "❌ 無會員資料"
+                : "🎯 開始配對"}
         </button>
       </div>
 
