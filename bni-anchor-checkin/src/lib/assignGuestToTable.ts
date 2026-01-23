@@ -11,14 +11,20 @@ export async function matchGuestWithMembers(
   members: Member[]
 ): Promise<MatchResult & { provider?: "deepseek" | "gemini" | "keyword" | null }> {
   
+  console.log("🎯 Starting member matching for guest:", guest.name, guest.profession);
+  console.log("📊 Total members available:", members.length);
+  
   // Try AI matching first (DeepSeek or Gemini)
   const aiResult = await matchMembersWithAI(guest, members);
   let recommendedMembers = aiResult.matches;
   let matchNote = "";
   let provider = aiResult.provider;
 
+  console.log(`🤖 AI Result - Provider: ${provider}, Matches: ${recommendedMembers.length}`);
+
   // Fallback to keyword matching if AI fails
   if (!recommendedMembers || recommendedMembers.length === 0) {
+    console.log("⚠️ AI matching failed, falling back to keyword matching");
     recommendedMembers = matchMembersByKeyword(guest, members);
     matchNote = buildKeywordNote(guest, recommendedMembers);
     provider = "keyword";

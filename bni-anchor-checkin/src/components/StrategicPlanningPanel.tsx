@@ -85,6 +85,8 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
       remarks: guestRemarks.trim() || undefined,
     };
 
+    // Clear previous result before starting new match
+    setMatchResult(null);
     setIsMatching(true);
     setCurrentGuest(guest);
     try {
@@ -284,45 +286,113 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
         </div>
       )}
 
-      {/* Recommended Member Combinations */}
-      {matchResult && matchResult.recommendedMembers && matchResult.recommendedMembers.length > 0 && (
-        <div className="matched-members-section">
-          <div className="section-header">
-            <h3>💼 推薦配對組合 Recommended Combinations</h3>
-            <p className="hint">
-              {currentGuest?.name} ({currentGuest?.profession}) 可以同以下會員配對交流：
-            </p>
-          </div>
+      {/* Recommended Member Combinations - Grouped by Match Strength */}
+      {matchResult && matchResult.recommendedMembers && matchResult.recommendedMembers.length > 0 && (() => {
+        const highMatches = matchResult.recommendedMembers.filter(m => m.matchStrength === "High");
+        const mediumMatches = matchResult.recommendedMembers.filter(m => m.matchStrength === "Medium");
+        const lowMatches = matchResult.recommendedMembers.filter(m => m.matchStrength === "Low");
 
-          <div className="member-combinations-list">
-            {matchResult.recommendedMembers.map((memberMatch, index) => (
-              <div
-                key={memberMatch.member.id}
-                className="combination-card"
-              >
-                <div className="combination-header">
-                  <div className="combination-number">#{index + 1}</div>
-                  <div className="member-info-header">
-                    <h4 className="member-name">{memberMatch.member.name}</h4>
-                    <span className={strengthStyles[memberMatch.matchStrength]}>
-                      {memberMatch.matchStrength} Match
-                    </span>
-                  </div>
-                </div>
-                
-                <div className="member-profession">
-                  {memberMatch.member.profession}
-                </div>
+        return (
+          <div className="matched-members-section">
+            <div className="section-header">
+              <h3>💼 AI 推薦配對 Recommended by AI</h3>
+              <p className="hint">
+                {currentGuest?.name} ({currentGuest?.profession}) 的配對建議：
+              </p>
+            </div>
 
-                <div className="match-reason">
-                  <strong>配對原因：</strong>
-                  <p>{memberMatch.reason}</p>
+            {/* High Match Members */}
+            {highMatches.length > 0 && (
+              <div className="match-strength-group">
+                <div className="match-strength-header high">
+                  <h4>🔥 Highest Match ({highMatches.length})</h4>
+                  <p className="hint">強烈推薦優先交流的會員</p>
+                </div>
+                <div className="member-combinations-list">
+                  {highMatches.map((memberMatch, index) => (
+                    <div key={memberMatch.member.id} className="combination-card high-match">
+                      <div className="combination-header">
+                        <div className="combination-number high">#{index + 1}</div>
+                        <div className="member-info-header">
+                          <h4 className="member-name">{memberMatch.member.name}</h4>
+                          <span className={strengthStyles[memberMatch.matchStrength]}>
+                            {memberMatch.matchStrength}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="member-profession">{memberMatch.member.profession}</div>
+                      <div className="match-reason">
+                        <strong>配對原因：</strong>
+                        <p>{memberMatch.reason}</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
+            )}
+
+            {/* Medium Match Members */}
+            {mediumMatches.length > 0 && (
+              <div className="match-strength-group">
+                <div className="match-strength-header medium">
+                  <h4>⚡ Medium Match ({mediumMatches.length})</h4>
+                  <p className="hint">值得考慮交流的會員</p>
+                </div>
+                <div className="member-combinations-list">
+                  {mediumMatches.map((memberMatch, index) => (
+                    <div key={memberMatch.member.id} className="combination-card medium-match">
+                      <div className="combination-header">
+                        <div className="combination-number medium">#{index + 1}</div>
+                        <div className="member-info-header">
+                          <h4 className="member-name">{memberMatch.member.name}</h4>
+                          <span className={strengthStyles[memberMatch.matchStrength]}>
+                            {memberMatch.matchStrength}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="member-profession">{memberMatch.member.profession}</div>
+                      <div className="match-reason">
+                        <strong>配對原因：</strong>
+                        <p>{memberMatch.reason}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Low Match Members */}
+            {lowMatches.length > 0 && (
+              <div className="match-strength-group">
+                <div className="match-strength-header low">
+                  <h4>💡 Low Match ({lowMatches.length})</h4>
+                  <p className="hint">一般人脈拓展機會</p>
+                </div>
+                <div className="member-combinations-list">
+                  {lowMatches.map((memberMatch, index) => (
+                    <div key={memberMatch.member.id} className="combination-card low-match">
+                      <div className="combination-header">
+                        <div className="combination-number low">#{index + 1}</div>
+                        <div className="member-info-header">
+                          <h4 className="member-name">{memberMatch.member.name}</h4>
+                          <span className={strengthStyles[memberMatch.matchStrength]}>
+                            {memberMatch.matchStrength}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="member-profession">{memberMatch.member.profession}</div>
+                      <div className="match-reason">
+                        <strong>配對原因：</strong>
+                        <p>{memberMatch.reason}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Configuration Info */}
       <div className="config-info">

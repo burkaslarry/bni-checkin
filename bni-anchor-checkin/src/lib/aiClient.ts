@@ -62,7 +62,13 @@ ${memberList}
 const callDeepSeek = async (
   prompt: string
 ): Promise<AIMatchResponse[] | null> => {
-  if (!DEEPSEEK_API_KEY) return null;
+  if (!DEEPSEEK_API_KEY) {
+    console.warn("DeepSeek API key not configured");
+    return null;
+  }
+
+  console.log("🤖 Calling DeepSeek API...");
+  console.log("📝 Prompt preview:", prompt.substring(0, 200) + "...");
 
   try {
     const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
@@ -79,16 +85,27 @@ const callDeepSeek = async (
       }),
     });
 
-    if (!response.ok) throw new Error(`DeepSeek API error: ${response.status}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("❌ DeepSeek API HTTP error:", response.status, errorText);
+      throw new Error(`DeepSeek API error: ${response.status}`);
+    }
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content || "";
+    console.log("✅ DeepSeek response received:", content.substring(0, 300) + "...");
+    
     const jsonMatch = content.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) throw new Error("No JSON found in DeepSeek response");
+    if (!jsonMatch) {
+      console.error("❌ No JSON found in response:", content);
+      throw new Error("No JSON found in DeepSeek response");
+    }
 
-    return JSON.parse(jsonMatch[0]) as AIMatchResponse[];
+    const result = JSON.parse(jsonMatch[0]) as AIMatchResponse[];
+    console.log(`✅ Parsed ${result.length} member matches from DeepSeek`);
+    return result;
   } catch (error) {
-    console.error("DeepSeek API failed:", error);
+    console.error("❌ DeepSeek API failed:", error);
     return null;
   }
 };
