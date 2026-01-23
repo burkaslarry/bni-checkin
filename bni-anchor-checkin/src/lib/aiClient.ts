@@ -10,38 +10,48 @@ type AIProvider = "deepseek" | "gemini" | "keyword" | null;
 const buildPrompt = (guest: Guest, tables: TableGroup[]): string => {
   const tableDescriptions = tables
     .map((t) => {
-      const professions = t.members.map((m) => m.profession).join(", ");
+      const professions = t.members.map((m) => `${m.name} (${m.profession})`).join(", ");
       return `Table ${t.tableNumber}: ${professions} (${t.members.length}/8 seats)`;
     })
     .join("\n");
 
-  return `You are a strategic seating assistant for a BNI-style networking event.
+  return `You are an elite strategic seating consultant for a BNI-style business networking event. Your mission is to create HIGH-VALUE connections that lead to immediate referrals and long-term partnerships.
 
-Guest Profile:
-- Name: ${guest.name}
-- Profession: ${guest.profession}
-${guest.targetProfession ? `- Target Profession: ${guest.targetProfession}` : ""}
-- Bottlenecks: ${guest.bottlenecks.join(", ")}
-${guest.remarks ? `- Remarks: ${guest.remarks}` : ""}
+【來賓檔案 Guest Profile】
+姓名: ${guest.name}
+職業: ${guest.profession}
+${guest.targetProfession ? `目標對接: ${guest.targetProfession}` : ""}
+瓶頸/需求: ${guest.bottlenecks.length > 0 ? guest.bottlenecks.join(", ") : "未指定"}
+${guest.remarks ? `價值交換: ${guest.remarks}` : ""}
 
-Available Tables:
+【可用座位 Available Tables】
 ${tableDescriptions}
 
-Instructions:
-1. Rank ALL tables from best to worst based on "Referral Potential" and "Problem Solving" for this guest.
-2. Consider which table members can help resolve the guest's bottlenecks or connect them with their target profession.
-3. Prefer tables with available seats (under 8 people).
-4. For each table, provide:
-   - Table number
-   - Match strength: "High", "Medium", or "Low"
-   - Brief reason (1-2 sentences explaining the strategic match)
+【核心配對原則 Core Matching Principles】
+1. **價值互補 (Value Complementarity)**: 優先配對能解決來賓「瓶頸」的專業人士
+2. **目標對接 (Target Alignment)**: 如果來賓有明確的「目標職業」，尋找該領域或能引薦該領域的會員
+3. **資源交換 (Resource Exchange)**: 關注備註中的「價值提供」，配對能產生雙向價值的人脈
+4. **行業互補 (Industry Synergy)**: 尋找上下游產業鏈、異業合作機會
+5. **座位可用性 (Seat Availability)**: 優先選擇有空位的桌次 (<8人)
 
-Response format (JSON array):
+【配對策略 Matching Strategy】
+- **High Match**: 桌上有2位以上會員能直接解決來賓瓶頸，或其職業正是來賓的目標對接對象
+- **Medium Match**: 桌上有1位會員能提供相關協助，或行業高度相關
+- **Low Match**: 桌上會員可提供一般人脈拓展，但無直接業務契合點
+
+【輸出要求 Output Format】
+請為每張桌次評分並排序（最佳配對在前），以 JSON 格式回應：
+
 [
-  { "tableNumber": 2, "matchStrength": "High", "reason": "..." },
-  { "tableNumber": 1, "matchStrength": "Medium", "reason": "..." },
+  {
+    "tableNumber": 2,
+    "matchStrength": "High",
+    "reason": "桌上有 [會員名稱] ([職業]) 能直接解決來賓的 [具體瓶頸]，並且 [會員名稱2] 在 [目標行業] 有豐富人脈，可提供精準引薦。"
+  },
   ...
-]`;
+]
+
+**重要提醒**: 請確保每個 reason 具體說明「誰」能提供「什麼價值」給來賓，而非泛泛而談。`;
 };
 
 const callDeepSeek = async (

@@ -243,7 +243,7 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
             <input
               id="guest-profession"
               className={`input-field ${showValidation && !guestProfession.trim() ? 'input-error' : ''}`}
-              placeholder="例如: 創業家 Entrepreneur"
+              placeholder="精確職稱，如：高淨值客戶財富管理師"
               value={guestProfession}
               onChange={(e) => {
                 setGuestProfession(e.target.value);
@@ -253,6 +253,9 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
             {showValidation && !guestProfession.trim() && (
               <span className="error-text">⚠️ 此欄位為必填</span>
             )}
+            <span className="hint" style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: '0.25rem', display: 'block' }}>
+              💡 越具體越好！避免只寫「創業家」，改寫「餐飲連鎖創業家」
+            </span>
           </div>
 
           <div className="form-group">
@@ -260,10 +263,13 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
             <input
               id="guest-target"
               className="input-field"
-              placeholder="例如: 建築承包商 Contractor（選填）"
+              placeholder="例如：房地產開發商的IT採購決策者"
               value={guestTargetProfession}
               onChange={(e) => setGuestTargetProfession(e.target.value)}
             />
+            <span className="hint" style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: '0.25rem', display: 'block' }}>
+              🎯 寫出具體對象，而非行業！如：「擁有大量企業客戶的保險經紀人」
+            </span>
           </div>
 
           <div className="form-group">
@@ -273,22 +279,28 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
             <input
               id="guest-bottlenecks"
               className="input-field"
-              placeholder="例如: 缺乏承包商, 需要設計合作夥伴"
+              placeholder="例如：缺乏進入政府標案的管道"
               value={guestBottlenecks}
               onChange={(e) => setGuestBottlenecks(e.target.value)}
             />
+            <span className="hint" style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: '0.25rem', display: 'block' }}>
+              🔑 這是配對的關鍵！寫出你缺什麼、誰能幫你
+            </span>
           </div>
 
           <div className="form-group full-width">
-            <label htmlFor="guest-remarks">備註 Remarks</label>
+            <label htmlFor="guest-remarks">備註 Remarks - 價值交換</label>
             <textarea
               id="guest-remarks"
               className="input-field"
-              rows={2}
-              placeholder="任何額外資訊..."
+              rows={3}
+              placeholder="我有[資源/專業]，我想找[目標對象]，我可以提供[給對方的價值]。例如：我有超過50位準客戶正在尋找專業律師合作，能分享家族辦公室設立趨勢。"
               value={guestRemarks}
               onChange={(e) => setGuestRemarks(e.target.value)}
             />
+            <span className="hint" style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: '0.25rem', display: 'block' }}>
+              ⭐ 最重要！說明你能給別人什麼價值，才能吸引高質量對接
+            </span>
           </div>
         </div>
 
