@@ -275,9 +275,10 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
       {matchResult && currentGuest && (
         <div className="match-result-card">
           <div className="result-header">
-            <h3>配對結果 Match Result</h3>
+            <h3>配對結果</h3>
             <span className={strengthStyles[matchResult.matchStrength]}>
-              {matchResult.matchStrength} Match
+              {matchResult.matchStrength === "High" ? "高度匹配" : 
+               matchResult.matchStrength === "Medium" ? "中度匹配" : "低度匹配"}
             </span>
           </div>
           <div className="result-content">
@@ -295,7 +296,7 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
         return (
           <div className="matched-members-section">
             <div className="section-header">
-              <h3>💼 AI 推薦配對 Recommended by AI</h3>
+              <h3>💼 AI 推薦配對</h3>
               <p className="hint">
                 {currentGuest?.name} ({currentGuest?.profession}) 的配對建議：
               </p>
@@ -305,7 +306,7 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
             {highMatches.length > 0 && (
               <div className="match-strength-group">
                 <div className="match-strength-header high">
-                  <h4>🔥 Highest Match ({highMatches.length})</h4>
+                  <h4>🔥 最高匹配度 ({highMatches.length})</h4>
                   <p className="hint">強烈推薦優先交流的會員</p>
                 </div>
                 <div className="member-combinations-list">
@@ -316,7 +317,7 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
                         <div className="member-info-header">
                           <h4 className="member-name">{memberMatch.member.name}</h4>
                           <span className={strengthStyles[memberMatch.matchStrength]}>
-                            {memberMatch.matchStrength}
+                            高度匹配
                           </span>
                         </div>
                       </div>
@@ -335,7 +336,7 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
             {mediumMatches.length > 0 && (
               <div className="match-strength-group">
                 <div className="match-strength-header medium">
-                  <h4>⚡ Medium Match ({mediumMatches.length})</h4>
+                  <h4>⚡ 中度匹配 ({mediumMatches.length})</h4>
                   <p className="hint">值得考慮交流的會員</p>
                 </div>
                 <div className="member-combinations-list">
@@ -346,7 +347,7 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
                         <div className="member-info-header">
                           <h4 className="member-name">{memberMatch.member.name}</h4>
                           <span className={strengthStyles[memberMatch.matchStrength]}>
-                            {memberMatch.matchStrength}
+                            中度匹配
                           </span>
                         </div>
                       </div>
@@ -365,7 +366,7 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
             {lowMatches.length > 0 && (
               <div className="match-strength-group">
                 <div className="match-strength-header low">
-                  <h4>💡 Low Match ({lowMatches.length})</h4>
+                  <h4>💡 低度匹配 ({lowMatches.length})</h4>
                   <p className="hint">一般人脈拓展機會</p>
                 </div>
                 <div className="member-combinations-list">
@@ -376,7 +377,7 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
                         <div className="member-info-header">
                           <h4 className="member-name">{memberMatch.member.name}</h4>
                           <span className={strengthStyles[memberMatch.matchStrength]}>
-                            {memberMatch.matchStrength}
+                            低度匹配
                           </span>
                         </div>
                       </div>
