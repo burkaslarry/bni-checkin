@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EventXP - Intelligent Event Management Platform</title>
+    <meta name="description" content="Transform your events with AI-powered networking, real-time insights, and seamless check-in experiences.">
+    <link rel="icon" type="image/svg+xml" href="/icon.svg">
+    <style>
+        :root {
+            --primary: #38bdf8;
+            --secondary: #22c55e;
+            --accent: #f59e0b;
+            --dark: #1e293b;
+            --light: #f8fafc;
+            --gray: #64748b;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: var(--dark);
+            background: var(--light);
+        }
+
+        /* Header */
+        header {
+            background: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        nav {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--dark);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+
+        .nav-links a:hover {
+            color: var(--primary);
+        }
+
+        .cta-button {
+            background: var(--primary);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            text-decoration: none;
+            font-weight: 600;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .cta-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(56, 189, 248, 0.3);
+        }
+
+        /* Hero Section */
+        .hero {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 6rem 2rem;
+            text-align: center;
+        }
+
+        .hero h1 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            font-weight: 800;
+        }
+
+        .hero p {
+            font-size: 1.25rem;
+            margin-bottom: 2rem;
+            opacity: 0.9;
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .button-primary {
+            background: white;
+            color: #667eea;
+            padding: 1rem 2rem;
+            border-radius: 0.5rem;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 1.125rem;
+            transition: transform 0.3s;
+        }
+
+        .button-primary:hover {
+            transform: scale(1.05);
+        }
+
+        .button-secondary {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 0.5rem;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 1.125rem;
+            border: 2px solid white;
+            transition: background 0.3s;
+        }
+
+        .button-secondary:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        /* Features Section */
+        .section {
+            max-width: 1200px;
+            margin: 4rem auto;
+            padding: 0 2rem;
+        }
+
+        .section-title {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 3rem;
+            font-weight: 700;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2rem;
+        }
+
+        .feature-card {
+            background: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 15px rgba(0,0,0,0.15);
+        }
+
+        .feature-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .feature-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .feature-description {
+            color: var(--gray);
+        }
+
+        /* Pricing Section */
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: 3rem;
+        }
+
+        .pricing-card {
+            background: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .pricing-card.featured {
+            border: 3px solid var(--primary);
+            transform: scale(1.05);
+        }
+
+        .price-tag {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: var(--primary);
+            margin: 1rem 0;
+        }
+
+        .price-features {
+            list-style: none;
+            margin: 2rem 0;
+            text-align: left;
+        }
+
+        .price-features li {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .price-features li:before {
+            content: "✓ ";
+            color: var(--secondary);
+            font-weight: bold;
+        }
+
+        /* CTA Section */
+        .cta-section {
+            background: var(--primary);
+            color: white;
+            padding: 4rem 2rem;
+            text-align: center;
+            margin: 4rem 0;
+        }
+
+        .cta-section h2 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+
+        /* Footer */
+        footer {
+            background: var(--dark);
+            color: white;
+            padding: 3rem 2rem;
+            text-align: center;
+        }
+
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .footer-links a {
+            color: white;
+            text-decoration: none;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2rem;
+            }
+
+            .section-title {
+                font-size: 2rem;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            .pricing-card.featured {
+                transform: scale(1);
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <nav>
+            <a href="#" class="logo">🎯 EventXP</a>
+            <ul class="nav-links">
+                <li><a href="#features">Features</a></li>
+                <li><a href="#pricing">Pricing</a></li>
+                <li><a href="#about">About</a></li>
+                <li><a href="https://github.com/your-org/eventxp">GitHub</a></li>
+            </ul>
+            <a href="http://localhost:5173" class="cta-button">Launch Demo</a>
+        </nav>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <h1>🎯 Intelligent Event Management</h1>
+        <p>Transform your events with AI-powered networking, real-time insights, and seamless check-in experiences.</p>
+        <div class="hero-buttons">
+            <a href="http://localhost:5173" class="button-primary">Try Demo</a>
+            <a href="https://github.com/your-org/eventxp" class="button-secondary">View on GitHub</a>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="section" id="features">
+        <h2 class="section-title">✨ Key Features</h2>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">🤖</div>
+                <h3 class="feature-title">AI-Powered Networking</h3>
+                <p class="feature-description">
+                    DeepSeek AI analyzes attendee profiles to suggest high-value connections and strategic seating arrangements.
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">📊</div>
+                <h3 class="feature-title">Real-Time Analytics</h3>
+                <p class="feature-description">
+                    Live dashboard with attendance tracking, VIP management, and comprehensive data export capabilities.
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">✅</div>
+                <h3 class="feature-title">Seamless Check-In</h3>
+                <p class="feature-description">
+                    QR code scanning, offline support, and multi-device sync for a frictionless check-in experience.
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🎨</div>
+                <h3 class="feature-title">Modern UX</h3>
+                <p class="feature-description">
+                    Progressive Web App with responsive design, dark/light mode, and works on all devices.
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🔒</div>
+                <h3 class="feature-title">Secure & Private</h3>
+                <p class="feature-description">
+                    Backend-only API keys, CORS protection, HTTPS encryption, and GDPR compliance built-in.
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">⚡</div>
+                <h3 class="feature-title">Lightning Fast</h3>
+                <p class="feature-description">
+                    Built with modern tech stack: React, Kotlin, WebSocket for instant real-time updates.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing Section -->
+    <section class="section" id="pricing">
+        <h2 class="section-title">💼 Pricing</h2>
+        <div class="pricing-grid">
+            <div class="pricing-card">
+                <h3>🎯 Essentials</h3>
+                <div class="price-tag">$480<span style="font-size:1rem">/year</span></div>
+                <ul class="price-features">
+                    <li>Basic check-in system</li>
+                    <li>Real-time dashboard</li>
+                    <li>CSV export</li>
+                    <li>Up to 100 attendees</li>
+                    <li>Email support</li>
+                </ul>
+                <a href="#contact" class="cta-button">Get Started</a>
+            </div>
+
+            <div class="pricing-card featured">
+                <h3>🚀 Professional</h3>
+                <div class="price-tag">$2,880<span style="font-size:1rem">/year</span></div>
+                <ul class="price-features">
+                    <li><strong>All Essentials features</strong></li>
+                    <li>AI-powered networking</li>
+                    <li>Strategic seating</li>
+                    <li>VIP management</li>
+                    <li>Up to 500 attendees</li>
+                    <li>Priority support</li>
+                </ul>
+                <a href="#contact" class="cta-button">Most Popular</a>
+            </div>
+
+            <div class="pricing-card">
+                <h3>🏢 Enterprise</h3>
+                <div class="price-tag">Custom</div>
+                <ul class="price-features">
+                    <li><strong>All Professional features</strong></li>
+                    <li>Multi-event support</li>
+                    <li>Custom branding</li>
+                    <li>Dedicated support</li>
+                    <li>Unlimited attendees</li>
+                    <li>White-label option</li>
+                </ul>
+                <a href="#contact" class="cta-button">Contact Sales</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Use Cases Section -->
+    <section class="section">
+        <h2 class="section-title">🎯 Perfect For</h2>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">🤝</div>
+                <h3 class="feature-title">Business Networking</h3>
+                <p class="feature-description">
+                    BNI chapters, chambers of commerce, and professional associations with automated member matching.
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🏢</div>
+                <h3 class="feature-title">Corporate Events</h3>
+                <p class="feature-description">
+                    Conferences, seminars, and team-building with department-wise seating and VIP tracking.
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🎪</div>
+                <h3 class="feature-title">Trade Shows</h3>
+                <p class="feature-description">
+                    Large-scale exhibitions with exhibitor-visitor matching and booth traffic analytics.
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">📚</div>
+                <h3 class="feature-title">Educational Events</h3>
+                <p class="feature-description">
+                    Workshops and training with participant skill matching and engagement analytics.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-section" id="contact">
+        <h2>Ready to Transform Your Events?</h2>
+        <p style="font-size:1.25rem; margin-bottom:2rem;">Start your free trial today. No credit card required.</p>
+        <div style="display:flex; gap:1rem; justify-content:center; flex-wrap:wrap;">
+            <a href="http://localhost:5173" class="button-primary">Launch Demo</a>
+            <a href="mailto:hello@eventxp.com" class="button-secondary">Contact Sales</a>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="footer-links">
+            <a href="#features">Features</a>
+            <a href="#pricing">Pricing</a>
+            <a href="./SETUP.md">Documentation</a>
+            <a href="https://github.com/your-org/eventxp">GitHub</a>
+            <a href="mailto:hello@eventxp.com">Contact</a>
+        </div>
+        <p>&copy; 2026 EventXP. All rights reserved.</p>
+        <p style="margin-top:1rem; opacity:0.7;">Made with ❤️ for event organizers worldwide</p>
+    </footer>
+</body>
+</html>
