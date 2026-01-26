@@ -23,10 +23,40 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Hiragino Sans', 'Noto Sans CJK', sans-serif;
             line-height: 1.6;
             color: var(--dark);
             background: var(--light);
+        }
+
+        /* Language Switcher */
+        .language-switcher {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .lang-btn {
+            background: transparent;
+            border: 2px solid var(--gray);
+            color: var(--dark);
+            padding: 0.4rem 0.8rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.875rem;
+            transition: all 0.3s;
+        }
+
+        .lang-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .lang-btn.active {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: white;
         }
 
         /* Header */
@@ -45,6 +75,8 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
         }
 
         .logo {
@@ -52,6 +84,13 @@
             font-weight: 700;
             color: var(--primary);
             text-decoration: none;
+        }
+
+        .nav-center {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+            flex-wrap: wrap;
         }
 
         .nav-links {
@@ -79,6 +118,8 @@
             text-decoration: none;
             font-weight: 600;
             transition: transform 0.3s, box-shadow 0.3s;
+            border: none;
+            cursor: pointer;
         }
 
         .cta-button:hover {
@@ -289,6 +330,34 @@
             .pricing-card.featured {
                 transform: scale(1);
             }
+
+            nav {
+                justify-content: center;
+            }
+
+            .language-switcher {
+                order: 3;
+                width: 100%;
+                justify-content: center;
+                margin-top: 1rem;
+            }
+        }
+
+        /* Hidden by default */
+        [data-lang] {
+            display: none;
+        }
+
+        [data-lang].active {
+            display: block;
+        }
+
+        [data-lang-inline] {
+            display: none;
+        }
+
+        [data-lang-inline].active {
+            display: inline;
         }
     </style>
 </head>
@@ -297,18 +366,39 @@
     <header>
         <nav>
             <a href="#" class="logo">🎯 EventXP</a>
-            <ul class="nav-links">
-                <li><a href="#features">Features</a></li>
-                <li><a href="#pricing">Pricing</a></li>
-                <li><a href="#about">About</a></li>
-                <li><a href="https://github.com/your-org/eventxp">GitHub</a></li>
-            </ul>
-            <a href="http://localhost:5173" class="cta-button">Launch Demo</a>
+            
+            <div class="nav-center">
+                <ul class="nav-links">
+                    <li><a href="#features" data-lang-inline="en" class="active">Features</a></li>
+                    <li><a href="#features" data-lang-inline="zh-TW">功能特色</a></li>
+                    <li><a href="#features" data-lang-inline="zh-CN">功能特色</a></li>
+                    <li><a href="#features" data-lang-inline="ja">機能</a></li>
+                    
+                    <li><a href="#pricing" data-lang-inline="en" class="active">Pricing</a></li>
+                    <li><a href="#pricing" data-lang-inline="zh-TW">價格方案</a></li>
+                    <li><a href="#pricing" data-lang-inline="zh-CN">价格方案</a></li>
+                    <li><a href="#pricing" data-lang-inline="ja">料金</a></li>
+                    
+                    <li><a href="https://github.com/your-org/eventxp">GitHub</a></li>
+                </ul>
+                
+                <div class="language-switcher">
+                    <button class="lang-btn active" onclick="switchLanguage('en')">EN</button>
+                    <button class="lang-btn" onclick="switchLanguage('zh-TW')">繁中</button>
+                    <button class="lang-btn" onclick="switchLanguage('zh-CN')">简中</button>
+                    <button class="lang-btn" onclick="switchLanguage('ja')">日本語</button>
+                </div>
+            </div>
+            
+            <a href="http://localhost:5173" class="cta-button" data-lang-inline="en">Launch Demo</a>
+            <a href="http://localhost:5173" class="cta-button" data-lang-inline="zh-TW">啟動演示</a>
+            <a href="http://localhost:5173" class="cta-button" data-lang-inline="zh-CN">启动演示</a>
+            <a href="http://localhost:5173" class="cta-button" data-lang-inline="ja">デモを起動</a>
         </nav>
     </header>
 
-    <!-- Hero Section -->
-    <section class="hero">
+    <!-- Hero Section - English -->
+    <section class="hero" data-lang="en">
         <h1>🎯 Intelligent Event Management</h1>
         <p>Transform your events with AI-powered networking, real-time insights, and seamless check-in experiences.</p>
         <div class="hero-buttons">
@@ -317,8 +407,38 @@
         </div>
     </section>
 
-    <!-- Features Section -->
-    <section class="section" id="features">
+    <!-- Hero Section - Traditional Chinese -->
+    <section class="hero" data-lang="zh-TW">
+        <h1>🎯 智慧活動管理平台</h1>
+        <p>運用 AI 驅動的智慧配對、即時數據洞察和無縫簽到體驗，全面提升您的活動價值。</p>
+        <div class="hero-buttons">
+            <a href="http://localhost:5173" class="button-primary">試用演示</a>
+            <a href="https://github.com/your-org/eventxp" class="button-secondary">查看 GitHub</a>
+        </div>
+    </section>
+
+    <!-- Hero Section - Simplified Chinese -->
+    <section class="hero" data-lang="zh-CN">
+        <h1>🎯 智能活动管理平台</h1>
+        <p>运用 AI 驱动的智能配对、实时数据洞察和无缝签到体验，全面提升您的活动价值。</p>
+        <div class="hero-buttons">
+            <a href="http://localhost:5173" class="button-primary">试用演示</a>
+            <a href="https://github.com/your-org/eventxp" class="button-secondary">查看 GitHub</a>
+        </div>
+    </section>
+
+    <!-- Hero Section - Japanese -->
+    <section class="hero" data-lang="ja">
+        <h1>🎯 インテリジェントイベント管理</h1>
+        <p>AIによるネットワーキング、リアルタイム分析、シームレスなチェックインでイベントを変革します。</p>
+        <div class="hero-buttons">
+            <a href="http://localhost:5173" class="button-primary">デモを試す</a>
+            <a href="https://github.com/your-org/eventxp" class="button-secondary">GitHubで見る</a>
+        </div>
+    </section>
+
+    <!-- Features Section - English -->
+    <section class="section" id="features" data-lang="en">
         <h2 class="section-title">✨ Key Features</h2>
         <div class="features-grid">
             <div class="feature-card">
@@ -371,8 +491,170 @@
         </div>
     </section>
 
-    <!-- Pricing Section -->
-    <section class="section" id="pricing">
+    <!-- Features Section - Traditional Chinese -->
+    <section class="section" id="features" data-lang="zh-TW">
+        <h2 class="section-title">✨ 核心功能</h2>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">🤖</div>
+                <h3 class="feature-title">AI 智慧配對</h3>
+                <p class="feature-description">
+                    DeepSeek AI 分析參與者資料，推薦高價值人脈連結和策略性座位安排。
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">📊</div>
+                <h3 class="feature-title">即時數據分析</h3>
+                <p class="feature-description">
+                    即時儀表板追蹤出席狀況、VIP 管理與全方位數據匯出功能。
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">✅</div>
+                <h3 class="feature-title">無縫簽到體驗</h3>
+                <p class="feature-description">
+                    QR 碼掃描、離線支援與多裝置同步，打造零摩擦的簽到流程。
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🎨</div>
+                <h3 class="feature-title">現代化介面</h3>
+                <p class="feature-description">
+                    漸進式 Web 應用程式，響應式設計、深色/淺色模式，支援所有裝置。
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🔒</div>
+                <h3 class="feature-title">安全隱私</h3>
+                <p class="feature-description">
+                    後端 API 金鑰保護、CORS 防護、HTTPS 加密與 GDPR 合規內建。
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">⚡</div>
+                <h3 class="feature-title">極速效能</h3>
+                <p class="feature-description">
+                    採用現代技術架構：React、Kotlin、WebSocket 實現即時更新。
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section - Simplified Chinese -->
+    <section class="section" id="features" data-lang="zh-CN">
+        <h2 class="section-title">✨ 核心功能</h2>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">🤖</div>
+                <h3 class="feature-title">AI 智能配对</h3>
+                <p class="feature-description">
+                    DeepSeek AI 分析参与者资料，推荐高价值人脉连接和策略性座位安排。
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">📊</div>
+                <h3 class="feature-title">实时数据分析</h3>
+                <p class="feature-description">
+                    实时仪表板追踪出席状况、VIP 管理与全方位数据导出功能。
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">✅</div>
+                <h3 class="feature-title">无缝签到体验</h3>
+                <p class="feature-description">
+                    QR 码扫描、离线支持与多设备同步，打造零摩擦的签到流程。
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🎨</div>
+                <h3 class="feature-title">现代化界面</h3>
+                <p class="feature-description">
+                    渐进式 Web 应用程序，响应式设计、深色/浅色模式，支持所有设备。
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🔒</div>
+                <h3 class="feature-title">安全隐私</h3>
+                <p class="feature-description">
+                    后端 API 密钥保护、CORS 防护、HTTPS 加密与 GDPR 合规内建。
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">⚡</div>
+                <h3 class="feature-title">极速性能</h3>
+                <p class="feature-description">
+                    采用现代技术架构：React、Kotlin、WebSocket 实现实时更新。
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section - Japanese -->
+    <section class="section" id="features" data-lang="ja">
+        <h2 class="section-title">✨ 主な機能</h2>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">🤖</div>
+                <h3 class="feature-title">AIネットワーキング</h3>
+                <p class="feature-description">
+                    DeepSeek AIが参加者プロフィールを分析し、価値の高いつながりと戦略的な座席配置を提案します。
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">📊</div>
+                <h3 class="feature-title">リアルタイム分析</h3>
+                <p class="feature-description">
+                    出席追跡、VIP管理、包括的なデータエクスポート機能を備えたライブダッシュボード。
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">✅</div>
+                <h3 class="feature-title">シームレスチェックイン</h3>
+                <p class="feature-description">
+                    QRコードスキャン、オフラインサポート、マルチデバイス同期で摩擦のないチェックイン体験。
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🎨</div>
+                <h3 class="feature-title">モダンUX</h3>
+                <p class="feature-description">
+                    レスポンシブデザイン、ダーク/ライトモード対応のプログレッシブWebアプリ。全デバイスで動作。
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🔒</div>
+                <h3 class="feature-title">セキュアで安全</h3>
+                <p class="feature-description">
+                    バックエンドのみのAPIキー、CORS保護、HTTPS暗号化、GDPR準拠を標準装備。
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">⚡</div>
+                <h3 class="feature-title">超高速</h3>
+                <p class="feature-description">
+                    最新技術スタック構築：React、Kotlin、WebSocketによる即時リアルタイム更新。
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing Section - English -->
+    <section class="section" id="pricing" data-lang="en">
         <h2 class="section-title">💼 Pricing</h2>
         <div class="pricing-grid">
             <div class="pricing-card">
@@ -385,7 +667,7 @@
                     <li>Up to 100 attendees</li>
                     <li>Email support</li>
                 </ul>
-                <a href="#contact" class="cta-button">Get Started</a>
+                <a href="mailto:info@innovatexp.co" class="cta-button">Get Started</a>
             </div>
 
             <div class="pricing-card featured">
@@ -399,7 +681,7 @@
                     <li>Up to 500 attendees</li>
                     <li>Priority support</li>
                 </ul>
-                <a href="#contact" class="cta-button">Most Popular</a>
+                <a href="mailto:info@innovatexp.co" class="cta-button">Most Popular</a>
             </div>
 
             <div class="pricing-card">
@@ -413,13 +695,154 @@
                     <li>Unlimited attendees</li>
                     <li>White-label option</li>
                 </ul>
-                <a href="#contact" class="cta-button">Contact Sales</a>
+                <a href="mailto:info@innovatexp.co" class="cta-button">Contact Sales</a>
             </div>
         </div>
     </section>
 
-    <!-- Use Cases Section -->
-    <section class="section">
+    <!-- Pricing Section - Traditional Chinese -->
+    <section class="section" id="pricing" data-lang="zh-TW">
+        <h2 class="section-title">💼 價格方案</h2>
+        <div class="pricing-grid">
+            <div class="pricing-card">
+                <h3>🎯 基礎版</h3>
+                <div class="price-tag">$480<span style="font-size:1rem">/年</span></div>
+                <ul class="price-features">
+                    <li>基礎簽到系統</li>
+                    <li>即時儀表板</li>
+                    <li>CSV 匯出</li>
+                    <li>最多 100 位參與者</li>
+                    <li>電郵支援</li>
+                </ul>
+                <a href="mailto:info@innovatexp.co" class="cta-button">立即開始</a>
+            </div>
+
+            <div class="pricing-card featured">
+                <h3>🚀 專業版</h3>
+                <div class="price-tag">$2,880<span style="font-size:1rem">/年</span></div>
+                <ul class="price-features">
+                    <li><strong>包含所有基礎版功能</strong></li>
+                    <li>AI 智慧配對</li>
+                    <li>策略性座位安排</li>
+                    <li>VIP 管理</li>
+                    <li>最多 500 位參與者</li>
+                    <li>優先技術支援</li>
+                </ul>
+                <a href="mailto:info@innovatexp.co" class="cta-button">最受歡迎</a>
+            </div>
+
+            <div class="pricing-card">
+                <h3>🏢 企業版</h3>
+                <div class="price-tag">客製化</div>
+                <ul class="price-features">
+                    <li><strong>包含所有專業版功能</strong></li>
+                    <li>多活動支援</li>
+                    <li>客製化品牌</li>
+                    <li>專屬技術支援</li>
+                    <li>無限參與者</li>
+                    <li>白標選項</li>
+                </ul>
+                <a href="mailto:info@innovatexp.co" class="cta-button">聯絡銷售</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing Section - Simplified Chinese -->
+    <section class="section" id="pricing" data-lang="zh-CN">
+        <h2 class="section-title">💼 价格方案</h2>
+        <div class="pricing-grid">
+            <div class="pricing-card">
+                <h3>🎯 基础版</h3>
+                <div class="price-tag">$480<span style="font-size:1rem">/年</span></div>
+                <ul class="price-features">
+                    <li>基础签到系统</li>
+                    <li>实时仪表板</li>
+                    <li>CSV 导出</li>
+                    <li>最多 100 位参与者</li>
+                    <li>电邮支持</li>
+                </ul>
+                <a href="mailto:info@innovatexp.co" class="cta-button">立即开始</a>
+            </div>
+
+            <div class="pricing-card featured">
+                <h3>🚀 专业版</h3>
+                <div class="price-tag">$2,880<span style="font-size:1rem">/年</span></div>
+                <ul class="price-features">
+                    <li><strong>包含所有基础版功能</strong></li>
+                    <li>AI 智能配对</li>
+                    <li>策略性座位安排</li>
+                    <li>VIP 管理</li>
+                    <li>最多 500 位参与者</li>
+                    <li>优先技术支持</li>
+                </ul>
+                <a href="mailto:info@innovatexp.co" class="cta-button">最受欢迎</a>
+            </div>
+
+            <div class="pricing-card">
+                <h3>🏢 企业版</h3>
+                <div class="price-tag">定制化</div>
+                <ul class="price-features">
+                    <li><strong>包含所有专业版功能</strong></li>
+                    <li>多活动支持</li>
+                    <li>定制化品牌</li>
+                    <li>专属技术支持</li>
+                    <li>无限参与者</li>
+                    <li>白标选项</li>
+                </ul>
+                <a href="mailto:info@innovatexp.co" class="cta-button">联系销售</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing Section - Japanese -->
+    <section class="section" id="pricing" data-lang="ja">
+        <h2 class="section-title">💼 料金プラン</h2>
+        <div class="pricing-grid">
+            <div class="pricing-card">
+                <h3>🎯 ベーシック</h3>
+                <div class="price-tag">$480<span style="font-size:1rem">/年</span></div>
+                <ul class="price-features">
+                    <li>基本チェックインシステム</li>
+                    <li>リアルタイムダッシュボード</li>
+                    <li>CSVエクスポート</li>
+                    <li>最大100名の参加者</li>
+                    <li>メールサポート</li>
+                </ul>
+                <a href="mailto:info@innovatexp.co" class="cta-button">今すぐ始める</a>
+            </div>
+
+            <div class="pricing-card featured">
+                <h3>🚀 プロフェッショナル</h3>
+                <div class="price-tag">$2,880<span style="font-size:1rem">/年</span></div>
+                <ul class="price-features">
+                    <li><strong>全てのベーシック機能</strong></li>
+                    <li>AIネットワーキング</li>
+                    <li>戦略的座席配置</li>
+                    <li>VIP管理</li>
+                    <li>最大500名の参加者</li>
+                    <li>優先サポート</li>
+                </ul>
+                <a href="mailto:info@innovatexp.co" class="cta-button">最も人気</a>
+            </div>
+
+            <div class="pricing-card">
+                <h3>🏢 エンタープライズ</h3>
+                <div class="price-tag">カスタム</div>
+                <ul class="price-features">
+                    <li><strong>全てのプロ機能</strong></li>
+                    <li>マルチイベント対応</li>
+                    <li>カスタムブランディング</li>
+                    <li>専任サポート</li>
+                    <li>無制限の参加者</li>
+                    <li>ホワイトラベル</li>
+                </ul>
+                <a href="mailto:info@innovatexp.co" class="cta-button">お問い合わせ</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Use Cases Section - English -->
+    <section class="section" data-lang="en">
         <h2 class="section-title">🎯 Perfect For</h2>
         <div class="features-grid">
             <div class="feature-card">
@@ -456,27 +879,281 @@
         </div>
     </section>
 
-    <!-- CTA Section -->
-    <section class="cta-section" id="contact">
+    <!-- Use Cases Section - Traditional Chinese -->
+    <section class="section" data-lang="zh-TW">
+        <h2 class="section-title">🎯 適用場景</h2>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">🤝</div>
+                <h3 class="feature-title">商業交流活動</h3>
+                <p class="feature-description">
+                    BNI 分會、商會與專業協會，自動化會員配對系統。
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🏢</div>
+                <h3 class="feature-title">企業活動</h3>
+                <p class="feature-description">
+                    會議、研討會與團隊建設活動，部門座位安排與 VIP 追蹤。
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🎪</div>
+                <h3 class="feature-title">展覽會</h3>
+                <p class="feature-description">
+                    大型展會，參展商與訪客配對及展位流量分析。
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">📚</div>
+                <h3 class="feature-title">教育活動</h3>
+                <p class="feature-description">
+                    工作坊與培訓課程，參與者技能配對與參與度分析。
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Use Cases Section - Simplified Chinese -->
+    <section class="section" data-lang="zh-CN">
+        <h2 class="section-title">🎯 适用场景</h2>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">🤝</div>
+                <h3 class="feature-title">商业交流活动</h3>
+                <p class="feature-description">
+                    BNI 分会、商会与专业协会，自动化会员配对系统。
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🏢</div>
+                <h3 class="feature-title">企业活动</h3>
+                <p class="feature-description">
+                    会议、研讨会与团队建设活动，部门座位安排与 VIP 追踪。
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🎪</div>
+                <h3 class="feature-title">展览会</h3>
+                <p class="feature-description">
+                    大型展会，参展商与访客配对及展位流量分析。
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">📚</div>
+                <h3 class="feature-title">教育活动</h3>
+                <p class="feature-description">
+                    工作坊与培训课程，参与者技能配对与参与度分析。
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Use Cases Section - Japanese -->
+    <section class="section" data-lang="ja">
+        <h2 class="section-title">🎯 最適な用途</h2>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">🤝</div>
+                <h3 class="feature-title">ビジネスネットワーキング</h3>
+                <p class="feature-description">
+                    BNI支部、商工会議所、専門家協会の自動メンバーマッチング。
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🏢</div>
+                <h3 class="feature-title">企業イベント</h3>
+                <p class="feature-description">
+                    カンファレンス、セミナー、チームビルディング、部門別座席配置とVIP追跡。
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🎪</div>
+                <h3 class="feature-title">展示会</h3>
+                <p class="feature-description">
+                    大規模展示会、出展者と来場者のマッチングとブース来場分析。
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">📚</div>
+                <h3 class="feature-title">教育イベント</h3>
+                <p class="feature-description">
+                    ワークショップとトレーニング、参加者スキルマッチングとエンゲージメント分析。
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section - English -->
+    <section class="cta-section" id="contact" data-lang="en">
         <h2>Ready to Transform Your Events?</h2>
         <p style="font-size:1.25rem; margin-bottom:2rem;">Start your free trial today. No credit card required.</p>
         <div style="display:flex; gap:1rem; justify-content:center; flex-wrap:wrap;">
             <a href="http://localhost:5173" class="button-primary">Launch Demo</a>
-            <a href="mailto:hello@eventxp.com" class="button-secondary">Contact Sales</a>
+            <a href="mailto:info@innovatexp.co" class="button-secondary">Contact Sales</a>
         </div>
     </section>
 
-    <!-- Footer -->
-    <footer>
+    <!-- CTA Section - Traditional Chinese -->
+    <section class="cta-section" id="contact" data-lang="zh-TW">
+        <h2>準備好提升您的活動了嗎？</h2>
+        <p style="font-size:1.25rem; margin-bottom:2rem;">立即開始免費試用，無需信用卡。</p>
+        <div style="display:flex; gap:1rem; justify-content:center; flex-wrap:wrap;">
+            <a href="http://localhost:5173" class="button-primary">啟動演示</a>
+            <a href="mailto:info@innovatexp.co" class="button-secondary">聯絡銷售</a>
+        </div>
+    </section>
+
+    <!-- CTA Section - Simplified Chinese -->
+    <section class="cta-section" id="contact" data-lang="zh-CN">
+        <h2>准备好提升您的活动了吗？</h2>
+        <p style="font-size:1.25rem; margin-bottom:2rem;">立即开始免费试用，无需信用卡。</p>
+        <div style="display:flex; gap:1rem; justify-content:center; flex-wrap:wrap;">
+            <a href="http://localhost:5173" class="button-primary">启动演示</a>
+            <a href="mailto:info@innovatexp.co" class="button-secondary">联系销售</a>
+        </div>
+    </section>
+
+    <!-- CTA Section - Japanese -->
+    <section class="cta-section" id="contact" data-lang="ja">
+        <h2>イベントを変革する準備はできましたか？</h2>
+        <p style="font-size:1.25rem; margin-bottom:2rem;">今すぐ無料トライアルを開始。クレジットカード不要。</p>
+        <div style="display:flex; gap:1rem; justify-content:center; flex-wrap:wrap;">
+            <a href="http://localhost:5173" class="button-primary">デモを起動</a>
+            <a href="mailto:info@innovatexp.co" class="button-secondary">営業に連絡</a>
+        </div>
+    </section>
+
+    <!-- Footer - English -->
+    <footer data-lang="en">
         <div class="footer-links">
             <a href="#features">Features</a>
             <a href="#pricing">Pricing</a>
             <a href="./SETUP.md">Documentation</a>
             <a href="https://github.com/your-org/eventxp">GitHub</a>
-            <a href="mailto:hello@eventxp.com">Contact</a>
+            <a href="mailto:info@innovatexp.co">Contact</a>
         </div>
         <p>&copy; 2026 EventXP. All rights reserved.</p>
         <p style="margin-top:1rem; opacity:0.7;">Made with ❤️ for event organizers worldwide</p>
     </footer>
+
+    <!-- Footer - Traditional Chinese -->
+    <footer data-lang="zh-TW">
+        <div class="footer-links">
+            <a href="#features">功能特色</a>
+            <a href="#pricing">價格方案</a>
+            <a href="./SETUP.md">技術文件</a>
+            <a href="https://github.com/your-org/eventxp">GitHub</a>
+            <a href="mailto:info@innovatexp.co">聯絡我們</a>
+        </div>
+        <p>&copy; 2026 EventXP. 保留所有權利。</p>
+        <p style="margin-top:1rem; opacity:0.7;">用 ❤️ 為全球活動主辦方打造</p>
+    </footer>
+
+    <!-- Footer - Simplified Chinese -->
+    <footer data-lang="zh-CN">
+        <div class="footer-links">
+            <a href="#features">功能特色</a>
+            <a href="#pricing">价格方案</a>
+            <a href="./SETUP.md">技术文档</a>
+            <a href="https://github.com/your-org/eventxp">GitHub</a>
+            <a href="mailto:info@innovatexp.co">联系我们</a>
+        </div>
+        <p>&copy; 2026 EventXP. 保留所有权利。</p>
+        <p style="margin-top:1rem; opacity:0.7;">用 ❤️ 为全球活动主办方打造</p>
+    </footer>
+
+    <!-- Footer - Japanese -->
+    <footer data-lang="ja">
+        <div class="footer-links">
+            <a href="#features">機能</a>
+            <a href="#pricing">料金</a>
+            <a href="./SETUP.md">ドキュメント</a>
+            <a href="https://github.com/your-org/eventxp">GitHub</a>
+            <a href="mailto:info@innovatexp.co">お問い合わせ</a>
+        </div>
+        <p>&copy; 2026 EventXP. 無断転載禁止。</p>
+        <p style="margin-top:1rem; opacity:0.7;">世界中のイベント主催者のために ❤️ で作られました</p>
+    </footer>
+
+    <!-- Language Switcher Script -->
+    <script>
+        // Get current language from localStorage or default to 'en'
+        let currentLang = localStorage.getItem('eventxp-lang') || 'en';
+
+        function switchLanguage(lang) {
+            currentLang = lang;
+            localStorage.setItem('eventxp-lang', lang);
+            
+            // Update HTML lang attribute
+            document.documentElement.lang = lang;
+            
+            // Hide all language sections
+            document.querySelectorAll('[data-lang]').forEach(el => {
+                el.classList.remove('active');
+            });
+            
+            // Hide all inline language elements
+            document.querySelectorAll('[data-lang-inline]').forEach(el => {
+                el.classList.remove('active');
+            });
+            
+            // Show selected language sections
+            document.querySelectorAll(`[data-lang="${lang}"]`).forEach(el => {
+                el.classList.add('active');
+            });
+            
+            // Show selected language inline elements
+            document.querySelectorAll(`[data-lang-inline="${lang}"]`).forEach(el => {
+                el.classList.add('active');
+            });
+            
+            // Update active button
+            document.querySelectorAll('.lang-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+        }
+
+        // Initialize language on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Hide all sections first
+            document.querySelectorAll('[data-lang]').forEach(el => {
+                el.style.display = 'none';
+            });
+            
+            document.querySelectorAll('[data-lang-inline]').forEach(el => {
+                el.style.display = 'none';
+            });
+            
+            // Show current language
+            document.querySelectorAll(`[data-lang="${currentLang}"]`).forEach(el => {
+                el.classList.add('active');
+                el.style.display = 'block';
+            });
+            
+            document.querySelectorAll(`[data-lang-inline="${currentLang}"]`).forEach(el => {
+                el.classList.add('active');
+                el.style.display = 'inline';
+            });
+            
+            // Set active button
+            document.querySelectorAll('.lang-btn').forEach(btn => {
+                if (btn.textContent === 'EN' && currentLang === 'en') btn.classList.add('active');
+                if (btn.textContent === '繁中' && currentLang === 'zh-TW') btn.classList.add('active');
+                if (btn.textContent === '简中' && currentLang === 'zh-CN') btn.classList.add('active');
+                if (btn.textContent === '日本語' && currentLang === 'ja') btn.classList.add('active');
+            });
+        });
+    </script>
 </body>
 </html>
