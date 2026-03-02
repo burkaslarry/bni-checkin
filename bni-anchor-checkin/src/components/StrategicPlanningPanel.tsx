@@ -1,8 +1,7 @@
-import { useState, useCallback, useEffect } from "react";
-import type { Guest, Member, MatchResult } from "../types/seating";
-import { matchGuestWithMembers } from "../lib/assignGuestToTable";
+import { useState, useCallback, useEffect, useRef } from "react";
+import type { Guest, Member, MatchResult, MemberMatch } from "../types/seating";
 import { sampleGuests } from "../lib/sampleData";
-import { getMembers } from "../api";
+import { getMembers, batchMatch, BatchGuestInfo, BatchMatchResult } from "../api";
 
 type StrategicPlanningPanelProps = {
   onNotify: (message: string, type: "success" | "error" | "info") => void;
@@ -32,6 +31,14 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
   const [currentGuest, setCurrentGuest] = useState<Guest | null>(null);
   const [isMatching, setIsMatching] = useState(false);
   const [showValidation, setShowValidation] = useState(false);
+
+  // Batch matching state
+  const [showBatchMode, setShowBatchMode] = useState(false);
+  const [batchGuests, setBatchGuests] = useState<BatchGuestInfo[]>([]);
+  const [batchResults, setBatchResults] = useState<BatchMatchResult[]>([]);
+  const [isBatchProcessing, setIsBatchProcessing] = useState(false);
+  const [batchProgress, setBatchProgress] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load real members from backend
   useEffect(() => {
@@ -90,12 +97,41 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
     setIsMatching(true);
     setCurrentGuest(guest);
     try {
-      const result = await matchGuestWithMembers(guest, members);
+      // Use batchMatch API (same as 批量配對) - calls DeepSeek
+      const response = await batchMatch([{
+        name: guest.name,
+        profession: guest.profession,
+        remarks: guest.remarks
+      }]);
+      const batchResult = response.results[0];
+      if (!batchResult) {
+        throw new Error("No match result returned");
+      }
+      const recommendedMembers: MemberMatch[] = batchResult.matchedMembers.map((m) => ({
+        member: {
+          id: `member-${m.memberName}`,
+          name: m.memberName,
+          profession: m.profession
+        },
+        matchStrength: (m.matchStrength as "High" | "Medium" | "Low") || "Low",
+        reason: m.reason
+      }));
+      const highCount = recommendedMembers.filter((m) => m.matchStrength === "High").length;
+      const mediumCount = recommendedMembers.filter((m) => m.matchStrength === "Medium").length;
+      let overallMatchStrength: "High" | "Medium" | "Low" = "Low";
+      if (highCount >= 2) overallMatchStrength = "High";
+      else if (highCount >= 1 || mediumCount >= 3) overallMatchStrength = "Medium";
+      const result: MatchResult & { provider?: "deepseek" | "gemini" | "keyword" | null } = {
+        matchStrength: overallMatchStrength,
+        matchNote: `${response.provider === "deepseek" ? "🤖 DeepSeek AI" : "🤖 AI"}: 找到 ${recommendedMembers.length} 位推薦會員`,
+        recommendedMembers,
+        provider: response.provider === "deepseek" ? "deepseek" : "keyword"
+      };
       setMatchResult(result);
-      onNotify(
-        `配對完成！${result.provider === "keyword" ? "使用關鍵字配對" : `使用 ${result.provider?.toUpperCase()} AI 配對`}`,
-        "success"
-      );
+      onNotify(`配對完成！使用 ${response.provider?.toUpperCase()} AI 配對。CSV 已下載`, "success");
+      // Auto-download CSV (batching_single-{name}.csv), stay on page
+      const safeName = guest.name.replace(/[/\\?%*:|"<>]/g, "_");
+      exportBatchResultsCsvFromResults([batchResult], `batching_single-${safeName}.csv`);
     } catch (error) {
       onNotify(
         "配對失敗: " + (error instanceof Error ? error.message : "未知錯誤"),
@@ -130,6 +166,216 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
     onNotify("已重置表單", "info");
   };
 
+  // Batch matching functions
+  // Download CSV template
+  const downloadCsvTemplate = () => {
+    const template = '\ufeff姓名(Name),專業領域(Profession),引薦人(Referrer),備註(Remarks)\n張三,網頁設計,Larry Lo,有意加入BNI\n李四,會計服務,Jessica Cheung,';
+    const blob = new Blob([template], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'batch_matching_template.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    onNotify("CSV 範本已下載", "success");
+  };
+
+  const handleCsvUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      const lines = text.split('\n').filter(line => line.trim());
+      
+      // Skip header line
+      const dataLines = lines.slice(1);
+      const guests: BatchGuestInfo[] = [];
+      
+      for (const line of dataLines) {
+        // Handle CSV with possible quoted values
+        const parts = line.split(',').map(p => p.trim().replace(/^"|"$/g, ''));
+        if (parts.length >= 2 && parts[0] && parts[1]) {
+          guests.push({
+            name: parts[0],
+            profession: parts[1],
+            remarks: parts[3] || parts[2] || undefined // Column 4 is remarks, column 3 is referrer
+          });
+        }
+      }
+      
+      if (guests.length === 0) {
+        onNotify("CSV 檔案格式不正確，請確保包含姓名和專業領域欄位", "error");
+        return;
+      }
+      
+      setBatchGuests(guests);
+      setBatchResults([]);
+      onNotify(`已載入 ${guests.length} 位來賓資料`, "success");
+    };
+    reader.readAsText(file);
+    
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // State for loading dialog
+  const [showLoadingDialog, setShowLoadingDialog] = useState(false);
+
+  const handleBatchMatch = async () => {
+    if (batchGuests.length === 0) {
+      onNotify("請先上傳 CSV 檔案", "error");
+      return;
+    }
+
+    setIsBatchProcessing(true);
+    setShowLoadingDialog(true);
+    setBatchProgress(0);
+    setBatchResults([]);
+
+    try {
+      const response = await batchMatch(batchGuests);
+      setBatchResults(response.results);
+      setShowLoadingDialog(false);
+      onNotify(`批量配對完成！已處理 ${response.results.length} 位來賓`, "success");
+      
+      // Auto-export CSV on success
+      if (response.results.length > 0) {
+        setTimeout(() => {
+          exportBatchResultsCsvFromResults(response.results);
+        }, 500);
+      }
+    } catch (error) {
+      setShowLoadingDialog(false);
+      onNotify("批量配對失敗: " + (error instanceof Error ? error.message : "未知錯誤"), "error");
+    } finally {
+      setIsBatchProcessing(false);
+      setBatchProgress(100);
+    }
+  };
+
+  // Export function that takes results as parameter (for auto-export)
+  // Optional filename: e.g. "batching_single-張三.csv" for single guest
+  const exportBatchResultsCsvFromResults = (results: BatchMatchResult[], customFilename?: string) => {
+    const csvLines: string[] = [];
+    csvLines.push("姓名(Name),專業領域(Profession),可配對會友,理由");
+
+    for (const result of results) {
+      // Sort matches: High first, then Medium, then Low
+      const sortedMatches = [...result.matchedMembers].sort((a, b) => {
+        const order = { High: 0, Medium: 1, Low: 2 };
+        return (order[a.matchStrength as keyof typeof order] || 2) - (order[b.matchStrength as keyof typeof order] || 2);
+      });
+
+      if (sortedMatches.length > 0) {
+        // Get the best match(es)
+        const bestStrength = sortedMatches[0].matchStrength;
+        const bestMatches = sortedMatches.filter(m => m.matchStrength === bestStrength);
+        
+        const matchedNames = bestMatches.map(m => `${m.memberName}(${m.profession})`).join('; ');
+        const reasons = bestMatches.map(m => m.reason).join('; ');
+        
+        // Escape CSV values
+        const escapeCsv = (str: string) => `"${str.replace(/"/g, '""')}"`;
+        
+        csvLines.push([
+          escapeCsv(result.guestName),
+          escapeCsv(result.guestProfession),
+          escapeCsv(matchedNames),
+          escapeCsv(reasons)
+        ].join(','));
+      } else {
+        csvLines.push([
+          `"${result.guestName}"`,
+          `"${result.guestProfession}"`,
+          '"無匹配"',
+          '"未找到合適的配對會員"'
+        ].join(','));
+      }
+    }
+
+    const csvContent = '\ufeff' + csvLines.join('\n'); // Add BOM for Excel
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = customFilename ?? `batch_matching_results_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    onNotify("CSV 結果已自動匯出", "success");
+  };
+
+  const exportBatchResultsCsv = () => {
+    if (batchResults.length === 0) {
+      onNotify("沒有可匯出的結果", "error");
+      return;
+    }
+
+    const csvLines: string[] = [];
+    csvLines.push("姓名(Name),專業領域(Profession),可配對會友,理由");
+
+    for (const result of batchResults) {
+      // Sort matches: High first, then Medium, then Low
+      const sortedMatches = [...result.matchedMembers].sort((a, b) => {
+        const order = { High: 0, Medium: 1, Low: 2 };
+        return (order[a.matchStrength as keyof typeof order] || 2) - (order[b.matchStrength as keyof typeof order] || 2);
+      });
+
+      if (sortedMatches.length > 0) {
+        // Get the best match(es)
+        const bestStrength = sortedMatches[0].matchStrength;
+        const bestMatches = sortedMatches.filter(m => m.matchStrength === bestStrength);
+        
+        const matchedNames = bestMatches.map(m => `${m.memberName}(${m.profession})`).join('; ');
+        const reasons = bestMatches.map(m => m.reason).join('; ');
+        
+        // Escape CSV values
+        const escapeCsv = (str: string) => `"${str.replace(/"/g, '""')}"`;
+        
+        csvLines.push([
+          escapeCsv(result.guestName),
+          escapeCsv(result.guestProfession),
+          escapeCsv(matchedNames),
+          escapeCsv(reasons)
+        ].join(','));
+      } else {
+        csvLines.push([
+          `"${result.guestName}"`,
+          `"${result.guestProfession}"`,
+          '"無匹配"',
+          '"未找到合適的配對會員"'
+        ].join(','));
+      }
+    }
+
+    const csvContent = '\ufeff' + csvLines.join('\n'); // Add BOM for Excel
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `batch_matching_results_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    onNotify("CSV 已匯出", "success");
+  };
+
+  const resetBatchMode = () => {
+    setBatchGuests([]);
+    setBatchResults([]);
+    setBatchProgress(0);
+  };
+
   return (
     <section className="section strategic-planning-panel">
       <div className="section-header">
@@ -149,7 +395,196 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
         )}
       </div>
 
-      {/* Guest Input Form */}
+      {/* Mode Toggle */}
+      <div className="mode-toggle" style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem' }}>
+        <button
+          type="button"
+          className={`button ${!showBatchMode ? 'primary' : 'ghost-button'}`}
+          onClick={() => setShowBatchMode(false)}
+          style={{ flex: 1 }}
+        >
+          👤 單一來賓配對
+        </button>
+        <button
+          type="button"
+          className={`button ${showBatchMode ? 'primary' : 'ghost-button'}`}
+          onClick={() => setShowBatchMode(true)}
+          style={{ flex: 1 }}
+        >
+          📋 批量配對
+        </button>
+      </div>
+
+      {/* Batch Matching Section */}
+      {showBatchMode && (
+        <div className="batch-matching-section" style={{ marginBottom: '2rem' }}>
+          <div className="guest-form-card">
+            <div className="form-header">
+              <h3>📋 批量配對 Batch Matching</h3>
+              <p className="hint">上傳 CSV 檔案進行批量 AI 配對</p>
+            </div>
+
+            <div className="csv-upload-section" style={{ padding: '1rem', border: '2px dashed var(--border)', borderRadius: '8px', marginBottom: '1rem' }}>
+              <h4 style={{ margin: '0 0 0.5rem 0' }}>CSV 格式說明</h4>
+              <p className="hint" style={{ marginBottom: '0.5rem' }}>
+                請上傳包含以下欄位的 CSV 檔案：
+              </p>
+              <code style={{ display: 'block', background: 'var(--card-bg)', padding: '0.5rem', borderRadius: '4px', marginBottom: '1rem' }}>
+                姓名(Name),專業領域(Profession),引薦人(Referrer),備註(Remarks)
+              </code>
+              
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={downloadCsvTemplate}
+                  style={{ cursor: 'pointer' }}
+                >
+                  📥 下載 CSV 範本
+                </button>
+                
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv"
+                  onChange={handleCsvUpload}
+                  style={{ display: 'none' }}
+                  id="csv-upload"
+                />
+                <label
+                  htmlFor="csv-upload"
+                  className="button"
+                  style={{ cursor: 'pointer', display: 'inline-block' }}
+                >
+                  📁 選擇 CSV 檔案
+                </label>
+              </div>
+            </div>
+
+            {batchGuests.length > 0 && (
+              <div className="batch-preview" style={{ marginBottom: '1rem' }}>
+                <h4>已載入 {batchGuests.length} 位來賓</h4>
+                <div style={{ maxHeight: '200px', overflow: 'auto', background: 'var(--card-bg)', padding: '0.5rem', borderRadius: '4px' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                        <th style={{ textAlign: 'left', padding: '0.25rem' }}>#</th>
+                        <th style={{ textAlign: 'left', padding: '0.25rem' }}>姓名</th>
+                        <th style={{ textAlign: 'left', padding: '0.25rem' }}>專業領域</th>
+                        <th style={{ textAlign: 'left', padding: '0.25rem' }}>備註</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {batchGuests.slice(0, 10).map((guest, idx) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
+                          <td style={{ padding: '0.25rem' }}>{idx + 1}</td>
+                          <td style={{ padding: '0.25rem' }}>{guest.name}</td>
+                          <td style={{ padding: '0.25rem' }}>{guest.profession}</td>
+                          <td style={{ padding: '0.25rem' }}>{guest.remarks || '-'}</td>
+                        </tr>
+                      ))}
+                      {batchGuests.length > 10 && (
+                        <tr>
+                          <td colSpan={4} style={{ padding: '0.25rem', textAlign: 'center', color: 'var(--muted)' }}>
+                            ... 還有 {batchGuests.length - 10} 位
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+                  <button
+                    type="button"
+                    className="button primary"
+                    onClick={handleBatchMatch}
+                    disabled={isBatchProcessing || isLoadingMembers}
+                    style={{ flex: 2 }}
+                  >
+                    {isBatchProcessing ? '⏳ 配對中...' : '🤖 開始 AI 批量配對'}
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={resetBatchMode}
+                    style={{ flex: 1 }}
+                  >
+                    🔄 重置
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Batch Results */}
+            {batchResults.length > 0 && (
+              <div className="batch-results" style={{ marginTop: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <h4>配對結果 ({batchResults.length} 位來賓)</h4>
+                  <button
+                    type="button"
+                    className="button"
+                    onClick={exportBatchResultsCsv}
+                  >
+                    📥 匯出 CSV
+                  </button>
+                </div>
+                
+                <div style={{ maxHeight: '400px', overflow: 'auto' }}>
+                  {batchResults.map((result, idx) => {
+                    const sortedMatches = [...result.matchedMembers].sort((a, b) => {
+                      const order = { High: 0, Medium: 1, Low: 2 };
+                      return (order[a.matchStrength as keyof typeof order] || 2) - (order[b.matchStrength as keyof typeof order] || 2);
+                    });
+                    
+                    return (
+                      <div key={idx} className="batch-result-card" style={{ 
+                        background: 'var(--card-bg)', 
+                        padding: '1rem', 
+                        borderRadius: '8px', 
+                        marginBottom: '0.5rem',
+                        border: '1px solid var(--border)'
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                          <strong>{result.guestName}</strong>
+                          <span className="hint">{result.guestProfession}</span>
+                        </div>
+                        {sortedMatches.length > 0 ? (
+                          <div>
+                            {sortedMatches.slice(0, 3).map((match, mIdx) => (
+                              <div key={mIdx} style={{ 
+                                padding: '0.25rem 0.5rem', 
+                                background: match.matchStrength === 'High' ? 'rgba(34, 197, 94, 0.1)' : 
+                                           match.matchStrength === 'Medium' ? 'rgba(234, 179, 8, 0.1)' : 'rgba(148, 163, 184, 0.1)',
+                                borderRadius: '4px',
+                                marginBottom: '0.25rem',
+                                fontSize: '0.9rem'
+                              }}>
+                                <span style={{ 
+                                  color: match.matchStrength === 'High' ? 'var(--success)' : 
+                                         match.matchStrength === 'Medium' ? 'var(--warning)' : 'var(--muted)'
+                                }}>
+                                  {match.matchStrength === 'High' ? '🔥' : match.matchStrength === 'Medium' ? '⚡' : '💡'}
+                                </span>
+                                {' '}{match.memberName} ({match.profession})
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="hint">無匹配</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Guest Input Form - Only show when not in batch mode */}
+      {!showBatchMode && (
       <div className="guest-form-card">
         <div className="form-header">
           <h3>來賓資料 Guest Profile</h3>
@@ -270,9 +705,10 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
                 : "🎯 開始配對"}
         </button>
       </div>
+      )}
 
-      {/* Match Result Summary */}
-      {matchResult && currentGuest && (
+      {/* Match Result Summary - Only show when not in batch mode */}
+      {!showBatchMode && matchResult && currentGuest && (
         <div className="match-result-card">
           <div className="result-header">
             <h3>配對結果</h3>
@@ -287,8 +723,8 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
         </div>
       )}
 
-      {/* Recommended Member Combinations - Grouped by Match Strength */}
-      {matchResult && matchResult.recommendedMembers && matchResult.recommendedMembers.length > 0 && (() => {
+      {/* Recommended Member Combinations - Grouped by Match Strength - Only show when not in batch mode */}
+      {!showBatchMode && matchResult && matchResult.recommendedMembers && matchResult.recommendedMembers.length > 0 && (() => {
         const highMatches = matchResult.recommendedMembers.filter(m => m.matchStrength === "High");
         const mediumMatches = matchResult.recommendedMembers.filter(m => m.matchStrength === "Medium");
         const lowMatches = matchResult.recommendedMembers.filter(m => m.matchStrength === "Low");
@@ -401,17 +837,87 @@ export const StrategicPlanningPanel = ({ onNotify, eventId }: StrategicPlanningP
         <p className="hint">
           請在專案根目錄建立 <code>.env.local</code> 檔案並添加以下環境變數：
         </p>
-        <div className="config-example">
-          <code>
-            VITE_DEEPSEEK_API_KEY=your_deepseek_key<br />
-            VITE_DEEPSEEK_MODEL=deepseek-v3<br />
-            VITE_GEMINI_API_KEY=your_gemini_key
-          </code>
-        </div>
         <p className="hint">
           系統會優先使用 DeepSeek AI，失敗時自動切換至 Gemini，兩者都失敗則使用關鍵字匹配。
         </p>
       </div>
+
+      {/* Loading Dialog for Batch Matching */}
+      {showLoadingDialog && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.8)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999
+          }}
+        >
+          <div 
+            style={{
+              background: 'var(--card-bg, #1a1a2e)',
+              borderRadius: '16px',
+              padding: '2rem 3rem',
+              textAlign: 'center',
+              boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
+              maxWidth: '450px'
+            }}
+          >
+            <div style={{ fontSize: '4rem', marginBottom: '1rem', animation: 'spin 2s linear infinite' }}>
+              🤖
+            </div>
+            <h3 style={{ margin: '0 0 0.5rem 0' }}>AI 配對分析中...</h3>
+            <p style={{ color: 'var(--muted, #888)', margin: 0 }}>
+              正在使用 DeepSeek AI 為 {batchGuests.length} 位來賓進行智能配對
+            </p>
+            <p style={{ color: 'var(--accent, #6366f1)', fontSize: '0.9rem', marginTop: '0.5rem' }}>
+              ⚡ 並行處理中（約需 1-2 分鐘）
+            </p>
+            <div style={{ 
+              marginTop: '1.5rem', 
+              height: '4px', 
+              background: 'var(--border)', 
+              borderRadius: '2px',
+              overflow: 'hidden'
+            }}>
+              <div style={{ 
+                height: '100%', 
+                background: 'var(--accent, #6366f1)',
+                width: '100%',
+                animation: 'loading-bar 2s ease-in-out infinite'
+              }} />
+            </div>
+            <button
+              onClick={() => {
+                setShowLoadingDialog(false);
+                setIsBatchProcessing(false);
+                onNotify("已取消批量配對", "info");
+              }}
+              className="ghost-button"
+              style={{ marginTop: '1.5rem', width: '100%' }}
+            >
+              ✕ 關閉此視窗（處理將繼續）
+            </button>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        @keyframes loading-bar {
+          0% { transform: translateX(-100%); }
+          50% { transform: translateX(0%); }
+          100% { transform: translateX(100%); }
+        }
+      `}</style>
     </section>
   );
 };

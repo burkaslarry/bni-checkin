@@ -1,5 +1,5 @@
-import { useState, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { useState, useCallback, useEffect } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { NotificationStack } from "../components/NotificationStack";
 import { NotificationEntry } from "../components/ScanPanel";
 import { QRGeneratorPanel } from "../components/QRGeneratorPanel";
@@ -25,7 +25,7 @@ const navTargets: { id: AdminView; title: string; description: string; icon: str
   },
   {
     id: "generate",
-    title: "產生 QR 碼",
+    title: "新增活動和二維碼",
     description: "產生活動簽到用 QR Code",
     icon: "🔳"
   },
@@ -47,8 +47,19 @@ const createNotificationId = () =>
   crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
 
 export default function AdminPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeView, setActiveView] = useState<AdminView>("home");
   const [notifications, setNotifications] = useState<NotificationEntry[]>([]);
+
+  // Handle URL parameter for direct navigation
+  useEffect(() => {
+    const viewParam = searchParams.get("view");
+    if (viewParam && ["generate", "records", "manual", "event", "strategic"].includes(viewParam)) {
+      setActiveView(viewParam as AdminView);
+      // Clear the URL parameter after navigating
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const pushNotification = useCallback((note: NotificationEntry) => {
     setNotifications((current) => [...current, note]);
@@ -102,11 +113,14 @@ export default function AdminPage() {
       
       <header className="site-header">
         <div>
-          <p className="hint">BNI Anchor Checkin</p>
-          <h1>🛠️ BNI Anchor Checkin 管理後台</h1>
+          <p className="hint">EventXP for BNI Anchor</p>
+          <h1>🛠️ EventXP for BNI Anchor 管理後台</h1>
           <p className="hint">Admin Dashboard</p>
         </div>
         <div className="header-meta">
+          <Link to="/report" className="ghost-button" style={{ marginRight: "0.5rem" }}>
+            📊 即時報告
+          </Link>
           <Link to="/admin" className="ghost-button back-home-btn">
             ← 返回首頁
           </Link>
@@ -132,6 +146,25 @@ export default function AdminPage() {
                 <span className="hint">{item.description}</span>
               </button>
             ))}
+            
+            {/* External Links to New Pages */}
+            <Link to="/admin/members" className="nav-card" style={{ textDecoration: 'none' }}>
+              <span className="nav-icon">👥</span>
+              <strong className="nav-title">會員管理</strong>
+              <span className="hint">管理會員資料和狀態</span>
+            </Link>
+            
+            <Link to="/admin/guests" className="nav-card" style={{ textDecoration: 'none' }}>
+              <span className="nav-icon">🎫</span>
+              <strong className="nav-title">嘉賓管理</strong>
+              <span className="hint">管理嘉賓資料</span>
+            </Link>
+            
+            <Link to="/admin/import" className="nav-card" style={{ textDecoration: 'none' }}>
+              <span className="nav-icon">📥</span>
+              <strong className="nav-title">批量匯入</strong>
+              <span className="hint">CSV 批量新增會員/嘉賓</span>
+            </Link>
           </div>
         </section>
       )}

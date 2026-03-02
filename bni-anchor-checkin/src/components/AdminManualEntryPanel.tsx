@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { checkIn, getMembers, MemberInfo, AttendeeRole } from "../api";
+import { checkIn, getMembers, getGuests, MemberInfo, GuestInfo, AttendeeRole, checkEventThisWeek } from "../api";
 
 type AdminManualEntryPanelProps = {
   onNotify: (message: string, type: "success" | "error" | "info") => void;
@@ -7,6 +7,14 @@ type AdminManualEntryPanelProps = {
 
 // Guest role options
 type GuestRole = "GUEST" | "VIP" | "SPEAKER";
+
+// Combined type for batch list
+type BatchPerson = {
+  name: string;
+  domain: string;
+  type: "member" | "guest";
+  referrer?: string;
+};
 
 // Helper to format date for datetime-local input
 const formatDateTimeLocal = (date: Date): string => {
@@ -19,59 +27,77 @@ const formatDateTimeLocal = (date: Date): string => {
 };
 
 export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) => {
-  const [mode, setMode] = useState<"single" | "batch">("single");
+  const [mode, setMode] = useState<"single" | "batch">("batch"); // Default to batch
   const [members, setMembers] = useState<MemberInfo[]>([]);
-  const [selectedMember, setSelectedMember] = useState("");
+  const [guests, setGuests] = useState<GuestInfo[]>([]);
+  const [batchList, setBatchList] = useState<BatchPerson[]>([]);
   const [name, setName] = useState("");
   const [domain, setDomain] = useState("");
-  const [isGuest, setIsGuest] = useState(false);
+  const [isGuest, setIsGuest] = useState(true); // Default to guest
   const [guestRole, setGuestRole] = useState<GuestRole>("GUEST");
   const [referrer, setReferrer] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [customTime, setCustomTime] = useState(formatDateTimeLocal(new Date()));
   
   // Batch check-in state
-  const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set());
+  const [selectedPeople, setSelectedPeople] = useState<Set<string>>(new Set());
   const [batchSubmitting, setBatchSubmitting] = useState(false);
 
-  // Fetch members list
+  // Event check - must have event this week
+  const [noEventThisWeek, setNoEventThisWeek] = useState(false);
+
+  // Check if event exists this week
   useEffect(() => {
-    const fetchMembers = async () => {
+    checkEventThisWeek().then((exists) => {
+      setNoEventThisWeek(!exists);
+    });
+  }, []);
+
+  // Fetch members and guests list
+  useEffect(() => {
+    const fetchData = async () => {
       try {
-        const data = await getMembers();
-        setMembers(data.members);
+        const [membersData, guestsData] = await Promise.all([
+          getMembers(),
+          getGuests()
+        ]);
+        setMembers(membersData.members);
+        setGuests(guestsData.guests || []);
+        
+        // Combine into batch list
+        const combined: BatchPerson[] = [
+          ...membersData.members.map(m => ({
+            name: m.name,
+            domain: m.domain,
+            type: "member" as const
+          })),
+          ...(guestsData.guests || []).map(g => ({
+            name: g.name,
+            domain: g.profession,
+            type: "guest" as const,
+            referrer: g.referrer
+          }))
+        ];
+        setBatchList(combined);
       } catch {
-        onNotify("無法載入會員名單", "error");
+        onNotify("無法載入名單", "error");
       }
     };
-    fetchMembers();
+    fetchData();
   }, [onNotify]);
 
-  // Update selected member's domain when member changes
+  // Reset form when switching between guest and member
   useEffect(() => {
-    if (!isGuest && selectedMember) {
-      const member = members.find(m => m.name === selectedMember);
-      if (member) {
-        setDomain(member.domain);
-      }
-    }
-  }, [selectedMember, members, isGuest]);
-
-  // Reset fields when switching between guest and member
-  useEffect(() => {
-    setSelectedMember("");
-    setName("");
-    setDomain("");
     setGuestRole("GUEST");
     setReferrer("");
   }, [isGuest]);
 
   const handleSubmit = async () => {
-    const submitName = isGuest ? name.trim() : selectedMember;
+    const submitName = name.trim();
     const submitDomain = domain.trim();
 
     if (!submitName) {
-      onNotify(isGuest ? "請輸入姓名" : "請選擇會員", "error");
+      onNotify("請輸入姓名", "error");
       return;
     }
     if (!submitDomain) {
@@ -95,10 +121,9 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
       });
 
       if (result.status === "success") {
-        const roleLabel = isGuest ? (guestRole === "VIP" ? " (VIP)" : guestRole === "SPEAKER" ? " (講者)" : "") : "";
-        onNotify(`✅ ${submitName}${roleLabel} 簽到成功！`, "success");
+        const typeLabel = isGuest ? (guestRole === "VIP" ? " (VIP嘉賓)" : guestRole === "SPEAKER" ? " (講者)" : " (嘉賓)") : " (會員)";
+        onNotify(`✅ ${submitName}${typeLabel} 簽到成功！`, "success");
         setName("");
-        setSelectedMember("");
         setDomain("");
         setIsGuest(false);
         setGuestRole("GUEST");
@@ -123,34 +148,40 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
     }
   };
 
-  const isFormValid = isGuest 
-    ? (name.trim().length > 0 && domain.trim().length > 0)
-    : (selectedMember.length > 0 && domain.trim().length > 0);
-
   // Batch check-in handlers
-  const toggleMemberSelection = (memberName: string) => {
-    setSelectedMembers(prev => {
+  const togglePersonSelection = (personKey: string) => {
+    setSelectedPeople(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(memberName)) {
-        newSet.delete(memberName);
+      if (newSet.has(personKey)) {
+        newSet.delete(personKey);
       } else {
-        newSet.add(memberName);
+        newSet.add(personKey);
       }
       return newSet;
     });
   };
 
   const selectAllMembers = () => {
-    setSelectedMembers(new Set(members.map(m => m.name)));
+    const memberKeys = batchList.filter(p => p.type === "member").map(p => `member:${p.name}`);
+    setSelectedPeople(new Set(memberKeys));
+  };
+
+  const selectAllGuests = () => {
+    const guestKeys = batchList.filter(p => p.type === "guest").map(p => `guest:${p.name}`);
+    setSelectedPeople(new Set(guestKeys));
+  };
+
+  const selectAll = () => {
+    setSelectedPeople(new Set(batchList.map(p => `${p.type}:${p.name}`)));
   };
 
   const clearAllSelections = () => {
-    setSelectedMembers(new Set());
+    setSelectedPeople(new Set());
   };
 
   const handleBatchCheckIn = async () => {
-    if (selectedMembers.size === 0) {
-      onNotify("請至少選擇一位會員", "error");
+    if (selectedPeople.size === 0) {
+      onNotify("請至少選擇一位", "error");
       return;
     }
 
@@ -160,17 +191,20 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
     const selectedTime = new Date(customTime);
     const timeString = `${selectedTime.getFullYear()}-${String(selectedTime.getMonth() + 1).padStart(2, '0')}-${String(selectedTime.getDate()).padStart(2, '0')}T${String(selectedTime.getHours()).padStart(2, '0')}:${String(selectedTime.getMinutes()).padStart(2, '0')}:${String(selectedTime.getSeconds()).padStart(2, '0')}`;
 
-    for (const memberName of selectedMembers) {
+    for (const personKey of selectedPeople) {
       try {
-        const member = members.find(m => m.name === memberName);
-        if (!member) continue;
+        const [type, ...nameParts] = personKey.split(":");
+        const personName = nameParts.join(":");
+        const person = batchList.find(p => p.name === personName && p.type === type);
+        if (!person) continue;
 
         await checkIn({
-          name: memberName,
-          type: "member",
-          domain: member.domain,
+          name: personName,
+          type: person.type,
+          domain: person.domain,
           currentTime: timeString,
-          role: "MEMBER"
+          role: person.type === "member" ? "MEMBER" : "GUEST",
+          referrer: person.referrer
         });
         successCount++;
       } catch {
@@ -182,14 +216,36 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
     clearAllSelections();
     
     if (failCount === 0) {
-      onNotify(`✅ 批量簽到成功！已簽到 ${successCount} 位會員`, "success");
+      onNotify(`✅ 批量簽到成功！已簽到 ${successCount} 位`, "success");
     } else {
       onNotify(`⚠️ 批量簽到完成：成功 ${successCount} 位，失敗 ${failCount} 位`, "info");
     }
   };
-  
-  const displayName = isGuest ? name : selectedMember;
-  const selectedMemberInfo = members.find(m => m.name === selectedMember);
+
+  if (noEventThisWeek) {
+    return (
+      <section className="section manual-entry-panel">
+        <div
+          style={{
+            background: "#fef2f2",
+            border: "2px solid #ef4444",
+            borderRadius: "12px",
+            padding: "2rem",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: "2.5rem", marginBottom: "0.75rem" }}>⚠️</div>
+          <h3 style={{ margin: "0 0 0.5rem 0", color: "#b91c1c" }}>本週尚未建立活動</h3>
+          <p style={{ margin: "0 0 1rem 0", color: "#991b1b" }}>
+            請主辦單位先在管理頁面建立本週活動後，再進行手動簽到。
+          </p>
+          <p style={{ margin: 0, fontSize: "0.9rem", color: "#7f1d1d" }}>
+            Please ask the organizer to create the event first.
+          </p>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="section manual-entry-panel">
@@ -218,162 +274,107 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
 
       {mode === "single" ? (
         <>
-      <div className="form-group checkbox-group">
-        <label className="checkbox-label">
-          <input
-            type="checkbox"
-            checked={isGuest}
-            onChange={(e) => setIsGuest(e.target.checked)}
-          />
-          <span className="checkbox-text">🎫 嘉賓 Guest</span>
-        </label>
-        <p className="hint">勾選表示為嘉賓，否則為會員（下拉選單）</p>
-      </div>
-
-      {/* Member dropdown or Guest text input */}
-      {isGuest ? (
-        <>
+          {/* Simple single entry - just name and profession */}
           <div className="form-group">
             <label htmlFor="admin-name">姓名 Name *</label>
             <input
               id="admin-name"
               className="input-field"
-              placeholder="請輸入嘉賓姓名..."
+              placeholder="請輸入姓名..."
               value={name}
               onChange={(e) => setName(e.target.value)}
               autoComplete="off"
             />
           </div>
 
-          {/* Role Selection for Guests */}
           <div className="form-group">
-            <label>嘉賓身份 Role</label>
-            <div className="role-selector">
-              <button
-                type="button"
-                className={`role-option ${guestRole === "GUEST" ? "active" : ""}`}
-                onClick={() => setGuestRole("GUEST")}
-              >
-                👤 一般來賓
-              </button>
-              <button
-                type="button"
-                className={`role-option vip ${guestRole === "VIP" ? "active" : ""}`}
-                onClick={() => setGuestRole("VIP")}
-              >
-                ⭐ VIP
-              </button>
-              <button
-                type="button"
-                className={`role-option speaker ${guestRole === "SPEAKER" ? "active" : ""}`}
-                onClick={() => setGuestRole("SPEAKER")}
-              >
-                🎤 講者
-              </button>
-            </div>
-          </div>
-
-          {/* Referrer for Guests */}
-          <div className="form-group">
-            <label htmlFor="admin-referrer">邀請人 Referrer (選填)</label>
+            <label htmlFor="admin-domain">專業領域 Domain *</label>
             <input
-              id="admin-referrer"
+              id="admin-domain"
               className="input-field"
-              placeholder="邀請此來賓的會員..."
-              value={referrer}
-              onChange={(e) => setReferrer(e.target.value)}
+              placeholder="例如: 網頁設計、會計服務..."
+              value={domain}
+              onChange={(e) => setDomain(e.target.value)}
               autoComplete="off"
             />
           </div>
-        </>
-      ) : (
-        <div className="form-group">
-          <label htmlFor="admin-member-select">選擇會員 Select Member *</label>
-          <select
-            id="admin-member-select"
-            className="select-field"
-            value={selectedMember}
-            onChange={(e) => setSelectedMember(e.target.value)}
-          >
-            <option value="">-- 請選擇會員 --</option>
-            {members.map((member) => (
-              <option key={member.name} value={member.name}>
-                {member.name} - {member.domain}
-              </option>
-            ))}
-          </select>
-          <p className="hint">共 {members.length} 位會員</p>
-        </div>
-      )}
 
-      <div className="form-group">
-        <label htmlFor="admin-domain">專業領域 Domain *</label>
-        <input
-          id="admin-domain"
-          className="input-field"
-          placeholder="例如: 網頁設計、會計服務..."
-          value={domain}
-          onChange={(e) => setDomain(e.target.value)}
-          autoComplete="off"
-          readOnly={!isGuest && !!selectedMember}
-          />
-        {!isGuest && selectedMember && (
-          <p className="hint">已自動填入會員的專業領域</p>
-        )}
-      </div>
-
-      <div className="form-group">
-        <label htmlFor="admin-time">簽到時間 Check-in Time</label>
-        <input
-          id="admin-time"
-          className="input-field"
-          type="datetime-local"
-          value={customTime}
-          onChange={(e) => setCustomTime(e.target.value)}
-        />
-        <p className="hint">可選擇自訂時間，預設為當前時間</p>
-      </div>
-
-      <div className={`preview-card ${isGuest && guestRole === "VIP" ? "vip-preview" : isGuest && guestRole === "SPEAKER" ? "speaker-preview" : ""}`}>
-        <h4>📋 簽到預覽</h4>
-        <div className="preview-row">
-          <span className="preview-label">姓名:</span>
-          <span className="preview-value">{displayName || "—"}</span>
-        </div>
-        <div className="preview-row">
-          <span className="preview-label">專業領域:</span>
-          <span className="preview-value">{domain || "—"}</span>
-        </div>
-        <div className="preview-row">
-          <span className="preview-label">類型:</span>
-          <span className={`type-badge ${isGuest ? guestRole.toLowerCase() : "member"}`}>
-            {isGuest 
-              ? (guestRole === "VIP" ? "⭐ VIP" : guestRole === "SPEAKER" ? "🎤 講者" : "👤 來賓")
-              : "👤 會員"}
-          </span>
-        </div>
-        {isGuest && referrer && (
-          <div className="preview-row">
-            <span className="preview-label">邀請人:</span>
-            <span className="preview-value">{referrer}</span>
+          <div className="form-group checkbox-group">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={isGuest}
+                onChange={(e) => setIsGuest(e.target.checked)}
+              />
+              <span className="checkbox-text">🎫 嘉賓 Guest</span>
+            </label>
+            <p className="hint">勾選表示為嘉賓，否則為會員</p>
           </div>
-        )}
-        <div className="preview-row">
-          <span className="preview-label">簽到時間:</span>
-          <span className="preview-value">
-            {new Date(customTime).toLocaleString("zh-TW")}
-          </span>
-        </div>
-      </div>
 
-      <button
-        className="button submit-button"
-        type="button"
-        onClick={handleSubmit}
-        disabled={!isFormValid || isSubmitting}
-      >
-        {isSubmitting ? "處理中..." : "✅ 確認新增"}
-      </button>
+          {isGuest && (
+            <>
+              {/* Role Selection for Guests */}
+              <div className="form-group">
+                <label>嘉賓身份 Role</label>
+                <div className="role-selector">
+                  <button
+                    type="button"
+                    className={`role-option ${guestRole === "GUEST" ? "active" : ""}`}
+                    onClick={() => setGuestRole("GUEST")}
+                  >
+                    👤 一般
+                  </button>
+                  <button
+                    type="button"
+                    className={`role-option vip ${guestRole === "VIP" ? "active" : ""}`}
+                    onClick={() => setGuestRole("VIP")}
+                  >
+                    ⭐ VIP
+                  </button>
+                  <button
+                    type="button"
+                    className={`role-option speaker ${guestRole === "SPEAKER" ? "active" : ""}`}
+                    onClick={() => setGuestRole("SPEAKER")}
+                  >
+                    🎤 講者
+                  </button>
+                </div>
+              </div>
+
+              {/* Referrer for Guests */}
+              <div className="form-group">
+                <label htmlFor="admin-referrer">邀請人 (選填)</label>
+                <input
+                  id="admin-referrer"
+                  className="input-field"
+                  placeholder="邀請此來賓的會員..."
+                  value={referrer}
+                  onChange={(e) => setReferrer(e.target.value)}
+                  autoComplete="off"
+                />
+              </div>
+            </>
+          )}
+
+          <div className="form-group">
+            <label htmlFor="admin-time">簽到時間 (選填)</label>
+            <input
+              id="admin-time"
+              className="input-field"
+              type="datetime-local"
+              value={customTime}
+              onChange={(e) => setCustomTime(e.target.value)}
+            />
+          </div>
+
+          <button
+            className="button submit-button"
+            type="button"
+            onClick={handleSubmit}
+            disabled={!name.trim() || !domain.trim() || isSubmitting}
+          >
+            {isSubmitting ? "處理中..." : "✅ 確認新增"}
+          </button>
         </>
       ) : (
         <>
@@ -389,60 +390,117 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
             />
           </div>
 
-          <div className="batch-controls">
-            <button
-              type="button"
-              className="ghost-button"
-              onClick={selectAllMembers}
-              disabled={members.length === 0}
-            >
+          <div className="batch-controls" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
+            <button type="button" className="ghost-button" onClick={selectAll}>
               ✓ 全選
+            </button>
+            <button type="button" className="ghost-button" onClick={selectAllMembers}>
+              👤 全選會員
+            </button>
+            <button type="button" className="ghost-button" onClick={selectAllGuests}>
+              🎫 全選嘉賓
             </button>
             <button
               type="button"
               className="ghost-button"
               onClick={clearAllSelections}
-              disabled={selectedMembers.size === 0}
+              disabled={selectedPeople.size === 0}
             >
               ✕ 清除
             </button>
-            <span className="selection-count">
-              已選擇 {selectedMembers.size} / {members.length} 位會員
-            </span>
           </div>
 
-          <div className="batch-member-list">
-            {members.length === 0 ? (
-              <div className="empty-state">
-                <p className="hint">載入會員名單中...</p>
-              </div>
-            ) : (
-              members.map((member) => (
-                <label
-                  key={member.name}
-                  className={`batch-member-item ${selectedMembers.has(member.name) ? "selected" : ""}`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedMembers.has(member.name)}
-                    onChange={() => toggleMemberSelection(member.name)}
-                  />
-                  <div className="member-info">
-                    <span className="member-name">{member.name}</span>
-                    <span className="member-domain">{member.domain}</span>
+          <div className="selection-count" style={{ marginBottom: '1rem', padding: '0.5rem', background: 'var(--card-bg)', borderRadius: '8px' }}>
+            已選擇 <strong>{selectedPeople.size}</strong> / {batchList.length} 位
+            （會員 {batchList.filter(p => p.type === "member").length} 位 + 嘉賓 {batchList.filter(p => p.type === "guest").length} 位）
+          </div>
+
+          {/* Two columns: Members and Guests */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            {/* Members Column */}
+            <div>
+              <h4 style={{ margin: '0 0 0.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span>👤</span> 會員 Members
+                <span className="hint" style={{ fontWeight: 'normal' }}>({members.length})</span>
+              </h4>
+              <div className="batch-member-list" style={{ maxHeight: '400px', overflow: 'auto' }}>
+                {members.length === 0 ? (
+                  <div className="empty-state">
+                    <p className="hint">載入中...</p>
                   </div>
-                </label>
-              ))
-            )}
+                ) : (
+                  members.map((member) => {
+                    const key = `member:${member.name}`;
+                    return (
+                      <label
+                        key={key}
+                        className={`batch-member-item ${selectedPeople.has(key) ? "selected" : ""}`}
+                        style={{ borderLeft: '3px solid #3b82f6' }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedPeople.has(key)}
+                          onChange={() => togglePersonSelection(key)}
+                        />
+                        <div className="member-info">
+                          <span className="member-name">{member.name}</span>
+                          <span className="member-domain">{member.domain}</span>
+                        </div>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* Guests Column */}
+            <div>
+              <h4 style={{ margin: '0 0 0.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span>🎫</span> 嘉賓 Guests
+                <span className="hint" style={{ fontWeight: 'normal' }}>({guests.length})</span>
+              </h4>
+              <div className="batch-member-list" style={{ maxHeight: '400px', overflow: 'auto' }}>
+                {guests.length === 0 ? (
+                  <div className="empty-state">
+                    <p className="hint">無嘉賓資料</p>
+                  </div>
+                ) : (
+                  guests.map((guest) => {
+                    const key = `guest:${guest.name}`;
+                    return (
+                      <label
+                        key={key}
+                        className={`batch-member-item ${selectedPeople.has(key) ? "selected" : ""}`}
+                        style={{ borderLeft: '3px solid #22c55e' }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedPeople.has(key)}
+                          onChange={() => togglePersonSelection(key)}
+                        />
+                        <div className="member-info">
+                          <span className="member-name">{guest.name}</span>
+                          <span className="member-domain">{guest.profession}</span>
+                          {guest.referrer && (
+                            <span className="hint" style={{ fontSize: '0.75rem' }}>邀請人: {guest.referrer}</span>
+                          )}
+                        </div>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+            </div>
           </div>
 
           <button
             className="button submit-button"
             type="button"
             onClick={handleBatchCheckIn}
-            disabled={selectedMembers.size === 0 || batchSubmitting}
+            disabled={selectedPeople.size === 0 || batchSubmitting}
+            style={{ marginTop: '1rem' }}
           >
-            {batchSubmitting ? "批量處理中..." : `✅ 批量簽到 (${selectedMembers.size} 位)`}
+            {batchSubmitting ? "批量處理中..." : `✅ 批量簽到 (${selectedPeople.size} 位)`}
           </button>
         </>
       )}

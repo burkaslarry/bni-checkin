@@ -3,14 +3,26 @@ import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
+  server: {
+    proxy: {
+      "/api": {
+        target: "http://localhost:10000",
+        changeOrigin: true
+      },
+      "/ws": {
+        target: "ws://localhost:10000",
+        ws: true
+      }
+    }
+  },
   plugins: [
     react(),
     VitePWA({
       registerType: "autoUpdate",
       includeAssets: ["icon.svg"],
       manifest: {
-        name: "BNI Anchor Checkin",
-        short_name: "Anchor Checkin",
+        name: "EventXP for BNI Anchor",
+        short_name: "EventXP",
         description: "QR code attendance tracker for BNI Anchor members.",
         theme_color: "#0f172a",
         background_color: "#0f172a",

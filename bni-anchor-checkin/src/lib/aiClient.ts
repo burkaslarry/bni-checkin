@@ -1,7 +1,7 @@
 import type { Guest, Member, MemberMatch } from "../types/seating";
 
-// Backend API URL
-const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL || "http://localhost:10000";
+// Backend API URL (same as api.ts)
+const BACKEND_API_URL = import.meta.env.VITE_API_BASE || "http://localhost:10000";
 
 type AIProvider = "deepseek" | "gemini" | "keyword" | null;
 
@@ -83,6 +83,53 @@ const callDeepSeekViaBackend = async (
   }
 };
 
+// Direct DeepSeek API when backend unreachable
+const callDeepSeekDirect = async (
+  guest: Guest,
+  members: Member[]
+): Promise<AIMatchResponse[] | null> => {
+  const apiKey = import.meta.env.VITE_DEEPSEEK_API_KEY as string;
+  if (!apiKey || apiKey.startsWith("your_")) return null;
+
+  const memberList = members.map((m) => `- ${m.name} (${m.profession})`).join("\n");
+  const prompt = `You are a BNI networking consultant. Match guest to members.
+
+Guest: ${guest.name} - ${guest.profession}
+${guest.targetProfession ? `Target: ${guest.targetProfession}` : ""}
+${guest.bottlenecks?.length ? `Bottlenecks: ${guest.bottlenecks.join(", ")}` : ""}
+${guest.remarks ? `Remarks: ${guest.remarks}` : ""}
+
+Members:
+${memberList}
+
+Return JSON only: {"matches": [{"memberName": "name", "matchStrength": "High"|"Medium"|"Low", "reason": "..."}]}`;
+
+  try {
+    const res = await fetch("https://api.deepseek.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: "deepseek-chat",
+        messages: [
+          { role: "system", content: "Return valid JSON only." },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 2000,
+        response_format: { type: "json_object" }
+      })
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const content = data?.choices?.[0]?.message?.content;
+    if (!content) return null;
+    const parsed = JSON.parse(content) as { matches?: AIMatchResponse[] };
+    return parsed.matches ?? null;
+  } catch {
+    return null;
+  }
+};
+
 // Gemini fallback is deprecated - all AI calls should go through backend
 // Keeping this for backwards compatibility only
 const callGeminiDEPRECATED = async (): Promise<AIMatchResponse[] | null> => {
@@ -95,8 +142,12 @@ export const matchMembersWithAI = async (
   members: Member[]
 ): Promise<{ matches: MemberMatch[]; provider: AIProvider }> => {
   
-  // Call backend DeepSeek API
-  const backendResult = await callDeepSeekViaBackend(guest, members);
+  // Call backend DeepSeek API first
+  let backendResult = await callDeepSeekViaBackend(guest, members);
+  // Fallback: direct DeepSeek when backend unreachable
+  if (!backendResult || backendResult.length === 0) {
+    backendResult = await callDeepSeekDirect(guest, members);
+  }
   if (backendResult && backendResult.length > 0) {
     // Convert AI response to MemberMatch format
     const matches: MemberMatch[] = backendResult

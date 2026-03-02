@@ -1,6 +1,6 @@
 {
-  "name": "BNI Anchor Checkin",
-  "short_name": "Anchor Checkin",
+  "name": "EventXP for BNI Anchor",
+  "short_name": "EventXP",
   "icons": [
     {
       "src": "/icon.svg",

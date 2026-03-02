@@ -1,570 +1,643 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { checkIn, getMembers, MemberInfo, getCurrentEvent, EventData } from "../api";
-import jsQR from "jsqr";
-
-interface BarcodeDetectorOptions {
-  formats?: string[];
-}
-
-interface BarcodeDetection {
-  rawValue: string;
-}
-
-declare class BarcodeDetector {
-  constructor(options?: BarcodeDetectorOptions);
-  detect(source: ImageBitmapSource): Promise<BarcodeDetection[]>;
-}
+import { useState, useEffect, useMemo, useRef } from "react";
+import { getEventForDate, getMembers, getGuests, logAttendance, getReportWebSocketUrl } from "../api";
 
 type CheckinType = "member" | "guest";
+
+type Member = {
+  id: number;
+  name: string;
+  profession: string;
+  standing?: string;
+};
+
+type Guest = {
+  id: number;
+  name: string;
+  profession: string;
+  referrer?: string;
+  event_date?: string;
+};
 
 type CheckinFormPanelProps = {
   onNotify: (message: string, type: "success" | "error" | "info") => void;
 };
 
 export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const detectorRef = useRef<BarcodeDetector | null>(null);
-  const scanIntervalRef = useRef<number | null>(null);
-  const lastScannedRef = useRef<string>("");
-  const isCameraReadyRef = useRef(false);
-
-  // Form state
   const [checkinType, setCheckinType] = useState<CheckinType>("member");
-  const [members, setMembers] = useState<MemberInfo[]>([]);
-  const [selectedMember, setSelectedMember] = useState("");
-  const [guestName, setGuestName] = useState("");
-  const [guestDomain, setGuestDomain] = useState("");
+  const [members, setMembers] = useState<Member[]>([]);
+  const [guests, setGuests] = useState<Guest[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedName, setSelectedName] = useState("");
+  const [isLoading, setIsLoading] = useState(true); // Show loading until first fetch completes
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [supportsDetector, setSupportsDetector] = useState(false);
-  const [lastScanned, setLastScanned] = useState("");
-  const [eventInfo, setEventInfo] = useState<{ eventName: string; eventDate: string } | null>(null);
-  const [currentEvent, setCurrentEvent] = useState<EventData | null>(null);
-  const [isEventEnded, setIsEventEnded] = useState(false);
-  const [scanStatus, setScanStatus] = useState<"idle" | "scanning" | "success">("idle");
-  const [showQRScanner, setShowQRScanner] = useState(true);
+  const [checkInSuccess, setCheckInSuccess] = useState(false);
+  const [alreadyCheckedIn, setAlreadyCheckedIn] = useState(false);
+  const [noEventForDate, setNoEventForDate] = useState(false);
+  const [wsConnected, setWsConnected] = useState(false);
+  const wsRef = useRef<WebSocket | null>(null);
 
-  // Fetch members list
-  useEffect(() => {
-    const fetchMembers = async () => {
-      try {
-        const data = await getMembers();
-        setMembers(data.members);
-      } catch {
-        onNotify("無法載入會員名單", "error");
-      }
-    };
-    fetchMembers();
-  }, [onNotify]);
-
-  // Fetch current event and check if ended
-  useEffect(() => {
-    const checkEventStatus = async () => {
-      try {
-        const event = await getCurrentEvent();
-        setCurrentEvent(event);
-
-        if (event) {
-          const now = new Date();
-          const eventDate = new Date(event.date);
-          const [endHours, endMinutes] = event.endTime.split(":").map(Number);
-
-          const eventEndTime = new Date(eventDate);
-          eventEndTime.setHours(endHours, endMinutes, 0, 0);
-
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          eventDate.setHours(0, 0, 0, 0);
-
-          if (today.getTime() === eventDate.getTime() && now > eventEndTime) {
-            setIsEventEnded(true);
-          } else {
-            setIsEventEnded(false);
-          }
-        }
-      } catch {
-        // Silent fail
-      }
-    };
-
-    checkEventStatus();
-    const interval = setInterval(checkEventStatus, 60000);
-    return () => clearInterval(interval);
+  // Read event date from URL param (?event=2026-03-05)
+  const eventDate = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    const param = params.get("event");
+    if (param) return param;
+    // Fallback: today's date
+    return new Date().toISOString().split("T")[0];
   }, []);
 
-  // Initialize camera
-  const initCamera = useCallback(async () => {
-    if (!navigator.mediaDevices?.getUserMedia) {
-      console.log("getUserMedia not supported");
-      return;
-    }
+  // Fetch members from backend (bni-anchor-checkin-backend /api/members)
+  const fetchMembers = async () => {
+    setIsLoading(true);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" }
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.oncanplay = () => {
-          isCameraReadyRef.current = true;
-          console.log("Camera ready for scanning");
-        };
-        await videoRef.current.play();
-      }
-    } catch (err) {
-      console.log("Camera not available:", err);
-      onNotify("相機無法使用", "error");
-    }
-  }, [onNotify]);
-
-  useEffect(() => {
-    if (showQRScanner) {
-      void initCamera();
-    }
-    return () => {
-      streamRef.current?.getTracks().forEach((track) => track.stop());
-      if (scanIntervalRef.current) {
-        clearInterval(scanIntervalRef.current);
-      }
-    };
-  }, [initCamera, showQRScanner]);
-
-  useEffect(() => {
-    if ("BarcodeDetector" in window) {
-      detectorRef.current = new BarcodeDetector({ formats: ["qr_code"] });
-      setSupportsDetector(true);
-    }
-  }, []);
-
-  // Process QR code data
-  const processQRCode = useCallback(
-    (qrData: string) => {
-      if (qrData === lastScannedRef.current) {
-        return;
-      }
-
-      lastScannedRef.current = qrData;
-      setLastScanned(qrData);
-
-      try {
-        const parsed = JSON.parse(qrData);
-
-        // Check if it's an event QR code
-        if (parsed.eventName && parsed.eventDate) {
-          setEventInfo({ eventName: parsed.eventName, eventDate: parsed.eventDate });
-          setScanStatus("success");
-          onNotify(`✅ 活動確認: ${parsed.eventName} (${parsed.eventDate})`, "success");
-          setShowQRScanner(false);
-          return true;
-        }
-
-        // Check if it's a member QR code
-        if (parsed.name && parsed.type === "member") {
-          const match = members.find(
-            (m) => m.name.toLowerCase() === parsed.name.toLowerCase()
-          );
-          if (match) {
-            setCheckinType("member");
-            setSelectedMember(match.name);
-            setScanStatus("success");
-            onNotify(`✅ 已識別會員: ${match.name}`, "success");
-            setShowQRScanner(false);
-            return true;
-          }
-        }
-
-        // Check if it's a guest QR code
-        if (parsed.name && parsed.type === "guest") {
-          setCheckinType("guest");
-          setGuestName(parsed.name);
-          setScanStatus("success");
-          onNotify(`✅ 已識別來賓: ${parsed.name}`, "success");
-          setShowQRScanner(false);
-          return true;
-        }
-      } catch {
-        // Not JSON, try simple format
-        const parts = qrData.split("-");
-        if (parts.length >= 2 && parts[1] === "ANCHOR") {
-          const memberName = parts[0];
-          const match = members.find(
-            (m) => m.name.toLowerCase() === memberName.toLowerCase()
-          );
-          if (match) {
-            setCheckinType("member");
-            setSelectedMember(match.name);
-            setScanStatus("success");
-            onNotify(`✅ 已識別會員: ${match.name}`, "success");
-            setShowQRScanner(false);
-            return true;
-          }
-        }
-      }
-
-      return false;
-    },
-    [members, onNotify]
-  );
-
-  // Auto-scan function using jsQR (works in all browsers)
-  const performAutoScan = useCallback(async () => {
-    if (!videoRef.current || !isCameraReadyRef.current) {
-      return;
-    }
-
-    const video = videoRef.current;
-    if (!video.videoWidth || !video.videoHeight) {
-      return;
-    }
-
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
-    // Try BarcodeDetector first if supported
-    if (supportsDetector && detectorRef.current) {
-      try {
-        const barcodes = await detectorRef.current.detect(canvas);
-        if (barcodes.length > 0) {
-          processQRCode(barcodes[0].rawValue);
-          return;
-        }
-      } catch {
-        // Fall through to jsQR
-      }
-    }
-
-    // Fallback to jsQR (works in all browsers)
-    const code = jsQR(imageData.data, imageData.width, imageData.height);
-    if (code) {
-      processQRCode(code.data);
-    }
-  }, [supportsDetector, processQRCode]);
-
-  // Start auto-scanning when camera is ready
-  useEffect(() => {
-    if (!showQRScanner) return;
-
-    scanIntervalRef.current = window.setInterval(() => {
-      void performAutoScan();
-    }, 300);
-
-    return () => {
-      if (scanIntervalRef.current) {
-        clearInterval(scanIntervalRef.current);
-        scanIntervalRef.current = null;
-      }
-    };
-  }, [performAutoScan, showQRScanner]);
-
-  // Reset lastScannedRef when user clears selection
-  useEffect(() => {
-    if (!selectedMember && !guestName && !eventInfo) {
-      lastScannedRef.current = "";
-    }
-  }, [selectedMember, guestName, eventInfo]);
-
-  // Handle member submission
-  const handleMemberSubmit = async () => {
-    if (!selectedMember) {
-      onNotify("請選擇會員", "error");
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const now = new Date();
-      const localTimeString = `${now.getFullYear()}-${String(
-        now.getMonth() + 1
-      ).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}T${String(
-        now.getHours()
-      ).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(
-        now.getSeconds()
-      ).padStart(2, "0")}`;
-
-      const result = await checkIn({
-        name: selectedMember,
-        type: "member",
-        currentTime: localTimeString
-      });
-
-      if (result.status === "success") {
-        onNotify(`✅ ${selectedMember} 簽到成功！`, "success");
-        // Reset form
-        setSelectedMember("");
-        setEventInfo(null);
-        setLastScanned("");
-        setScanStatus("idle");
-        setShowQRScanner(true);
-      } else {
-        onNotify(`❌ ${result.message}`, "error");
-      }
+      const result = await getMembers();
+      const mappedMembers = (result.members ?? []).map((m, idx) => ({
+        id: typeof m.id === "number" ? m.id : idx + 1,
+        name: m.name,
+        profession: m.domain ?? "",
+        standing: m.standing,
+      }));
+      setMembers(mappedMembers);
     } catch (error) {
-      let message = "簽到失敗";
-      if (error instanceof Error) {
-        try {
-          const parsed = JSON.parse(error.message);
-          message = parsed.message || error.message;
-        } catch {
-          message = error.message;
-        }
-      }
-      onNotify(`❌ ${message}`, "error");
-    } finally {
-      setIsSubmitting(false);
+      const msg = error instanceof Error ? error.message : "無法連接後端";
+      onNotify(`無法載入會員列表: ${msg}`, "error");
     }
+    setIsLoading(false);
   };
 
-  // Handle guest submission
-  const handleGuestSubmit = async () => {
-    if (!guestName.trim()) {
-      onNotify("請輸入來賓姓名", "error");
-      return;
-    }
-
-    if (!guestDomain.trim()) {
-      onNotify("請輸入專業領域", "error");
-      return;
-    }
-
-    setIsSubmitting(true);
+  // Fetch guests from backend filtered by event_date
+  const fetchGuests = async () => {
+    setIsLoading(true);
     try {
-      const now = new Date();
-      const localTimeString = `${now.getFullYear()}-${String(
-        now.getMonth() + 1
-      ).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}T${String(
-        now.getHours()
-      ).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(
-        now.getSeconds()
-      ).padStart(2, "0")}`;
-
-      const result = await checkIn({
-        name: guestName.trim(),
-        type: "guest",
-        domain: guestDomain.trim(),
-        currentTime: localTimeString
-      });
-
-      if (result.status === "success") {
-        onNotify(`✅ ${guestName} 簽到成功！`, "success");
-        // Reset form
-        setGuestName("");
-        setGuestDomain("");
-        setEventInfo(null);
-        setLastScanned("");
-        setScanStatus("idle");
-        setShowQRScanner(true);
-      } else {
-        onNotify(`❌ ${result.message}`, "error");
-      }
+      const result = await getGuests();
+      const filteredGuests = (result.guests ?? [])
+        .filter((g) => g.eventDate === eventDate)
+        .map((g, idx) => ({
+          id: idx + 1,
+          name: g.name,
+          profession: g.profession,
+          referrer: g.referrer,
+          event_date: g.eventDate,
+        }));
+      setGuests(filteredGuests);
     } catch (error) {
-      let message = "簽到失敗";
-      if (error instanceof Error) {
-        try {
-          const parsed = JSON.parse(error.message);
-          message = parsed.message || error.message;
-        } catch {
-          message = error.message;
-        }
-      }
-      onNotify(`❌ ${message}`, "error");
-    } finally {
-      setIsSubmitting(false);
+      onNotify("無法載入嘉賓列表", "error");
     }
+    setIsLoading(false);
   };
 
-  const isEventValid = eventInfo !== null;
-  const isMemberFormValid = selectedMember.length > 0;
-  const isGuestFormValid = guestName.trim().length > 0 && guestDomain.trim().length > 0;
+  // Check if event exists for eventDate
+  useEffect(() => {
+    let cancelled = false;
+    getEventForDate(eventDate).then((event) => {
+      if (!cancelled) {
+        setNoEventForDate(!event);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [eventDate]);
+
+  useEffect(() => {
+    if (checkinType === "member") {
+      fetchMembers();
+    } else {
+      fetchGuests();
+    }
+    setSelectedId(null);
+    setSelectedName("");
+    setSearchQuery("");
+    setCheckInSuccess(false);
+    setAlreadyCheckedIn(false);
+  }, [checkinType, eventDate]);
+
+  // Poll every 30 seconds
+  useEffect(() => {
+    const refresh = () => {
+      if (checkinType === "member") fetchMembers();
+      else fetchGuests();
+    };
+    const id = window.setInterval(refresh, 30000);
+    return () => clearInterval(id);
+  }, [checkinType, eventDate]);
+
+  // WebSocket for real-time sync
+  useEffect(() => {
+    const ws = new WebSocket(getReportWebSocketUrl());
+    ws.onopen = () => setWsConnected(true);
+    ws.onclose = () => setWsConnected(false);
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === "attendance_updated" || msg.type === "event_created") {
+          getEventForDate(eventDate).then((event) => setNoEventForDate(!event));
+          if (checkinType === "member") fetchMembers();
+          else fetchGuests();
+        }
+      } catch (_) {}
+    };
+    wsRef.current = ws;
+    return () => ws.close();
+  }, [checkinType, eventDate]);
+
+  // Filter list by search query
+  const filteredList = useMemo(() => {
+    const q = searchQuery.toLowerCase();
+    if (checkinType === "member") {
+      return members.filter(
+        (m) =>
+          m.name.toLowerCase().includes(q) ||
+          m.profession.toLowerCase().includes(q)
+      );
+    } else {
+      return guests.filter(
+        (g) =>
+          g.name.toLowerCase().includes(q) ||
+          g.profession.toLowerCase().includes(q)
+      );
+    }
+  }, [checkinType, members, guests, searchQuery]);
+
+  const handleSelect = (id: number, name: string) => {
+    setSelectedId(id);
+    setSelectedName(name);
+    setCheckInSuccess(false);
+    setAlreadyCheckedIn(false);
+  };
+
+  const handleConfirmCheckIn = async () => {
+    if (!selectedId || !selectedName) return;
+
+    setIsSubmitting(true);
+
+    // Determine on-time vs late (can be enhanced with event cutoff logic)
+    const now = new Date();
+    const status = "on-time";
+
+    try {
+      const selected =
+        checkinType === "member"
+          ? members.find((m) => m.id === selectedId)
+          : guests.find((g) => g.id === selectedId);
+      await logAttendance(
+        selectedId,
+        checkinType,
+        selectedName,
+        selected?.profession ?? "",
+        eventDate,
+        now.toISOString(),
+        status
+      );
+      setCheckInSuccess(true);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("已經簽到")) {
+        setAlreadyCheckedIn(true);
+      } else {
+        onNotify(`簽到失敗: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
+      }
+    }
+
+    setIsSubmitting(false);
+  };
+
+  const standingColor: Record<string, string> = {
+    GREEN: "#22c55e",
+    YELLOW: "#eab308",
+    RED: "#ef4444",
+    BLACK: "#374151",
+  };
+
+  if (noEventForDate) {
+    return (
+      <section className="section checkin-form-panel">
+        <div
+          style={{
+            background: "#fef2f2",
+            border: "2px solid #ef4444",
+            borderRadius: "16px",
+            padding: "2rem",
+            textAlign: "center",
+            marginBottom: "1.5rem",
+          }}
+        >
+          <div style={{ fontSize: "3rem", marginBottom: "0.75rem" }}>⚠️</div>
+          <h2 style={{ margin: "0 0 0.5rem 0", color: "#b91c1c" }}>
+            尚未建立活動 No Event Created
+          </h2>
+          <p style={{ margin: "0 0 1rem 0", color: "#991b1b" }}>
+            此日期 ({eventDate}) 尚未建立活動。請主辦單位先在管理頁面建立活動後再進行簽到。
+          </p>
+          <p style={{ margin: 0, fontSize: "0.9rem", color: "#7f1d1d" }}>
+            Please ask the organizer to create the event first at the admin page.
+          </p>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="section checkin-form-panel">
-      {/* QR Scanner Section */}
-      {showQRScanner && (
-        <div className="qr-scanner-section">
-          <div className="section-header">
-            <h2>📱 掃描 QR 碼簽到</h2>
-            <p className="hint">掃描週例會 QR 碼開始簽到</p>
-          </div>
+      {/* Header */}
+      <div className="section-header" style={{ marginBottom: "1.5rem" }}>
+        <h2 style={{ margin: 0 }}>✅ EventXP for BNI Anchor 簽到 Check-in</h2>
+        <p className="hint" style={{ margin: "0.25rem 0 0 0" }}>
+          活動日期 Event Date:{" "}
+          <strong>
+            {new Date(eventDate).toLocaleDateString("zh-TW", {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+              weekday: "long",
+            })}
+          </strong>
+        </p>
+      </div>
 
-          <div className="scanner-container">
-            <div className="video-wrapper">
-              <video
-                ref={videoRef}
-                muted
-                playsInline
-                autoPlay
-                className="camera-video"
-              />
-              <div className="qr-scan-overlay">
-                <div className="qr-guide">
-                  <svg
-                    width="200"
-                    height="200"
-                    viewBox="0 0 200 200"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  >
-                    <path d="M 10 30 L 10 10 L 30 10" />
-                    <path d="M 170 30 L 170 10 L 150 10" />
-                    <path d="M 10 170 L 10 190 L 30 190" />
-                    <path d="M 170 170 L 170 190 L 150 190" />
-                  </svg>
+      {/* Step 1: Member / Guest Selector */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: "1rem",
+          marginBottom: "1.5rem",
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setCheckinType("member")}
+          style={{
+            padding: "1.25rem",
+            borderRadius: "12px",
+            border: `2px solid ${checkinType === "member" ? "#3b82f6" : "var(--border-color)"}`,
+            background:
+              checkinType === "member"
+                ? "linear-gradient(135deg, #eff6ff, #dbeafe)"
+                : "var(--card-bg)",
+            color: checkinType === "member" ? "#1e40af" : "inherit",
+            fontWeight: checkinType === "member" ? 700 : 500,
+            fontSize: "1rem",
+            cursor: "pointer",
+            transition: "all 0.2s",
+          }}
+        >
+          <div style={{ fontSize: "1.75rem", marginBottom: "0.25rem" }}>👤</div>
+          <div>會員 Member</div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setCheckinType("guest")}
+          style={{
+            padding: "1.25rem",
+            borderRadius: "12px",
+            border: `2px solid ${checkinType === "guest" ? "#22c55e" : "var(--border-color)"}`,
+            background:
+              checkinType === "guest"
+                ? "linear-gradient(135deg, #f0fdf4, #dcfce7)"
+                : "var(--card-bg)",
+            color: checkinType === "guest" ? "#15803d" : "inherit",
+            fontWeight: checkinType === "guest" ? 700 : 500,
+            fontSize: "1rem",
+            cursor: "pointer",
+            transition: "all 0.2s",
+          }}
+        >
+          <div style={{ fontSize: "1.75rem", marginBottom: "0.25rem" }}>🎫</div>
+          <div>嘉賓 Guest</div>
+        </button>
+      </div>
+
+      {/* Step 2: Search + Reload */}
+      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
+        <div style={{ position: "relative", flex: 1 }}>
+          <span
+            style={{
+              position: "absolute",
+              left: "1rem",
+              top: "50%",
+              transform: "translateY(-50%)",
+              fontSize: "1.1rem",
+              pointerEvents: "none",
+            }}
+          >
+            🔍
+          </span>
+          <input
+            type="text"
+            className="input-field"
+            placeholder={`搜尋${checkinType === "member" ? "會員" : "嘉賓"}姓名或專業...`}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{ paddingLeft: "2.75rem", width: "100%" }}
+            autoFocus
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => (checkinType === "member" ? fetchMembers() : fetchGuests())}
+          disabled={isLoading}
+          style={{
+            padding: "0.5rem 1rem",
+            borderRadius: "8px",
+            border: "1px solid var(--border-color)",
+            background: "var(--card-bg)",
+            cursor: isLoading ? "not-allowed" : "pointer",
+            whiteSpace: "nowrap",
+          }}
+          title="重新載入"
+        >
+          🔄
+        </button>
+      </div>
+
+      {/* Step 3: Name List */}
+      {isLoading ? (
+        <div
+          style={{
+            textAlign: "center",
+            padding: "3rem",
+            color: "var(--text-muted)",
+          }}
+        >
+          <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>⏳</div>
+          <p>載入中...</p>
+        </div>
+      ) : filteredList.length === 0 ? (
+        <div
+          style={{
+            textAlign: "center",
+            padding: "3rem",
+            color: "var(--text-muted)",
+          }}
+        >
+          <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>
+            {searchQuery ? "🔍" : checkinType === "guest" ? "🎫" : "👤"}
+          </div>
+          <p className="hint">
+            {searchQuery
+              ? `找不到「${searchQuery}」`
+              : checkinType === "guest"
+              ? `今日 (${eventDate}) 暫無嘉賓登記`
+              : "暫無會員資料"}
+          </p>
+        </div>
+      ) : (
+        <div
+          style={{
+            maxHeight: "380px",
+            overflowY: "auto",
+            borderRadius: "12px",
+            border: "1px solid #334155",
+            marginBottom: "1.5rem",
+          }}
+        >
+          {filteredList.map((item, idx) => {
+            const isSelected = selectedId === item.id;
+            const standing = (item as Member).standing;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => handleSelect(item.id, item.name)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "1rem",
+                  width: "100%",
+                  padding: "1rem 1.25rem",
+                  textAlign: "left",
+                  background: isSelected
+                    ? checkinType === "member"
+                      ? "#eff6ff"
+                      : "#f0fdf4"
+                    : idx % 2 === 0
+                    ? "#1e293b"
+                    : "#0f172a",
+                  border: "none",
+                  borderBottom: "1px solid var(--border-color)",
+                  borderLeft: isSelected
+                    ? `4px solid ${checkinType === "member" ? "#3b82f6" : "#22c55e"}`
+                    : "4px solid transparent",
+                  cursor: "pointer",
+                  transition: "all 0.15s",
+                }}
+              >
+                {/* Avatar */}
+                <div
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    borderRadius: "50%",
+                    background:
+                      checkinType === "member"
+                        ? "linear-gradient(135deg, #3b82f6, #1e40af)"
+                        : "linear-gradient(135deg, #22c55e, #15803d)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "white",
+                    fontWeight: 700,
+                    fontSize: "1rem",
+                    flexShrink: 0,
+                  }}
+                >
+                  {item.name.charAt(0).toUpperCase()}
                 </div>
-              </div>
-            </div>
-            <p className="scanner-hint">
-              {lastScanned ? "✅ 已掃描，請檢查下方表單" : "⏳ 正在掃描..."}
-            </p>
-          </div>
 
-          {isEventEnded && (
-            <div className="alert alert-warning">
-              ⚠️ 活動已結束，無法簽到
-            </div>
-          )}
+                {/* Info */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontWeight: 600,
+                      fontSize: "0.95rem",
+                      color: isSelected
+                        ? checkinType === "member"
+                          ? "#1e40af"
+                          : "#15803d"
+                        : "#ffffff",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {item.name}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "0.8rem",
+                      color: isSelected ? "var(--text-muted)" : "rgba(255,255,255,0.7)",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {item.profession}
+                    {checkinType === "guest" && (item as Guest).referrer && (
+                      <span style={{ marginLeft: "0.5rem", opacity: 0.8 }}>
+                        · 邀請人: {(item as Guest).referrer}
+                      </span>
+                    )}
+                  </div>
+                </div>
 
-          {eventInfo && (
-            <div className="alert alert-success">
-              ✅ 活動已識別: {eventInfo.eventName} ({eventInfo.eventDate})
-            </div>
-          )}
+                {/* Standing badge for members */}
+                {checkinType === "member" && standing && (
+                  <span
+                    style={{
+                      width: "10px",
+                      height: "10px",
+                      borderRadius: "50%",
+                      background: standingColor[standing] ?? "#94a3b8",
+                      flexShrink: 0,
+                    }}
+                  />
+                )}
+
+                {isSelected && (
+                  <span style={{ fontSize: "1.2rem", flexShrink: 0 }}>✓</span>
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
 
-      {/* Form Section - Show after QR scan or allow manual entry */}
-      {(!showQRScanner || eventInfo) && (
-        <div className="checkin-form-section">
-          <div className="section-header">
-            <h2>📋 簽到表單</h2>
-            <p className="hint">確認您的身份進行簽到</p>
-          </div>
-
-          {/* Type Selection */}
-          <div className="checkin-type-selector">
-            <label className="radio-button">
-              <input
-                type="radio"
-                name="checkin-type"
-                value="member"
-                checked={checkinType === "member"}
-                onChange={(e) => {
-                  setCheckinType(e.target.value as CheckinType);
-                  setGuestName("");
-                  setGuestDomain("");
-                }}
-              />
-              <span className="radio-label">會員 👤</span>
-            </label>
-            <label className="radio-button">
-              <input
-                type="radio"
-                name="checkin-type"
-                value="guest"
-                checked={checkinType === "guest"}
-                onChange={(e) => {
-                  setCheckinType(e.target.value as CheckinType);
-                  setSelectedMember("");
-                }}
-              />
-              <span className="radio-label">來賓 🎫</span>
-            </label>
-          </div>
-
-          {/* Member Form */}
-          {checkinType === "member" && (
-            <div className="form-group">
-              <label htmlFor="member-select" className="form-label">
-                會員姓名
-              </label>
-              <select
-                id="member-select"
-                value={selectedMember}
-                onChange={(e) => setSelectedMember(e.target.value)}
-                className="form-select"
-              >
-                <option value="">-- 請選擇會員 --</option>
-                {members.map((member) => (
-                  <option key={member.name} value={member.name}>
-                    {member.name} ({member.domain})
-                  </option>
-                ))}
-              </select>
-              {selectedMember && (
-                <div className="form-help">
-                  已選擇: <strong>{selectedMember}</strong>
-                </div>
-              )}
-              <button
-                type="button"
-                className="button button-primary full-width"
-                onClick={handleMemberSubmit}
-                disabled={!isMemberFormValid || isSubmitting || isEventEnded}
-              >
-                {isSubmitting ? "⏳ 簽到中..." : "✅ 會員簽到"}
-              </button>
-            </div>
-          )}
-
-          {/* Guest Form */}
-          {checkinType === "guest" && (
-            <div className="form-group">
-              <label htmlFor="guest-name" className="form-label">
-                來賓姓名
-              </label>
-              <input
-                id="guest-name"
-                type="text"
-                value={guestName}
-                onChange={(e) => setGuestName(e.target.value)}
-                placeholder="輸入姓名"
-                className="form-input"
-              />
-
-              <label htmlFor="guest-domain" className="form-label">
-                專業領域 (專業)
-              </label>
-              <input
-                id="guest-domain"
-                type="text"
-                value={guestDomain}
-                onChange={(e) => setGuestDomain(e.target.value)}
-                placeholder="例: 軟體開發、行銷、財務"
-                className="form-input"
-              />
-
-              <button
-                type="button"
-                className="button button-primary full-width"
-                onClick={handleGuestSubmit}
-                disabled={!isGuestFormValid || isSubmitting || isEventEnded}
-              >
-                {isSubmitting ? "⏳ 簽到中..." : "✅ 來賓簽到"}
-              </button>
-            </div>
-          )}
-
-          <button
-            type="button"
-            className="button button-secondary full-width"
-            onClick={() => {
-              setShowQRScanner(true);
-              setSelectedMember("");
-              setGuestName("");
-              setGuestDomain("");
-              setEventInfo(null);
-              setLastScanned("");
-              setScanStatus("idle");
+      {/* Step 4: Confirm Check-In */}
+      {selectedId && !checkInSuccess && !alreadyCheckedIn && (
+        <div
+          style={{
+            background: "var(--card-bg)",
+            borderRadius: "12px",
+            padding: "1.5rem",
+            border: `2px solid ${checkinType === "member" ? "#3b82f6" : "#22c55e"}`,
+            marginBottom: "1rem",
+          }}
+        >
+          <p style={{ margin: "0 0 1rem 0", fontWeight: 600 }}>
+            確認簽到 Confirm Check-in:
+          </p>
+          <p
+            style={{
+              fontSize: "1.25rem",
+              fontWeight: 700,
+              margin: "0 0 1rem 0",
+              color: checkinType === "member" ? "#77a6f2" : "#4ce684",
             }}
           >
-            🔄 重新掃描
+            {checkinType === "member" ? "👤" : "🎫"} {selectedName}
+          </p>
+          <button
+            type="button"
+            className="button submit-button"
+            onClick={handleConfirmCheckIn}
+            disabled={isSubmitting}
+            style={{
+              width: "100%",
+              padding: "1rem",
+              fontSize: "1.1rem",
+              background: checkinType === "member" ? "#3b82f6" : "#22c55e",
+              border: "none",
+              opacity: isSubmitting ? 0.7 : 1,
+            }}
+          >
+            {isSubmitting ? "⏳ 處理中..." : "✅ 確認簽到"}
           </button>
+        </div>
+      )}
+
+      {/* Already checked in */}
+      {alreadyCheckedIn && (
+        <div
+          style={{
+            background: "#fefce8",
+            border: "2px solid #eab308",
+            borderRadius: "12px",
+            padding: "1.5rem",
+            textAlign: "center",
+            marginBottom: "1rem",
+          }}
+        >
+          <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>⚠️</div>
+          <h3 style={{ margin: "0 0 0.25rem 0", color: "#a16207" }}>
+            已簽到 Already Checked In
+          </h3>
+          <p style={{ margin: 0, color: "#854d0e" }}>
+            <strong>{selectedName}</strong> 今日已完成簽到。
+          </p>
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={() => {
+              setAlreadyCheckedIn(false);
+              setSelectedId(null);
+              setSelectedName("");
+            }}
+            style={{ marginTop: "1rem" }}
+          >
+            返回 Back
+          </button>
+        </div>
+      )}
+
+      {/* Success State */}
+      {checkInSuccess && (
+        <div
+          style={{
+            background: "linear-gradient(135deg, #f0fdf4, #dcfce7)",
+            border: "2px solid #22c55e",
+            borderRadius: "16px",
+            padding: "2rem",
+            textAlign: "center",
+            animation: "fadeIn 0.4s ease",
+          }}
+        >
+          <div style={{ fontSize: "3.5rem", marginBottom: "0.75rem" }}>🎉</div>
+          <h2 style={{ margin: "0 0 0.5rem 0", color: "#15803d" }}>
+            簽到成功！Check-in Successful!
+          </h2>
+          <p
+            style={{
+              fontSize: "1.3rem",
+              fontWeight: 700,
+              color: "#166534",
+              margin: "0 0 0.5rem 0",
+            }}
+          >
+            {selectedName}
+          </p>
+          <p style={{ color: "#15803d", margin: "0 0 1.5rem 0", fontSize: "0.9rem" }}>
+            {checkinType === "member" ? "會員" : "嘉賓"} ·{" "}
+            {new Date().toLocaleTimeString("zh-TW", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </p>
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={() => {
+              setCheckInSuccess(false);
+              setSelectedId(null);
+              setSelectedName("");
+              setSearchQuery("");
+            }}
+            style={{ borderColor: "#22c55e", color: "#15803d" }}
+          >
+            返回 Back to List
+          </button>
+        </div>
+      )}
+
+      {/* Count bar + status */}
+      {!checkInSuccess && !alreadyCheckedIn && (
+        <div style={{ textAlign: "center", marginTop: "0.5rem" }}>
+          <p className="hint">
+            {isLoading
+              ? "載入中..."
+              : `顯示 ${filteredList.length} / ${checkinType === "member" ? members.length : guests.length} 位${checkinType === "member" ? "會員" : "嘉賓"}`}
+          </p>
+          <p className="hint" style={{ fontSize: "0.8rem", marginTop: "0.25rem", opacity: 0.8 }}>
+            自動每 30 秒更新 | WebSocket 即時同步{wsConnected ? "" : " (重新連線中...)"}
+          </p>
         </div>
       )}
     </section>

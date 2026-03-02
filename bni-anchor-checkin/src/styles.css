@@ -485,12 +485,12 @@ td {
 }
 
 .qr-info-label {
-  color: var(--muted);
+  color: #000;
   font-size: 0.9rem;
 }
 
 .qr-info-value {
-  color: var(--text);
+  color: #000;
   font-weight: 500;
 }
 

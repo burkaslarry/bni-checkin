@@ -1,3 +1,6 @@
+# Deploy backend to Render: connect this repo and use Blueprint (render.yaml)
+# Set env vars in Render Dashboard: SPRING_DATASOURCE_URL, SPRING_DATASOURCE_USERNAME, SPRING_DATASOURCE_PASSWORD
+# (Supabase connection string from project Settings → Database)
 services:
   - type: web
     name: bni-anchor-checkin-backend
@@ -9,5 +12,3 @@ services:
     envVars:
       - key: JAVA_OPTS
         value: -Xmx256m -Xms128m
-    buildCommand: ""
-    startCommand: ""
