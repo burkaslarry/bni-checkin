@@ -115,8 +115,14 @@ export default function AdminPublicGuestLinkPage({}: Props) {
               <button className="button" type="button" onClick={() => void copy()} style={{ background: "#10b981" }}>
                 📋 複製連結
               </button>
-              <a className="ghost-button" href={publicUrl} target="_blank" rel="noopener noreferrer">
-                🔎 預覽公開頁
+              <a
+                className="button"
+                href={publicUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ background: "#10b981", textDecoration: "none" }}
+              >
+                🔎 預覽表格
               </a>
             </div>
             <p className="hint" style={{ margin: 0 }}>

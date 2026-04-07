@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import ReportPage from "../pages/ReportPage";
 
 vi.mock("../api", () => ({
+  getCurrentEvent: vi.fn().mockResolvedValue({ id: 1, name: "BNI Anchor Meeting", date: "2026-02-10" }),
   getReportData: vi.fn().mockResolvedValue({
     eventId: 1,
     eventName: "BNI Anchor Meeting",
@@ -13,6 +14,10 @@ vi.mock("../api", () => ({
     absentees: [{ memberName: "Bob", status: "absent", role: "MEMBER" }],
     stats: { totalAttendees: 1, onTimeCount: 1, lateCount: 0, absentCount: 1 },
   }),
+  getRecords: vi.fn().mockResolvedValue({ records: [] }),
+  clearRecords: vi.fn().mockResolvedValue({ status: "success", message: "ok" }),
+  deleteRecord: vi.fn().mockResolvedValue({ status: "success", message: "ok" }),
+  exportRecords: vi.fn().mockResolvedValue(new Blob(["x"], { type: "text/csv" })),
   getReportWebSocketUrl: vi.fn().mockReturnValue("ws://localhost:10000/ws/report"),
 }));
 

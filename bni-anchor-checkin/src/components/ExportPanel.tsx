@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { exportRecords, getRecords, CheckInRecord, getReportData, ReportData } from "../api";
+import { exportRecords, getRecords, CheckInRecord, getReportData, ReportData, getCurrentEvent } from "../api";
 import { buildAttendanceCsvBasename, buildAttendanceCsvFilename } from "../lib/attendanceExportFilename";
 
 type ExportPanelProps = {
@@ -20,9 +20,10 @@ export const ExportPanel = ({ onNotify }: ExportPanelProps) => {
     const fetchPreview = async () => {
       setIsLoadingPreview(true);
       try {
+        const currentEvent = await getCurrentEvent();
         const [recordsData, report] = await Promise.all([
           getRecords(),
-          getReportData().catch(() => null)
+          getReportData(currentEvent?.id).catch(() => null)
         ]);
         setRecords(recordsData.records);
         setReportData(report);
@@ -52,7 +53,9 @@ export const ExportPanel = ({ onNotify }: ExportPanelProps) => {
       ? buildAttendanceCsvFilename(reportData.eventDate, reportData.eventName)
       : `${filename.trim()}.csv`;
     try {
-      const blob = await exportRecords(reportData?.eventId);
+      const currentEvent = await getCurrentEvent();
+      const exportEventId = reportData?.eventId ?? currentEvent?.id;
+      const blob = await exportRecords(exportEventId);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;

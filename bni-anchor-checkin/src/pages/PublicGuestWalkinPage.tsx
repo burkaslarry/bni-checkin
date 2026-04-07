@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { createPublicGuest, getEventById, getMembers, getPublicCaptcha, type EventData, MemberInfo, PublicCaptchaChallenge } from "../api";
+import { createPublicGuest, getCurrentEvent, getEventById, getMembers, getPublicCaptcha, type EventData, MemberInfo, PublicCaptchaChallenge } from "../api";
 
 type Props = {};
 
@@ -31,6 +31,34 @@ export default function PublicGuestWalkinPage({}: Props) {
     return `${captcha.a} ${captcha.op} ${captcha.b} = ?`;
   }, [captcha]);
 
+  const requiredFilled = useMemo(() => {
+    return (
+      name.trim().length > 0 &&
+      profession.trim().length > 0 &&
+      phoneNumber.trim().length > 0 &&
+      (eventId !== null || eventDate.trim().length > 0)
+    );
+  }, [name, profession, phoneNumber, eventId, eventDate]);
+
+  const expectedCaptchaAnswer = useMemo(() => {
+    if (!captcha) return null;
+    if (captcha.op === "+") return captcha.a + captcha.b;
+    if (captcha.op === "-") return captcha.a - captcha.b;
+    return null;
+  }, [captcha]);
+
+  const isCaptchaAnswerCorrect = useMemo(() => {
+    if (expectedCaptchaAnswer === null) return false;
+    const n = Number(captchaAnswer);
+    return Number.isFinite(n) && n === expectedCaptchaAnswer;
+  }, [captchaAnswer, expectedCaptchaAnswer]);
+
+  const canSubmit =
+    !submitting &&
+    !captchaLoading &&
+    requiredFilled &&
+    isCaptchaAnswerCorrect;
+
   const refreshCaptcha = async () => {
     setCaptchaLoading(true);
     setError(null);
@@ -52,6 +80,7 @@ export default function PublicGuestWalkinPage({}: Props) {
   // Optional: prefer eventID via public link: /public/guest?eventID=123
   // Backward compatibility: still allow old ?eventDate=YYYY-MM-DD links.
   useEffect(() => {
+    let cancelled = false;
     const params = new URLSearchParams(window.location.search);
     const rawId = params.get("eventID") ?? params.get("eventId");
     const id = rawId ? Number(rawId) : NaN;
@@ -60,7 +89,25 @@ export default function PublicGuestWalkinPage({}: Props) {
       return;
     }
     const d = params.get("eventDate");
-    if (d && /^\\d{4}-\\d{2}-\\d{2}$/.test(d)) setEventDate(d);
+    if (d && /^\\d{4}-\\d{2}-\\d{2}$/.test(d)) {
+      setEventDate(d);
+      return;
+    }
+    // No URL override: bind to backend current event so public form always targets the active event.
+    (async () => {
+      try {
+        const current = await getCurrentEvent();
+        if (!cancelled && current?.id) {
+          setEventId(current.id);
+          setEventDate(current.date);
+        }
+      } catch {
+        // Keep manual date fallback when current event is unavailable.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -336,9 +383,22 @@ export default function PublicGuestWalkinPage({}: Props) {
             </div>
           </div>
 
-          <button className="button" type="submit" disabled={submitting}>
-            {submitting ? "提交中..." : captchaLoading ? "載入驗證題目中..." : "提交登記"}
+          <button className="button" type="submit" disabled={!canSubmit}>
+            {submitting
+              ? "提交中..."
+              : captchaLoading
+              ? "載入驗證題目中..."
+              : !requiredFilled
+              ? "請先填妥必填欄位"
+              : !isCaptchaAnswerCorrect
+              ? "請先答對驗證題目"
+              : "提交登記"}
           </button>
+          {!captchaLoading && !isCaptchaAnswerCorrect && captchaAnswer.trim().length > 0 && (
+            <p className="hint" style={{ margin: 0, color: "var(--danger, #ef4444)" }}>
+              驗證題目答案不正確，請重新計算。
+            </p>
+          )}
         </form>
       </section>
     </div>

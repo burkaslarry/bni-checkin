@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import {
-  getReportData, getReportWebSocketUrl, exportRecords, getRecords, clearRecords, deleteRecord,
+  getReportData, getReportWebSocketUrl, exportRecords, getRecords, clearRecords, deleteRecord, getCurrentEvent,
   ReportData, ReportAttendance, AttendeeRole, CheckInRecord
 } from "../api";
 import { buildAttendanceCsvBasename, buildAttendanceCsvFilename } from "../lib/attendanceExportFilename";
@@ -43,7 +43,8 @@ export default function ReportPage() {
 
   const fetchReportData = useCallback(async () => {
     try {
-      const data = await getReportData();
+      const currentEvent = await getCurrentEvent();
+      const data = await getReportData(currentEvent?.id);
       if (!data) {
         setNoEvent(true);
         setError(null);
@@ -162,7 +163,9 @@ export default function ReportPage() {
   const handleExport = async () => {
     setExporting(true);
     try {
-      const blob = await exportRecords(reportData?.eventId);
+      const currentEvent = await getCurrentEvent();
+      const exportEventId = reportData?.eventId ?? currentEvent?.id;
+      const blob = await exportRecords(exportEventId);
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
