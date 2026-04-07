@@ -9,6 +9,10 @@ type PendingScan = {
 
 const QUEUE_KEY = "anchor-checkin-queue";
 
+/**
+ * Load pending scans from localStorage. Returns [] if missing/invalid or SSR. Side effect: may remove invalid key.
+ * @returns {PendingScan[]}
+ */
 const loadQueue = (): PendingScan[] => {
   if (typeof window === "undefined") {
     return [];
@@ -28,6 +32,10 @@ const loadQueue = (): PendingScan[] => {
   return [];
 };
 
+/**
+ * Persist queue to localStorage. No-op on SSR. Side effect: localStorage write.
+ * @param {PendingScan[]} queue
+ */
 const persistQueue = (queue: PendingScan[]) => {
   if (typeof window === "undefined") {
     return;
@@ -35,12 +43,23 @@ const persistQueue = (queue: PendingScan[]) => {
   window.localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
 };
 
+/**
+ * Create a pending scan with new id (crypto.randomUUID or fallback). No side effects.
+ * @param {string} qrPayload
+ * @returns {PendingScan}
+ */
 const createPendingScan = (qrPayload: string): PendingScan => ({
   id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2),
   qrPayload,
   createdAt: new Date().toISOString()
 });
 
+/**
+ * Offline queue for QR scans: enqueue when offline, flush when online. State synced to localStorage.
+ * Side effects: localStorage read/write; network (recordAttendance) on flush; subscribes to "online" event.
+ * @returns {{ pendingCount: number; enqueue: (qrPayload: string) => void; flushQueue: () => Promise<{ flushed: number }> }}
+ * @example const { pendingCount, enqueue, flushQueue } = useOfflineQueue(); enqueue(qrPayload); await flushQueue();
+ */
 export const useOfflineQueue = () => {
   const [queue, setQueue] = useState<PendingScan[]>(() => loadQueue());
 

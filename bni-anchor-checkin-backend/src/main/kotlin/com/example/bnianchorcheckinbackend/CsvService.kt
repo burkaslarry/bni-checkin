@@ -33,7 +33,11 @@ class CsvService {
                 ?: javaClass.getResourceAsStream("/member-anchor.csv")
                 ?: Thread.currentThread().contextClassLoader.getResourceAsStream("members.csv")
                 ?: javaClass.getResourceAsStream("/members.csv")
-                ?: throw IllegalStateException("No member CSV file found in classpath")
+                ?: run {
+                    // CSV is optional when using DB-backed flow; keep service usable with empty member list.
+                    System.err.println("Warning: No member CSV file found in classpath. CsvService will serve 0 members.")
+                    return
+                }
             
             println("Loading member CSV file...")
             

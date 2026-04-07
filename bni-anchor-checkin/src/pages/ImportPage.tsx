@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useDropzone } from "react-dropzone";
 import Papa from "papaparse";
-import { bulkImport, ImportRecord, getEventForDate } from "../api";
+import { bulkImport, ImportRecord, getEventForDate, getCurrentEvent } from "../api";
 
 type ImportType = "member" | "guest";
 
@@ -111,9 +111,12 @@ export default function ImportPage() {
     setIsImporting(true);
 
     try {
-      // For guest import: verify event exists for each event date
+      // For guest import: default empty eventDate to latest event (onsite support), then verify event exists
+      let guestEventDateDefault = "";
       if (importType === "guest") {
-        const eventDates = [...new Set(importData.map((r) => (r.eventDate || "").trim()).filter(Boolean))];
+        const currentEvent = await getCurrentEvent();
+        if (currentEvent?.date) guestEventDateDefault = currentEvent.date;
+        const eventDates = [...new Set(importData.map((r) => (r.eventDate || guestEventDateDefault).trim()).filter(Boolean))];
         for (const d of eventDates) {
           if (!d) continue;
           const normalized = d.includes("-") ? d : `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`;
@@ -125,15 +128,18 @@ export default function ImportPage() {
           }
         }
       }
-      const records: ImportRecord[] = importData.map(row => ({
-        name: row.name,
-        profession: row.profession || "",
-        email: row.email || "",
-        phoneNumber: row.phone || "",
-        referrer: row.referrer || "",
-        standing: row.standing || "GREEN",
-        eventDate: row.eventDate || ""
-      }));
+      const records: ImportRecord[] = importData.map((row) => {
+        const eventDate = (row.eventDate || "").trim() || (importType === "guest" ? guestEventDateDefault : "");
+        return {
+          name: row.name,
+          profession: row.profession || "",
+          email: row.email || "",
+          phoneNumber: row.phone || "",
+          referrer: row.referrer || "",
+          standing: row.standing || "GREEN",
+          eventDate
+        };
+      });
 
       const result = await bulkImport({
         type: importType,

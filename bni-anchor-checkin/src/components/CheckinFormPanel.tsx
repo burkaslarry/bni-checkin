@@ -1,7 +1,41 @@
-import { useState, useEffect, useMemo, useRef } from "react";
-import { getEventForDate, getMembers, getGuests, logAttendance, getReportWebSocketUrl } from "../api";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { getEventForDate, getMembers, getGuests, getCurrentEvent, logAttendance, getReportWebSocketUrl } from "../api";
 
 type CheckinType = "member" | "guest";
+
+/** Resolved event for check-in UI: always from backend (current event or 3-day fallback), never from URL. */
+type EventSnapshot = { id: number; date: string; name: string };
+
+async function resolveActiveEventForCheckin(): Promise<EventSnapshot | null> {
+  const current = await getCurrentEvent();
+  if (current?.date) {
+    return { id: current.id, date: current.date, name: current.name };
+  }
+  const base = new Date();
+  for (let delta = 0; delta <= 2; delta++) {
+    const d = new Date(base);
+    d.setDate(base.getDate() + delta);
+    const dateStr = d.toISOString().split("T")[0];
+    const evt = await getEventForDate(dateStr);
+    if (evt) {
+      return { id: evt.id, date: dateStr, name: evt.name };
+    }
+  }
+  return null;
+}
+
+/** WS payload types → 觸發一次與手動 🔄 相同的同步（後端亦會在嘉賓／當前活動變更時廣播）。 */
+const CHECKIN_FORM_WS_TYPES = new Set([
+  "attendance_updated",
+  "event_created",
+  "new_checkin",
+  "records_cleared",
+  "record_deleted",
+  "all_cleared",
+  "guest_registry_updated",
+  "current_event_changed",
+  "member_registry_updated",
+]);
 
 type Member = {
   id: number;
@@ -34,20 +68,20 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
   const [checkInSuccess, setCheckInSuccess] = useState(false);
   const [alreadyCheckedIn, setAlreadyCheckedIn] = useState(false);
   const [noEventForDate, setNoEventForDate] = useState(false);
+  const [eventSnapshot, setEventSnapshot] = useState<EventSnapshot | null>(null);
+  const [hydrating, setHydrating] = useState(true);
   const [wsConnected, setWsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
+  const pushRefreshDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const checkinTypeRef = useRef(checkinType);
+  checkinTypeRef.current = checkinType;
+  const fetchMembersRef = useRef<() => Promise<void>>(async () => {});
+  const fetchGuestsForDateRef = useRef<(d: string) => Promise<void>>(async () => {});
 
-  // Read event date from URL param (?event=2026-03-05)
-  const eventDate = useMemo(() => {
-    const params = new URLSearchParams(window.location.search);
-    const param = params.get("event");
-    if (param) return param;
-    // Fallback: today's date
-    return new Date().toISOString().split("T")[0];
-  }, []);
+  const eventContextKey = eventSnapshot ? `${eventSnapshot.id}:${eventSnapshot.date}` : "";
 
   // Fetch members from backend (bni-anchor-checkin-backend /api/members)
-  const fetchMembers = async () => {
+  const fetchMembers = useCallback(async () => {
     setIsLoading(true);
     try {
       const result = await getMembers();
@@ -63,81 +97,118 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
       onNotify(`無法載入會員列表: ${msg}`, "error");
     }
     setIsLoading(false);
-  };
+  }, [onNotify]);
 
-  // Fetch guests from backend filtered by event_date
-  const fetchGuests = async () => {
-    setIsLoading(true);
-    try {
-      const result = await getGuests();
-      const filteredGuests = (result.guests ?? [])
-        .filter((g) => g.eventDate === eventDate)
-        .map((g, idx) => ({
+  const fetchGuestsForDate = useCallback(
+    async (forDate: string) => {
+      setIsLoading(true);
+      try {
+        const result = await getGuests(forDate);
+        const mappedGuests = (result.guests ?? []).map((g, idx) => ({
           id: idx + 1,
           name: g.name,
           profession: g.profession,
           referrer: g.referrer,
           event_date: g.eventDate,
         }));
-      setGuests(filteredGuests);
-    } catch (error) {
-      onNotify("無法載入嘉賓列表", "error");
-    }
-    setIsLoading(false);
-  };
+        setGuests(mappedGuests);
+      } catch {
+        onNotify("無法載入嘉賓列表", "error");
+      }
+      setIsLoading(false);
+    },
+    [onNotify]
+  );
 
-  // Check if event exists for eventDate
+  fetchMembersRef.current = () => fetchMembers();
+  fetchGuestsForDateRef.current = (d: string) => fetchGuestsForDate(d);
+
+  const applyResolvedSnapshot = useCallback((snap: EventSnapshot | null) => {
+    setEventSnapshot((prev) => {
+      if (!snap && !prev) return prev;
+      if (snap && prev && snap.id === prev.id && snap.date === prev.date) return prev;
+      return snap;
+    });
+    setNoEventForDate(!snap);
+  }, []);
+
+  // First load: resolve event from API only (admin「當前活動」或三日後備)
   useEffect(() => {
     let cancelled = false;
-    getEventForDate(eventDate).then((event) => {
-      if (!cancelled) {
-        setNoEventForDate(!event);
+    (async () => {
+      try {
+        const snap = await resolveActiveEventForCheckin();
+        if (cancelled) return;
+        applyResolvedSnapshot(snap);
+      } catch {
+        if (!cancelled) {
+          applyResolvedSnapshot(null);
+        }
+      } finally {
+        if (!cancelled) setHydrating(false);
       }
-    });
-    return () => { cancelled = true; };
-  }, [eventDate]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [applyResolvedSnapshot]);
 
+  // When current event changes (id/date) or tab switches member/guest: reset selection and reload lists
   useEffect(() => {
+    if (hydrating || !eventSnapshot) return;
     if (checkinType === "member") {
-      fetchMembers();
+      void fetchMembers();
     } else {
-      fetchGuests();
+      void fetchGuestsForDate(eventSnapshot.date);
     }
     setSelectedId(null);
     setSelectedName("");
     setSearchQuery("");
     setCheckInSuccess(false);
     setAlreadyCheckedIn(false);
-  }, [checkinType, eventDate]);
+  }, [checkinType, eventContextKey, hydrating, eventSnapshot, fetchMembers, fetchGuestsForDate]);
 
-  // Poll every 30 seconds
-  useEffect(() => {
-    const refresh = () => {
-      if (checkinType === "member") fetchMembers();
-      else fetchGuests();
-    };
-    const id = window.setInterval(refresh, 30000);
-    return () => clearInterval(id);
-  }, [checkinType, eventDate]);
+  const runPushRefresh = useCallback(async () => {
+    try {
+      const snap = await resolveActiveEventForCheckin();
+      applyResolvedSnapshot(snap);
+      const ct = checkinTypeRef.current;
+      if (ct === "member") void fetchMembersRef.current();
+      else if (snap?.date) void fetchGuestsForDateRef.current(snap.date);
+    } catch {
+      applyResolvedSnapshot(null);
+    }
+  }, [applyResolvedSnapshot]);
 
-  // WebSocket for real-time sync
+  const schedulePushRefresh = useCallback(() => {
+    if (pushRefreshDebounceRef.current) clearTimeout(pushRefreshDebounceRef.current);
+    pushRefreshDebounceRef.current = setTimeout(() => {
+      pushRefreshDebounceRef.current = null;
+      void runPushRefresh();
+    }, 400);
+  }, [runPushRefresh]);
+
+  // WebSocket：嘉賓／當前活動／簽到等變更時，合併為一次刷新（等同手動按 🔄）
   useEffect(() => {
     const ws = new WebSocket(getReportWebSocketUrl());
     ws.onopen = () => setWsConnected(true);
     ws.onclose = () => setWsConnected(false);
     ws.onmessage = (e) => {
       try {
-        const msg = JSON.parse(e.data);
-        if (msg.type === "attendance_updated" || msg.type === "event_created") {
-          getEventForDate(eventDate).then((event) => setNoEventForDate(!event));
-          if (checkinType === "member") fetchMembers();
-          else fetchGuests();
-        }
+        const msg = JSON.parse(e.data) as { type?: string };
+        if (!msg.type || !CHECKIN_FORM_WS_TYPES.has(msg.type)) return;
+        schedulePushRefresh();
       } catch (_) {}
     };
     wsRef.current = ws;
-    return () => ws.close();
-  }, [checkinType, eventDate]);
+    return () => {
+      if (pushRefreshDebounceRef.current) {
+        clearTimeout(pushRefreshDebounceRef.current);
+        pushRefreshDebounceRef.current = null;
+      }
+      ws.close();
+    };
+  }, [schedulePushRefresh]);
 
   // Filter list by search query
   const filteredList = useMemo(() => {
@@ -165,7 +236,7 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
   };
 
   const handleConfirmCheckIn = async () => {
-    if (!selectedId || !selectedName) return;
+    if (!selectedId || !selectedName || !eventSnapshot?.date) return;
 
     setIsSubmitting(true);
 
@@ -183,7 +254,7 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
         checkinType,
         selectedName,
         selected?.profession ?? "",
-        eventDate,
+        eventSnapshot.date,
         now.toISOString(),
         status
       );
@@ -206,7 +277,24 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
     BLACK: "#374151",
   };
 
-  if (noEventForDate) {
+  if (hydrating) {
+    return (
+      <section className="section checkin-form-panel">
+        <div
+          style={{
+            textAlign: "center",
+            padding: "3rem",
+            color: "var(--text-muted)",
+          }}
+        >
+          <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>⏳</div>
+          <p>載入活動資料...</p>
+        </div>
+      </section>
+    );
+  }
+
+  if (noEventForDate || !eventSnapshot) {
     return (
       <section className="section checkin-form-panel">
         <div
@@ -221,10 +309,10 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
         >
           <div style={{ fontSize: "3rem", marginBottom: "0.75rem" }}>⚠️</div>
           <h2 style={{ margin: "0 0 0.5rem 0", color: "#b91c1c" }}>
-            尚未建立活動 No Event Created
+            暫時未有活動 No Upcoming Events
           </h2>
           <p style={{ margin: "0 0 1rem 0", color: "#991b1b" }}>
-            此日期 ({eventDate}) 尚未建立活動。請主辦單位先在管理頁面建立活動後再進行簽到。
+            後端未有「當前活動」，且 3 日內亦找不到活動。請管理員在後台建立活動或設為當前活動。
           </p>
           <p style={{ margin: 0, fontSize: "0.9rem", color: "#7f1d1d" }}>
             Please ask the organizer to create the event first at the admin page.
@@ -240,13 +328,14 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
       <div className="section-header" style={{ marginBottom: "1.5rem" }}>
         <h2 style={{ margin: 0 }}>✅ EventXP for BNI Anchor 簽到 Check-in</h2>
         <p className="hint" style={{ margin: "0.25rem 0 0 0" }}>
+          <strong>{eventSnapshot.name}</strong>
+          {" · "}
           活動日期 Event Date:{" "}
           <strong>
-            {new Date(eventDate).toLocaleDateString("zh-TW", {
+            {new Date(eventSnapshot.date).toLocaleDateString("zh-TW", {
               year: "numeric",
               month: "long",
               day: "numeric",
-              weekday: "long",
             })}
           </strong>
         </p>
@@ -306,13 +395,31 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
         </button>
       </div>
 
-      {/* Step 2: Search + Reload */}
-      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
-        <div style={{ position: "relative", flex: 1 }}>
+      {/* Step 2: Search（獨立區塊）+ Refresh（隔開） */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "stretch",
+          gap: "1rem",
+          marginBottom: "1rem",
+        }}
+      >
+        <div
+          className="checkin-form-search-wrap"
+          style={{
+            flex: 1,
+            minWidth: 0,
+            position: "relative",
+            borderRadius: "10px",
+            border: "1px solid var(--border-color)",
+            background: "var(--card-bg)",
+            padding: "2px",
+          }}
+        >
           <span
             style={{
               position: "absolute",
-              left: "1rem",
+              left: "calc(0.75rem + 2px)",
               top: "50%",
               transform: "translateY(-50%)",
               fontSize: "1.1rem",
@@ -327,26 +434,57 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
             placeholder={`搜尋${checkinType === "member" ? "會員" : "嘉賓"}姓名或專業...`}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ paddingLeft: "2.75rem", width: "100%" }}
+            style={{
+              paddingLeft: "2.75rem",
+              width: "100%",
+              marginTop: 0,
+              border: "none",
+              background: "transparent",
+              boxShadow: "none",
+            }}
             autoFocus
           />
         </div>
-        <button
-          type="button"
-          onClick={() => (checkinType === "member" ? fetchMembers() : fetchGuests())}
-          disabled={isLoading}
+        <div
           style={{
-            padding: "0.5rem 1rem",
-            borderRadius: "8px",
-            border: "1px solid var(--border-color)",
-            background: "var(--card-bg)",
-            cursor: isLoading ? "not-allowed" : "pointer",
-            whiteSpace: "nowrap",
+            display: "flex",
+            alignItems: "center",
+            flexShrink: 0,
+            paddingLeft: "0.25rem",
+            borderLeft: "1px solid var(--border-color)",
           }}
-          title="重新載入"
         >
-          🔄
-        </button>
+          <button
+            type="button"
+            onClick={() =>
+              checkinType === "member" ? void fetchMembers() : void fetchGuestsForDate(eventSnapshot.date)
+            }
+            disabled={isLoading}
+            aria-label="重新載入名單"
+            title="重新載入名單"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "48px",
+              height: "48px",
+              padding: 0,
+              borderRadius: "10px",
+              border: "1px solid var(--border-color)",
+              background: "var(--card-bg)",
+              cursor: isLoading ? "not-allowed" : "pointer",
+              opacity: isLoading ? 0.55 : 1,
+            }}
+          >
+            <img
+              src="/icons8-refresh-64.svg"
+              alt=""
+              width={28}
+              height={28}
+              style={{ display: "block", pointerEvents: "none" }}
+            />
+          </button>
+        </div>
       </div>
 
       {/* Step 3: Name List */}
@@ -376,7 +514,7 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
             {searchQuery
               ? `找不到「${searchQuery}」`
               : checkinType === "guest"
-              ? `今日 (${eventDate}) 暫無嘉賓登記`
+              ? `此活動 (${eventSnapshot.date}) 暫無嘉賓登記`
               : "暫無會員資料"}
           </p>
         </div>
@@ -636,7 +774,7 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
               : `顯示 ${filteredList.length} / ${checkinType === "member" ? members.length : guests.length} 位${checkinType === "member" ? "會員" : "嘉賓"}`}
           </p>
           <p className="hint" style={{ fontSize: "0.8rem", marginTop: "0.25rem", opacity: 0.8 }}>
-            自動每 30 秒更新 | WebSocket 即時同步{wsConnected ? "" : " (重新連線中...)"}
+            WebSocket 推送時自動更新（嘉賓／當前活動／簽到）· 亦可手按 🔄{wsConnected ? "" : " (WS 重新連線中…)"}
           </p>
         </div>
       )}

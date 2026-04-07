@@ -8,6 +8,13 @@ import java.time.LocalDate
 @Repository
 interface EventRepository : JpaRepository<Event, Long> {
     fun findTopByOrderByEventDateDesc(): Event?
+    fun findTopByDeletedAtIsNullOrderByEventDateDescStartTimeDesc(): Event?
+    fun findTopByStatusAndIsActiveTrueAndDeletedAtIsNullOrderByEventDateAscStartTimeAsc(status: String): Event?
+    fun findAllByOrderByIdDesc(): List<Event>
+    fun findAllByDeletedAtIsNullOrderByIdDesc(): List<Event>
     fun findByEventDate(eventDate: LocalDate): Event?
+    fun findByEventDateAndDeletedAtIsNull(eventDate: LocalDate): Event?
     fun existsByEventDateBetween(start: LocalDate, end: LocalDate): Boolean
+    fun existsByEventDateBetweenAndDeletedAtIsNull(start: LocalDate, end: LocalDate): Boolean
+    fun findAllByStatusAndDeletedAtIsNullOrderByEventDateAscStartTimeAsc(status: String): List<Event>
 }

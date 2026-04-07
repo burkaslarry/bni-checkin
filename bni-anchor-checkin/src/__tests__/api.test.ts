@@ -27,6 +27,27 @@ describe("API helpers", () => {
     expect(Array.isArray(result.members)).toBe(true);
   });
 
+  it("getReportData appends eventId for string ids", async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        eventId: 9,
+        eventName: "Test",
+        eventDate: "2026-02-10",
+        onTimeCutoff: "07:05",
+        attendees: [],
+        absentees: [],
+        stats: {}
+      }),
+    } as Response);
+    const { getReportData } = await import("../api");
+    await getReportData("9" as unknown as number);
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/report\?eventId=9$/),
+      expect.anything()
+    );
+  });
+
   it("getGuests returns guests array", async () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,

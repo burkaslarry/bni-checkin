@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { exportRecords, getRecords, CheckInRecord, getReportData, ReportData } from "../api";
+import { buildAttendanceCsvBasename, buildAttendanceCsvFilename } from "../lib/attendanceExportFilename";
 
 type ExportPanelProps = {
   onNotify: (message: string, type: "success" | "error" | "info") => void;
@@ -34,6 +35,12 @@ export const ExportPanel = ({ onNotify }: ExportPanelProps) => {
     fetchPreview();
   }, []);
 
+  useEffect(() => {
+    if (reportData) {
+      setFilename(buildAttendanceCsvBasename(reportData.eventDate, reportData.eventName));
+    }
+  }, [reportData?.eventId, reportData?.eventDate, reportData?.eventName]);
+
   const handleExportFromServer = async () => {
     if (!filename.trim()) {
       onNotify("請輸入檔案名稱", "error");
@@ -41,17 +48,20 @@ export const ExportPanel = ({ onNotify }: ExportPanelProps) => {
     }
 
     setIsExporting(true);
+    const downloadName = reportData
+      ? buildAttendanceCsvFilename(reportData.eventDate, reportData.eventName)
+      : `${filename.trim()}.csv`;
     try {
-      const blob = await exportRecords();
+      const blob = await exportRecords(reportData?.eventId);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `${filename.trim()}.csv`;
+      link.download = downloadName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-      onNotify(`✅ ${filename}.csv 已下載`, "success");
+      onNotify(`✅ ${downloadName} 已下載`, "success");
     } catch {
       onNotify("❌ 從伺服器匯出失敗", "error");
     } finally {

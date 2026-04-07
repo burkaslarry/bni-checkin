@@ -1,25 +1,42 @@
 import { useState, useEffect, useCallback } from "react";
-import { getCurrentEvent, clearAllEventsAndAttendance, EventData } from "../api";
+import {
+  getCurrentEvent,
+  EventData,
+  exportRecords,
+  listEvents,
+  activateEvent,
+  deleteEvent
+} from "../api";
+import { EventSummaryCard } from "./EventSummaryCard";
+import { EventAttendanceDetailModal } from "./EventAttendanceDetailModal";
+import { buildAttendanceCsvFilename } from "../lib/attendanceExportFilename";
 
 type EventManagementPanelProps = {
   onNotify: (message: string, type: "success" | "error" | "info") => void;
-  onNavigateToStrategic?: () => void;
   onNavigateToGenerate?: () => void;
 };
 
-export const EventManagementPanel = ({ onNotify, onNavigateToStrategic, onNavigateToGenerate }: EventManagementPanelProps) => {
+export const EventManagementPanel = ({ onNotify, onNavigateToGenerate }: EventManagementPanelProps) => {
   const [currentEvent, setCurrentEvent] = useState<EventData | null>(null);
+  const [allEvents, setAllEvents] = useState<EventData[]>([]);
   const [loading, setLoading] = useState(true);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [exportingEventId, setExportingEventId] = useState<number | null>(null);
+  const [activatingId, setActivatingId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [gridEvent, setGridEvent] = useState<EventData | null>(null);
 
   const fetchCurrentEvent = useCallback(async () => {
     setLoading(true);
     try {
       const event = await getCurrentEvent();
       setCurrentEvent(event);
+      const events = await listEvents();
+      setAllEvents(Array.isArray(events) ? events : []);
     } catch {
       setCurrentEvent(null);
+      setAllEvents([]);
     } finally {
       setLoading(false);
     }
@@ -29,37 +46,88 @@ export const EventManagementPanel = ({ onNotify, onNavigateToStrategic, onNaviga
     fetchCurrentEvent();
   }, [fetchCurrentEvent]);
 
-  // Auto-redirect to generate page if no event exists
   useEffect(() => {
-    if (!loading && !currentEvent && onNavigateToGenerate) {
+    if (!loading && !currentEvent && allEvents.length === 0 && onNavigateToGenerate) {
       const timer = setTimeout(() => {
         onNotify("尚未建立活動，正在導向新增活動頁面...", "info");
         onNavigateToGenerate();
       }, 1500);
       return () => clearTimeout(timer);
     }
-  }, [loading, currentEvent, onNavigateToGenerate, onNotify]);
+  }, [loading, currentEvent, allEvents.length, onNavigateToGenerate, onNotify]);
 
-  const handleDeleteAll = async () => {
+  const handleActivate = async (eventId: number) => {
+    setActivatingId(eventId);
+    try {
+      await activateEvent(eventId, true);
+      onNotify("已設為當前活動", "success");
+      await fetchCurrentEvent();
+    } catch (error) {
+      onNotify("設定失敗: " + (error instanceof Error ? error.message : "未知錯誤"), "error");
+    } finally {
+      setActivatingId(null);
+    }
+  };
+
+  const tryDeleteEvent = async (eventId: number, force: boolean, options?: { closeDangerConfirm?: boolean }) => {
+    await deleteEvent(eventId, force);
+    onNotify(force ? "已刪除活動及關聯簽到記錄" : "已刪除活動", "success");
+    if (options?.closeDangerConfirm) setShowDeleteConfirm(false);
+    await fetchCurrentEvent();
+  };
+
+  const handleDeleteClick = async (eventId: number) => {
+    if (!window.confirm("確定要刪除此活動？")) return;
+    setDeletingId(eventId);
+    try {
+      try {
+        await tryDeleteEvent(eventId, false);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "";
+        if (msg.includes("attendance") || msg.includes("force")) {
+          if (!window.confirm("此活動已有簽到記錄。強制刪除會一併清除簽到資料，確定？")) {
+            return;
+          }
+          await tryDeleteEvent(eventId, true);
+        } else {
+          throw e;
+        }
+      }
+    } catch (error) {
+      onNotify("刪除失敗: " + (error instanceof Error ? error.message : "未知錯誤"), "error");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleDangerZoneDelete = async () => {
+    if (!currentEvent) return;
     setIsDeleting(true);
     try {
-      await clearAllEventsAndAttendance();
-      setCurrentEvent(null);
-      setShowDeleteConfirm(false);
-      onNotify("已清除所有活動和簽到記錄", "success");
+      await tryDeleteEvent(currentEvent.id, true, { closeDangerConfirm: true });
     } catch (error) {
-      onNotify("清除失敗: " + (error instanceof Error ? error.message : "未知錯誤"), "error");
+      onNotify("刪除失敗: " + (error instanceof Error ? error.message : "未知錯誤"), "error");
     } finally {
       setIsDeleting(false);
     }
   };
 
-  const formatTime = (time: string) => {
-    if (!time) return time;
-    const [h, m] = time.split(":").map(Number);
-    const period = h >= 12 ? "PM" : "AM";
-    const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-    return `${hour12}:${String(m).padStart(2, "0")} ${period}`;
+  const handleExportEvent = async (ev: EventData) => {
+    setExportingEventId(ev.id);
+    try {
+      const blob = await exportRecords(ev.id);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = buildAttendanceCsvFilename(ev.date, ev.name);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      onNotify("已匯出 CSV（包含缺席名單）", "success");
+    } catch (e) {
+      onNotify("匯出失敗: " + (e instanceof Error ? e.message : "未知錯誤"), "error");
+    } finally {
+      setExportingEventId(null);
+    }
   };
 
   return (
@@ -69,108 +137,65 @@ export const EventManagementPanel = ({ onNotify, onNavigateToStrategic, onNaviga
         <p className="hint">查看和管理目前的活動</p>
       </div>
 
+      {gridEvent && (
+        <EventAttendanceDetailModal
+          event={gridEvent}
+          open
+          onClose={() => setGridEvent(null)}
+          onNotify={onNotify}
+        />
+      )}
+
       {loading ? (
         <div className="loading-state">
           <span>載入中...</span>
         </div>
-      ) : currentEvent ? (
+      ) : allEvents.length > 0 ? (
         <div className="event-details">
-          <div className="event-card">
-            <div className="event-card-header">
-              <h3>{currentEvent.name}</h3>
-              <span className="event-id">ID: {currentEvent.id}</span>
-            </div>
-            
-            <div className="event-info-grid">
-              <div className="info-item">
-                <span className="info-label">📆 活動日期</span>
-                <span className="info-value">{currentEvent.date}</span>
-              </div>
-              <div className="info-item">
-                <span className="info-label">🕐 登記開始</span>
-                <span className="info-value">{formatTime(currentEvent.registrationStartTime)}</span>
-              </div>
-              <div className="info-item">
-                <span className="info-label">🚀 活動開始</span>
-                <span className="info-value">{formatTime(currentEvent.startTime)}</span>
-              </div>
-              <div className="info-item">
-                <span className="info-label">⏰ 準時截止</span>
-                <span className="info-value highlight">{formatTime(currentEvent.onTimeCutoff)}</span>
-              </div>
-              <div className="info-item">
-                <span className="info-label">🏁 活動結束</span>
-                <span className="info-value">{formatTime(currentEvent.endTime)}</span>
-              </div>
-              <div className="info-item">
-                <span className="info-label">📝 建立時間</span>
-                <span className="info-value small">{new Date(currentEvent.createdAt).toLocaleString("zh-TW")}</span>
-              </div>
-            </div>
-
-            <div className="event-actions">
-              <a 
-                href="/report" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="button view-report-btn"
+          <div className="event-card-stack">
+            {allEvents.map((ev) => (
+              <EventSummaryCard
+                key={ev.id}
+                event={ev}
+                isCurrent={currentEvent?.id === ev.id}
+                onRefresh={fetchCurrentEvent}
+                onSetActive={() => void handleActivate(ev.id)}
+                setActiveDisabled={currentEvent?.id === ev.id}
+                activating={activatingId === ev.id}
+                onDelete={() => void handleDeleteClick(ev.id)}
+                deleting={deletingId === ev.id}
               >
-                📊 查看即時報告
-              </a>
-              {onNavigateToStrategic && (
                 <button
-                  className="button strategic-btn"
                   type="button"
-                  onClick={onNavigateToStrategic}
-                  style={{ backgroundColor: "#8b5cf6" }}
+                  className="button"
+                  style={{ backgroundColor: "#6366f1" }}
+                  onClick={() => setGridEvent(ev)}
                 >
-                  🎯 Strategic Seating
+                  📊 出席／缺席
                 </button>
-              )}
-              <button
-                className="ghost-button refresh-btn"
-                type="button"
-                onClick={fetchCurrentEvent}
-              >
-                🔄 重新整理
-              </button>
-            </div>
+                <button
+                  type="button"
+                  className="button"
+                  style={{ backgroundColor: "#0ea5e9" }}
+                  disabled={exportingEventId === ev.id}
+                  onClick={() => void handleExportEvent(ev)}
+                >
+                  {exportingEventId === ev.id ? "⏳ 匯出中..." : "📥 匯出 CSV"}
+                </button>
+                {currentEvent?.id === ev.id ? (
+                  <a
+                    href={`/admin/guests?eventDate=${encodeURIComponent(currentEvent.date)}`}
+                    className="button"
+                    style={{ backgroundColor: "#10b981" }}
+                  >
+                    🎫 本活動嘉賓名單
+                  </a>
+                ) : null}
+              </EventSummaryCard>
+            ))}
           </div>
 
-          <div className="danger-zone">
-            <h4>⚠️ 危險區域</h4>
-            <p className="hint">刪除活動將同時清除所有簽到記錄</p>
-            {!showDeleteConfirm ? (
-              <button
-                className="ghost-button danger-btn"
-                type="button"
-                onClick={() => setShowDeleteConfirm(true)}
-              >
-                🗑️ 刪除此活動
-              </button>
-            ) : (
-              <div className="delete-confirm">
-                <p className="warning-text">確定要刪除此活動和所有簽到記錄嗎？此操作無法復原！</p>
-                <div className="confirm-buttons">
-                  <button
-                    className="button danger-btn"
-                    type="button"
-                    onClick={handleDeleteAll}
-                    disabled={isDeleting}
-                  >
-                    {isDeleting ? "⏳ 刪除中..." : "確認刪除"}
-                  </button>
-                  <button
-                    className="ghost-button"
-                    type="button"
-                    onClick={() => setShowDeleteConfirm(false)}
-                  >
-                    取消
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+          
         </div>
       ) : (
         <div className="no-event-state">
@@ -182,4 +207,3 @@ export const EventManagementPanel = ({ onNotify, onNavigateToStrategic, onNaviga
     </section>
   );
 };
-

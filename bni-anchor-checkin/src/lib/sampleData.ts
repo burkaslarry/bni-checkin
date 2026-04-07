@@ -1,15 +1,10 @@
 import type { Guest } from "../types/seating";
 
 /**
- * 範例來賓資料 - 展示如何精準填寫以獲得 High Match
- * 
- * 填寫技巧:
- * 1. 職業: 寫具體職稱，如「高淨值客戶財富管理師」而非「金融業」
- * 2. 目標職業: 寫具體對象，如「法律事務所合夥人」而非「律師」
- * 3. 瓶頸: 寫出具體缺什麼、誰能幫忙
- * 4. 備註: 使用「我有X、我想找Y、我能提供Z」公式
+ * Sample guest data for demos: how to fill for high match (specific profession, target, bottlenecks, remarks).
+ * No side effects. Read-only.
+ * @type {Guest[]}
  */
-
 export const sampleGuests: Guest[] = [
   {
     id: "sample-1",

@@ -505,7 +505,7 @@ export const QRGeneratorPanel = ({ onNotify }: QRGeneratorPanelProps) => {
                 <div style={{ width: "75%", aspectRatio: "1" }}>
                   <QRCodeSVG
                     id="qr-code-website"
-                    value={`${ROOT_WEBSITE_URL}/?event=${encodeURIComponent(qrData?.eventDate ?? "")}`}
+                    value={`${ROOT_WEBSITE_URL}`} /** generate code url  */
                     size={256}
                     level="H"
                     bgColor="#ffffff"

@@ -3,20 +3,14 @@ import { Link, useSearchParams } from "react-router-dom";
 import { NotificationStack } from "../components/NotificationStack";
 import { NotificationEntry } from "../components/ScanPanel";
 import { QRGeneratorPanel } from "../components/QRGeneratorPanel";
-import { RecordsPanel } from "../components/RecordsPanel";
 import { AdminManualEntryPanel } from "../components/AdminManualEntryPanel";
 import { EventManagementPanel } from "../components/EventManagementPanel";
 import { StrategicPlanningPanel } from "../components/StrategicPlanningPanel";
+import { getCurrentEvent, type EventData } from "../api";
 
-type AdminView = "home" | "generate" | "records" | "manual" | "event" | "strategic";
+type AdminView = "home" | "generate" | "manual" | "event" | "strategic";
 
 const navTargets: { id: AdminView; title: string; description: string; icon: string }[] = [
-  {
-    id: "event",
-    title: "活動管理",
-    description: "查看和管理目前活動",
-    icon: "📅"
-  },
   {
     id: "strategic",
     title: "Strategic Seating",
@@ -28,12 +22,6 @@ const navTargets: { id: AdminView; title: string; description: string; icon: str
     title: "新增活動和二維碼",
     description: "產生活動簽到用 QR Code",
     icon: "🔳"
-  },
-  {
-    id: "records",
-    title: "簽到記錄 & 匯出",
-    description: "查看記錄並匯出 CSV",
-    icon: "📋"
   },
   {
     id: "manual",
@@ -50,11 +38,30 @@ export default function AdminPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeView, setActiveView] = useState<AdminView>("home");
   const [notifications, setNotifications] = useState<NotificationEntry[]>([]);
+  const [homeCurrentEvent, setHomeCurrentEvent] = useState<EventData | null>(null);
+  const [homeEventLoading, setHomeEventLoading] = useState(false);
+
+  const loadHomeCurrentEvent = useCallback(async () => {
+    setHomeEventLoading(true);
+    try {
+      setHomeCurrentEvent(await getCurrentEvent());
+    } catch {
+      setHomeCurrentEvent(null);
+    } finally {
+      setHomeEventLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeView === "home") {
+      void loadHomeCurrentEvent();
+    }
+  }, [activeView, loadHomeCurrentEvent]);
 
   // Handle URL parameter for direct navigation
   useEffect(() => {
     const viewParam = searchParams.get("view");
-    if (viewParam && ["generate", "records", "manual", "event", "strategic"].includes(viewParam)) {
+    if (viewParam && ["generate", "manual", "event", "strategic"].includes(viewParam)) {
       setActiveView(viewParam as AdminView);
       // Clear the URL parameter after navigating
       setSearchParams({}, { replace: true });
@@ -88,9 +95,8 @@ export default function AdminPage() {
     switch (activeView) {
       case "event":
         return (
-          <EventManagementPanel 
-            onNotify={handlePanelNotification} 
-            onNavigateToStrategic={() => setActiveView("strategic")}
+          <EventManagementPanel
+            onNotify={handlePanelNotification}
             onNavigateToGenerate={() => setActiveView("generate")}
           />
         );
@@ -98,8 +104,6 @@ export default function AdminPage() {
         return <StrategicPlanningPanel onNotify={handlePanelNotification} />;
       case "generate":
         return <QRGeneratorPanel onNotify={handlePanelNotification} />;
-      case "records":
-        return <RecordsPanel onNotify={handlePanelNotification} />;
       case "manual":
         return <AdminManualEntryPanel onNotify={handlePanelNotification} />;
       default:
@@ -131,9 +135,48 @@ export default function AdminPage() {
         <section className="section admin-panel">
           <div className="section-header">
             <h2>選擇功能</h2>
-            <p className="hint">管理與匯出功能</p>
+            <p className="hint admin-home-current-event-line">
+              {homeEventLoading ? (
+                "載入當前活動…"
+              ) : homeCurrentEvent ? (
+                <>
+                  當前活動：<strong>{homeCurrentEvent.name}</strong>{" "}
+                  <span className="admin-home-current-date">({homeCurrentEvent.date})</span>
+                  {" · "}
+                  <button
+                    type="button"
+                    className="admin-link-to-events"
+                    onClick={() => setActiveView("event")}
+                  >
+                    前往活動管理
+                  </button>
+                </>
+              ) : (
+                <>
+                  當前活動：<span className="admin-home-current-date">未設定</span>
+                  {" · "}
+                  <button
+                    type="button"
+                    className="admin-link-to-events"
+                    onClick={() => setActiveView("event")}
+                  >
+                    前往活動管理
+                  </button>
+                </>
+              )}
+            </p>
           </div>
           <div className="nav-grid">
+            <button
+              type="button"
+              className="nav-card"
+              onClick={() => setActiveView("event")}
+            >
+              <span className="nav-icon">📅</span>
+              <strong className="nav-title">活動管理</strong>
+              <span className="hint">查看／切換當前活動</span>
+            </button>
+
             {navTargets.map((item) => (
               <button
                 key={item.id}
@@ -146,6 +189,18 @@ export default function AdminPage() {
                 <span className="hint">{item.description}</span>
               </button>
             ))}
+
+            <a
+              href="/report"
+              className="nav-card"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ textDecoration: "none" }}
+            >
+              <span className="nav-icon">📊</span>
+              <strong className="nav-title">出席報表 / 匯出</strong>
+              <span className="hint">直接前往報表頁（包含匯出 CSV）</span>
+            </a>
             
             {/* External Links to New Pages */}
             <Link to="/admin/members" className="nav-card" style={{ textDecoration: 'none' }}>
@@ -164,6 +219,12 @@ export default function AdminPage() {
               <span className="nav-icon">📥</span>
               <strong className="nav-title">批量匯入</strong>
               <span className="hint">CSV 批量新增會員/嘉賓</span>
+            </Link>
+
+            <Link to="/admin/public-guest" className="nav-card" style={{ textDecoration: "none" }}>
+              <span className="nav-icon">🔗</span>
+              <strong className="nav-title">公開嘉賓登記連結</strong>
+              <span className="hint">教你點樣 share /public/guest 俾人填</span>
             </Link>
           </div>
         </section>

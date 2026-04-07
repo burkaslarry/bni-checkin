@@ -1,6 +1,13 @@
 import type { Guest, Member, MemberMatch } from "../types/seating";
 
-// Simple keyword-based matching as fallback
+/**
+ * Keyword-based member matching fallback: scores members by targetProfession and bottlenecks keywords; returns top 10.
+ * No side effects. Purely synchronous.
+ * @param {Guest} guest - targetProfession and bottlenecks used for scoring
+ * @param {Member[]} members
+ * @returns {MemberMatch[]} Up to 10 matches sorted by score (High ≥8, Medium ≥3)
+ * @example const matches = matchMembersByKeyword(guest, members);
+ */
 export const matchMembersByKeyword = (
   guest: Guest,
   members: Member[]
@@ -60,6 +67,13 @@ export const matchMembersByKeyword = (
     .slice(0, 10);
 };
 
+/**
+ * Build a short note summarizing keyword match results (counts of High/Medium).
+ * No side effects.
+ * @param {Guest} guest - unused but kept for API consistency
+ * @param {MemberMatch[]} memberMatches
+ * @returns {string} Human-readable note in Traditional Chinese
+ */
 export const buildKeywordNote = (
   guest: Guest,
   memberMatches: MemberMatch[]

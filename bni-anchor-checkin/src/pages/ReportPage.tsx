@@ -4,6 +4,7 @@ import {
   getReportData, getReportWebSocketUrl, exportRecords, getRecords, clearRecords, deleteRecord,
   ReportData, ReportAttendance, AttendeeRole, CheckInRecord
 } from "../api";
+import { buildAttendanceCsvBasename, buildAttendanceCsvFilename } from "../lib/attendanceExportFilename";
 
 type FilterType = "all" | "members" | "guests" | "vip";
 type ViewTab = "report" | "records";
@@ -33,6 +34,12 @@ export default function ReportPage() {
     const today = new Date().toISOString().split("T")[0];
     return `BNI_Anchor_${today}`;
   });
+
+  useEffect(() => {
+    if (reportData) {
+      setFilename(buildAttendanceCsvBasename(reportData.eventDate, reportData.eventName));
+    }
+  }, [reportData?.eventId, reportData?.eventDate, reportData?.eventName]);
 
   const fetchReportData = useCallback(async () => {
     try {
@@ -155,11 +162,14 @@ export default function ReportPage() {
   const handleExport = async () => {
     setExporting(true);
     try {
-      const blob = await exportRecords();
+      const blob = await exportRecords(reportData?.eventId);
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `${filename.trim() || "attendance"}.csv`;
+      const downloadName = reportData
+        ? buildAttendanceCsvFilename(reportData.eventDate, reportData.eventName)
+        : `${filename.trim() || "attendance"}.csv`;
+      link.download = downloadName;
       link.click();
       URL.revokeObjectURL(url);
     } catch (e) {
@@ -314,7 +324,7 @@ export default function ReportPage() {
             onClick={() => setViewTab("report")}
             style={{ borderRadius: "8px 0 0 0", borderRight: "1px solid #475569" }}
           >
-            📊 出席報告
+            📊 會員出席報告
           </button>
           <button
             className={`filter-btn ${viewTab === "records" ? "active" : ""}`}

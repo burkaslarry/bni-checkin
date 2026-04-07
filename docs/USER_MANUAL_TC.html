@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EventXP 簽到系統 — 使用者手冊</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: "PingFang TC", "Microsoft JhengHei", "Helvetica Neue", sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 24px;
+      font-size: 14px;
+    }
+    h1 { font-size: 1.75rem; border-bottom: 2px solid #1a73e8; padding-bottom: 8px; }
+    h2 { font-size: 1.25rem; margin-top: 1.5em; color: #1a73e8; }
+    h3 { font-size: 1.1rem; margin-top: 1em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+    th { background: #f5f5f5; }
+    ul, ol { margin: 0.5em 0; padding-left: 1.5em; }
+    li { margin: 0.25em 0; }
+    .meta { color: #666; font-size: 0.9rem; margin-bottom: 1.5em; }
+    @media print {
+      body { padding: 16px; font-size: 12px; }
+      h1 { font-size: 1.5rem; }
+      h2 { font-size: 1.15rem; }
+      a { color: #1a73e8; }
+    }
+  </style>
+</head>
+<body>
+  <h1>EventXP 活動管理系統 — 使用者手冊（繁體中文）</h1>
+  <p class="meta">版本：1.0 · 適用對象：社群或商會和活動管理成員，如 BNI Anchor</p>
+
+  <h2>一、系統簡介</h2>
+  <p>EventXP 活動管理系統（EventXP）專為社群或商會設計，提供：</p>
+  <ul>
+    <li><strong>QR Code 簽到</strong>：會員與嘉賓掃描 QR Code 即可完成簽到</li>
+    <li><strong>即時報表</strong>：出席人數、準時／遲到／缺席一目了然</li>
+    <li><strong>嘉賓管理</strong>：預先匯入嘉賓名單，簽到時可快速選擇</li>
+    <li><strong>CSV 匯出</strong>：活動結束後匯出簽到記錄，方便後續跟進</li>
+  </ul>
+
+  <h2>二、快速連結</h2>
+  <table>
+    <tr><th>功能</th><th>網址</th><th>使用對象</th></tr>
+    <tr><td>簽到頁面</td><td>https://bni-anchor-checkin.vercel.app</td><td>會員、嘉賓</td></tr>
+    <tr><td>報表頁面</td><td>https://bni-anchor-checkin.vercel.app/report</td><td>副主席、秘書</td></tr>
+    <tr><td>管理後台</td><td>https://bni-anchor-checkin.vercel.app/admin</td><td>管理員</td></tr>
+  </table>
+
+  <h2>三、活動前準備（管理員）</h2>
+  <h3>3.1 建立活動與 QR Code</h3>
+  <ol>
+    <li>開啟<strong>管理後台</strong> → 點選「新增活動和二維碼」</li>
+    <li>填寫<strong>活動名稱</strong>、<strong>活動日期</strong></li>
+    <li>設定<strong>登記開始時間</strong>；系統會自動計算其他時段</li>
+    <li>點選「建立活動」，再點選「下載 PDF」</li>
+    <li>列印 PDF，放置於接待處供來賓掃描</li>
+  </ol>
+  <h3>3.2 匯入嘉賓名單（選用）</h3>
+  <p>管理後台 → 匯入 → 選擇嘉賓，上傳 CSV。若未填活動日期，系統會自動帶入目前最新活動的日期。</p>
+
+  <h2>四、現場簽到流程</h2>
+  <h3>4.1 會員簽到</h3>
+  <p>掃描 QR Code → 選擇「會員」→ 下拉選單選擇姓名 → 點選「簽到」。</p>
+  <h3>4.2 嘉賓簽到</h3>
+  <p>掃描 QR Code → 選擇「來賓」→ 已登記則從下拉選單選擇；未登記則「手動輸入」姓名與專業領域後簽到。專業領域請務必填寫正確。</p>
+
+  <h2>五、管理後台功能</h2>
+  <h3>5.1 活動管理</h3>
+  <p>可查看目前活動、清除活動與簽到。建立新活動不會刪除舊活動。</p>
+  <h3>5.2 管理員手動輸入（補簽）</h3>
+  <p>管理後台 → 手動輸入 → 選擇嘉賓，填寫姓名、專業領域、邀請人。嘉賓名單僅顯示目前活動的嘉賓。</p>
+  <h3>5.3 簽到記錄與 CSV 匯出</h3>
+  <p>管理後台 → 簽到記錄 & 匯出 → 匯出 CSV。CSV 含姓名、專業領域、類別、出席狀態（準時／遲到／缺席）、簽到時間。匯出時系統會將出席狀態寫入後端資料庫。</p>
+
+  <h2>六、報表頁面</h2>
+  <p>網址：<a href="https://bni-anchor-checkin.vercel.app/report">https://bni-anchor-checkin.vercel.app/report</a></p>
+  <p>可查看即時出席統計、會員／嘉賓比例、出席與缺席名單。</p>
+
+  <h2>七、常見問題</h2>
+  <ul>
+    <li><strong>建立新活動後舊資料會不見嗎？</strong> 不會，僅新增活動。</li>
+    <li><strong>嘉賓名單空白？</strong> 請確認已為目前活動匯入嘉賓或設定活動日期。</li>
+    <li><strong>匯出 CSV 會寫入資料庫嗎？</strong> 會，目前活動的出席狀態會一併寫入。</li>
+    <li><strong>準時與遲到如何區分？</strong> 依活動設定的「準時截止」時間判斷。</li>
+  </ul>
+
+  <h2>八、技術支援</h2>
+  <p>Email：info@innovatexp.co · 公司網站：https://innovatexp.co · WhatsApp：93103031</p>
+  <p>感謝使用 EventXP，祝活動順利。</p>
+</body>
+</html>

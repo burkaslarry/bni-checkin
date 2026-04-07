@@ -13,7 +13,7 @@ echo -e "${YELLOW}🔄 清理佔用的埠口...${NC}"
 lsof -ti:10000 | xargs kill -9 2>/dev/null || true
 lsof -ti:5173 | xargs kill -9 2>/dev/null || true
 
-# 2. 載入資料庫密碼 (可選: 專案根目錄或 backend 目錄的 .env)
+# 2. 載入 .env (可選：僅用於 LOCAL_DB_PASSWORD 等，不啟用 production profile)
 if [ -f ".env" ]; then
   set -a; source .env; set +a
   echo -e "${GREEN}✓ 已載入 .env${NC}"
@@ -21,11 +21,12 @@ elif [ -f "bni-anchor-checkin-backend/.env" ]; then
   set -a; source bni-anchor-checkin-backend/.env; set +a
   echo -e "${GREEN}✓ 已載入 backend .env${NC}"
 fi
-if [ -z "${SUPABASE_DB_PASSWORD}" ]; then
-  echo -e "${YELLOW}⚠ SUPABASE_DB_PASSWORD 未設定，後端可能無法連接 Supabase。可建立 .env 並設定 SUPABASE_DB_PASSWORD=your_password${NC}"
-fi
+# 強制使用「預設 profile」= 本地 PostgreSQL（不採用 .env 的 SPRING_PROFILES_ACTIVE）
+unset SPRING_PROFILES_ACTIVE
+echo -e "${GREEN}✓ 使用本地 PostgreSQL 進行測試 (localhost:5432/bni_checkin)${NC}"
+echo -e "${YELLOW}  請確認已建立 DB 並執行 init-database.sql；密碼可設 LOCAL_DB_PASSWORD${NC}"
 
-# 3. 啟動後端
+# 3. 啟動後端（不帶 profile = 使用 application.properties 的本地 DB）
 echo -e "${GREEN}📦 啟動後端 (Spring Boot)...${NC}"
 cd bni-anchor-checkin-backend
 ./gradlew bootRun > backend.log 2>&1 &

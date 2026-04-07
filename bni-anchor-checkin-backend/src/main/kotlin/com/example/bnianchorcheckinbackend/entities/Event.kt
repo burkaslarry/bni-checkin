@@ -3,6 +3,7 @@ package com.example.bnianchorcheckinbackend.entities
 import jakarta.persistence.*
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.OffsetDateTime
 
 @Entity
 @Table(name = "bni_anchor_events")
@@ -33,5 +34,14 @@ data class Event(
     var onTimeCutoffTime: LocalTime,
 
     @Column(name = "late_cutoff_time")
-    var lateCutoffTime: LocalTime? = null
+    var lateCutoffTime: LocalTime? = null,
+
+    @Column(nullable = false)
+    var status: String = "ACTIVE",
+
+    @Column(name = "is_active", nullable = false)
+    var isActive: Boolean = false,
+
+    @Column(name = "deleted_at")
+    var deletedAt: OffsetDateTime? = null
 )

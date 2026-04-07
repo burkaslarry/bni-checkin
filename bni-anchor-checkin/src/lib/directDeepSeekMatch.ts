@@ -1,11 +1,19 @@
 /**
- * Direct DeepSeek API call for matching when backend is unreachable (e.g. production frontend, local backend)
+ * Direct DeepSeek API call for matching when backend is unreachable (e.g. production frontend, local backend).
  */
 
 const DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 
 type MemberInfo = { name: string; profession: string };
 
+/**
+ * Build prompt text for DeepSeek matching. No side effects.
+ * @param {string} guestName
+ * @param {string} guestProfession
+ * @param {string} [guestRemarks]
+ * @param {string} memberList - Formatted list of members
+ * @returns {string}
+ */
 function buildMatchPrompt(
   guestName: string,
   guestProfession: string,
@@ -31,6 +39,16 @@ ${memberList}
 - reason must be specific and in Traditional Chinese`;
 }
 
+/**
+ * Match one guest to members via direct DeepSeek API. Requires VITE_DEEPSEEK_API_KEY.
+ * Side effect: network call to api.deepseek.com.
+ * @param {string} guestName
+ * @param {string} guestProfession
+ * @param {string} [guestRemarks]
+ * @param {MemberInfo[]} members
+ * @returns {Promise<Array<{ memberName: string; profession: string; matchStrength: string; reason: string }>>}
+ * @throws {Error} If API key missing or API returns error / invalid JSON
+ */
 export async function matchOneGuestDirect(
   guestName: string,
   guestProfession: string,

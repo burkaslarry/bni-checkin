@@ -3,6 +3,7 @@ package com.example.bnianchorcheckinbackend
 import com.example.bnianchorcheckinbackend.entities.MemberStanding
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
@@ -22,7 +23,8 @@ data class UpdateGuestRequest(
 @Tag(name = "Member Management", description = "Endpoints for managing member records")
 @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = ["spring.datasource.url"])
 class MemberManagementController(
-    private val databaseMemberService: DatabaseMemberService
+    private val databaseMemberService: DatabaseMemberService,
+    @Autowired(required = false) private val attendanceWebSocketHandler: AttendanceWebSocketHandler?,
 ) {
 
     @PutMapping("/api/members/{name}")
@@ -49,6 +51,7 @@ class MemberManagementController(
             ))
         }
         return if (updatedMember != null) {
+            attendanceWebSocketHandler?.broadcast(mapOf("type" to "member_registry_updated"))
             ResponseEntity.ok(mapOf(
                 "status" to "success",
                 "message" to "Member updated successfully",
@@ -76,6 +79,7 @@ class MemberManagementController(
                 .body(mapOf("status" to "error", "message" to "資料庫暫時無法連線，無法刪除會員。"))
         }
         return if (deleted) {
+            attendanceWebSocketHandler?.broadcast(mapOf("type" to "member_registry_updated"))
             ResponseEntity.ok(mapOf("status" to "success", "message" to "Member deleted successfully"))
         } else {
             ResponseEntity.status(HttpStatus.NOT_FOUND).body(mapOf("status" to "error", "message" to "Member not found"))
@@ -97,6 +101,7 @@ class MemberManagementController(
             ))
         }
         return if (updatedGuest != null) {
+            attendanceWebSocketHandler?.broadcast(mapOf("type" to "guest_registry_updated"))
             ResponseEntity.ok(mapOf(
                 "status" to "success",
                 "message" to "Guest updated successfully",
@@ -125,6 +130,7 @@ class MemberManagementController(
                 .body(mapOf("status" to "error", "message" to "資料庫暫時無法連線，無法刪除嘉賓。"))
         }
         return if (deleted) {
+            attendanceWebSocketHandler?.broadcast(mapOf("type" to "guest_registry_updated"))
             ResponseEntity.ok(mapOf("status" to "success", "message" to "Guest deleted successfully"))
         } else {
             ResponseEntity.status(HttpStatus.NOT_FOUND).body(mapOf("status" to "error", "message" to "Guest not found"))

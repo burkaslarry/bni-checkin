@@ -20,6 +20,7 @@ class EventDbService(
     private val databaseMemberService: DatabaseMemberService
 ) {
     private val hkt = ZoneId.of("Asia/Hong_Kong")
+    private val activeStatus = "ACTIVE"
 
     private fun normalizeStatus(status: String?): String {
         val s = (status ?: "").trim()
@@ -33,7 +34,7 @@ class EventDbService(
         }
     }
 
-    private fun parseCheckInTimeToOffset(value: String?): OffsetDateTime? {
+    private fun parseCheckInTimeToOffset(value: String?, baseDate: LocalDate? = null): OffsetDateTime? {
         if (value.isNullOrBlank()) return null
         val v = value.trim()
         return try {
@@ -42,11 +43,11 @@ class EventDbService(
                     ?: Instant.parse(v).atZone(hkt).toOffsetDateTime()
                 Regex("^\\d{2}:\\d{2}:\\d{2}$").matches(v) -> {
                     val lt = LocalTime.parse(v, DateTimeFormatter.ofPattern("HH:mm:ss"))
-                    OffsetDateTime.of(LocalDate.now(hkt), lt, hkt.rules.getOffset(Instant.now()))
+                    OffsetDateTime.of(baseDate ?: LocalDate.now(hkt), lt, hkt.rules.getOffset(Instant.now()))
                 }
                 Regex("^\\d{2}:\\d{2}$").matches(v) -> {
                     val lt = LocalTime.parse(v, DateTimeFormatter.ofPattern("HH:mm"))
-                    OffsetDateTime.of(LocalDate.now(hkt), lt, hkt.rules.getOffset(Instant.now()))
+                    OffsetDateTime.of(baseDate ?: LocalDate.now(hkt), lt, hkt.rules.getOffset(Instant.now()))
                 }
                 else -> null
             }
@@ -79,6 +80,7 @@ class EventDbService(
         return memberRepository.findByNameIgnoreCase(name).orElse(null)?.id?.toInt()
     }
 
+    /** Create a new event in DB. Does NOT delete existing events; latest event is used for report/export. */
     @Transactional
     fun createEvent(request: EventRequest): EventData {
         val eventDate = LocalDate.parse(request.date)
@@ -95,50 +97,79 @@ class EventDbService(
             endTime = endTime,
             registrationStartTime = regStartTime,
             onTimeCutoffTime = onTimeCutoff,
-            lateCutoffTime = null
+            lateCutoffTime = null,
+            status = activeStatus,
+            isActive = false
         )
         val saved = eventRepository.save(event)
 
+        return toEventData(saved)
+    }
+
+    private fun toEventData(event: Event): EventData {
         return EventData(
-            id = saved.id!!.toInt(),
-            name = saved.name,
-            date = saved.eventDate.toString(),
-            startTime = saved.startTime.format(DateTimeFormatter.ofPattern("HH:mm")),
-            endTime = saved.endTime?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: "09:00",
-            registrationStartTime = saved.registrationStartTime.format(DateTimeFormatter.ofPattern("HH:mm")),
-            onTimeCutoff = saved.onTimeCutoffTime.format(DateTimeFormatter.ofPattern("HH:mm")),
-            createdAt = ZonedDateTime.now(hkt).toInstant().toString()
+            id = event.id!!.toInt(),
+            name = event.name,
+            date = event.eventDate.toString(),
+            startTime = event.startTime.format(DateTimeFormatter.ofPattern("HH:mm")),
+            endTime = event.endTime?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: "09:00",
+            registrationStartTime = event.registrationStartTime.format(DateTimeFormatter.ofPattern("HH:mm")),
+            onTimeCutoff = event.onTimeCutoffTime.format(DateTimeFormatter.ofPattern("HH:mm")),
+            createdAt = event.createDate.toString()
         )
     }
 
-    fun getReportData(): ReportData? {
-        val event = eventRepository.findTopByOrderByEventDateDesc() ?: return null
+    fun getReportData(eventId: Int? = null): ReportData? {
+        val event = if (eventId != null) {
+            eventRepository.findById(eventId.toLong()).orElse(null)?.takeIf { it.deletedAt == null }
+        } else {
+            resolveActiveEvent()
+        } ?: return null
         val eventDateStr = event.eventDate.toString()
-        val eventId = event.id!!.toInt()
+        val resolvedEventId = event.id!!.toInt()
 
         val allMembers = databaseMemberService.getAllMembers()
         val memberIdToName = allMembers.associate { (it["id"] as Int) to (it["name"] as String) }
-        val memberNameToId = allMembers.associate { (it["name"] as String) to (it["id"] as Int) }
-        val attendances = attendanceRepository.findByEventId(eventId)
+        val attendances = attendanceRepository.findByEventId(resolvedEventId)
 
-        val checkedInMemberIds = attendances.map { it.memberId }.toSet()
+        // Treat "absent" rows as absentees (not checked-in). This allows us to store a row per member.
+        val checkedInMemberIds = attendances.filter { it.status != "absent" }.map { it.memberId }.toSet()
         val attendees = attendances
+            .filter { it.status != "absent" }
             .map { att ->
                 val memberName = memberIdToName[att.memberId] ?: "Unknown (ID=${att.memberId})"
+                val timeStr = try {
+                    att.checkInTime.atZoneSameInstant(hkt).toLocalTime()
+                        .format(DateTimeFormatter.ofPattern("HH:mm:ss"))
+                } catch (_: Exception) {
+                    ""
+                }
                 AttendanceRecord(
                     memberName = memberName,
                     status = att.status,
-                    checkInTime = att.checkInTime.atZoneSameInstant(hkt).toLocalTime()
-                        .format(DateTimeFormatter.ofPattern("HH:mm:ss")),
+                    checkInTime = timeStr.ifEmpty { null },
                     role = "MEMBER"
                 )
             }
             .sortedByDescending { it.checkInTime ?: "" }
 
-        val absentees = allMembers
-            .filter { (it["id"] as Int) !in checkedInMemberIds }
-            .map { AttendanceRecord(memberName = it["name"] as String, status = "absent", role = "MEMBER") }
+        // If DB already has explicit absent rows, use them; otherwise derive absentees by missing checked-ins.
+        val absentFromDb = attendances
+            .filter { it.status == "absent" }
+            .map { att ->
+                val memberName = memberIdToName[att.memberId] ?: "Unknown (ID=${att.memberId})"
+                AttendanceRecord(memberName = memberName, status = "absent", role = "MEMBER")
+            }
             .sortedBy { it.memberName }
+
+        val absentees = if (absentFromDb.isNotEmpty()) {
+            absentFromDb
+        } else {
+            allMembers
+                .filter { (it["id"] as Int) !in checkedInMemberIds }
+                .map { AttendanceRecord(memberName = it["name"] as String, status = "absent", role = "MEMBER") }
+                .sortedBy { it.memberName }
+        }
 
         val stats = ReportStats(
             totalAttendees = attendees.size,
@@ -152,7 +183,7 @@ class EventDbService(
         )
 
         return ReportData(
-            eventId = eventId,
+            eventId = resolvedEventId,
             eventName = event.name,
             eventDate = eventDateStr,
             onTimeCutoff = event.onTimeCutoffTime.format(DateTimeFormatter.ofPattern("HH:mm")),
@@ -162,31 +193,57 @@ class EventDbService(
         )
     }
 
+    /**
+     * Resolve active event with rolling window:
+     * 1) manual override (is_active=true) + ACTIVE status
+     * 2) ongoing session (supports overnight)
+     * 3) upcoming within today..+2 days (inclusive), by date/time ASC
+     */
+    fun resolveActiveEvent(now: ZonedDateTime = ZonedDateTime.now(hkt)): Event? {
+        val manual = eventRepository
+            .findTopByStatusAndIsActiveTrueAndDeletedAtIsNullOrderByEventDateAscStartTimeAsc(activeStatus)
+        if (manual != null) return manual
+
+        val candidates = eventRepository.findAllByStatusAndDeletedAtIsNullOrderByEventDateAscStartTimeAsc(activeStatus)
+        val ongoing = candidates.firstOrNull { e ->
+            val start = ZonedDateTime.of(e.eventDate, e.startTime, hkt)
+            val endBase = e.endTime ?: e.startTime.plusHours(2)
+            val end = ZonedDateTime.of(
+                if (!endBase.isAfter(e.startTime)) e.eventDate.plusDays(1) else e.eventDate,
+                endBase,
+                hkt
+            )
+            !now.isBefore(start) && now.isBefore(end)
+        }
+        if (ongoing != null) return ongoing
+
+        val startDate = now.toLocalDate()
+        val endDate = startDate.plusDays(2)
+        return candidates.firstOrNull { e ->
+            !e.eventDate.isBefore(startDate) && !e.eventDate.isAfter(endDate)
+        }
+    }
+
     fun getCurrentEvent(): EventData? {
-        val event = eventRepository.findTopByOrderByEventDateDesc() ?: return null
-        return EventData(
-            id = event.id!!.toInt(),
-            name = event.name,
-            date = event.eventDate.toString(),
-            startTime = event.startTime.format(DateTimeFormatter.ofPattern("HH:mm")),
-            endTime = event.endTime?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: "09:00",
-            registrationStartTime = event.registrationStartTime.format(DateTimeFormatter.ofPattern("HH:mm")),
-            onTimeCutoff = event.onTimeCutoffTime.format(DateTimeFormatter.ofPattern("HH:mm")),
-            createdAt = ZonedDateTime.now(hkt).toString()
-        )
+        val event = resolveActiveEvent() ?: return null
+        return toEventData(event)
+    }
+
+    fun listEvents(): List<EventData> {
+        return eventRepository.findAllByDeletedAtIsNullOrderByIdDesc().map { toEventData(it) }
     }
 
     fun hasEventThisWeek(): Boolean {
         val now = LocalDate.now(hkt)
         val startOfWeek = now.minusDays(now.dayOfWeek.value.toLong() - 1)
         val endOfWeek = startOfWeek.plusDays(6)
-        return eventRepository.existsByEventDateBetween(startOfWeek, endOfWeek)
+        return eventRepository.existsByEventDateBetweenAndDeletedAtIsNull(startOfWeek, endOfWeek)
     }
 
     fun hasEventForDate(eventDate: String): Boolean {
         return try {
             val date = LocalDate.parse(eventDate)
-            eventRepository.findByEventDate(date) != null
+            eventRepository.findByEventDateAndDeletedAtIsNull(date) != null
         } catch (_: Exception) {
             false
         }
@@ -195,20 +252,42 @@ class EventDbService(
     fun getEventForDate(eventDate: String): EventData? {
         return try {
             val date = LocalDate.parse(eventDate)
-            val event = eventRepository.findByEventDate(date) ?: return null
-            EventData(
-                id = event.id!!.toInt(),
-                name = event.name,
-                date = event.eventDate.toString(),
-                startTime = event.startTime.format(DateTimeFormatter.ofPattern("HH:mm")),
-                endTime = event.endTime?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: "09:00",
-                registrationStartTime = event.registrationStartTime.format(DateTimeFormatter.ofPattern("HH:mm")),
-                onTimeCutoff = event.onTimeCutoffTime.format(DateTimeFormatter.ofPattern("HH:mm")),
-                createdAt = event.createDate.toString()
-            )
+            val event = eventRepository.findByEventDateAndDeletedAtIsNull(date) ?: return null
+            toEventData(event)
         } catch (_: Exception) {
             null
         }
+    }
+
+    @Transactional
+    fun setEventActive(eventId: Int, exclusive: Boolean): EventData? {
+        val event = eventRepository.findById(eventId.toLong()).orElse(null)?.takeIf { it.deletedAt == null } ?: return null
+        event.status = activeStatus
+        event.isActive = true
+        eventRepository.save(event)
+        if (exclusive) {
+            val others = eventRepository.findAllByStatusAndDeletedAtIsNullOrderByEventDateAscStartTimeAsc(activeStatus)
+                .filter { it.id != event.id }
+            others.forEach { it.isActive = false }
+            eventRepository.saveAll(others)
+        }
+        return toEventData(event)
+    }
+
+    @Transactional
+    fun softDeleteEvent(eventId: Int, force: Boolean): Boolean {
+        val event = eventRepository.findById(eventId.toLong()).orElse(null)?.takeIf { it.deletedAt == null } ?: return false
+        if (force) {
+            attendanceRepository.deleteByEventId(eventId)
+        } else {
+            val count = attendanceRepository.countByEventId(eventId)
+            if (count > 0) throw IllegalStateException("Event has attendance records. Use force=true to cascade delete check-ins.")
+        }
+        event.status = "DELETED"
+        event.isActive = false
+        event.deletedAt = OffsetDateTime.now(hkt)
+        eventRepository.save(event)
+        return true
     }
 
     @Transactional
@@ -218,7 +297,7 @@ class EventDbService(
         val eventId = event.id!!.toInt()
 
         val memberId = resolveMemberId(request.attendeeName) ?: return
-        val checkInTime = parseCheckInTimeToOffset(request.checkedInAt)
+        val checkInTime = parseCheckInTimeToOffset(request.checkedInAt, eventDate)
             ?: OffsetDateTime.now(hkt)
 
         val existing = attendanceRepository.findByEventIdAndMemberId(eventId, memberId)
@@ -251,6 +330,7 @@ class EventDbService(
     ) {
         val event = eventRepository.findTopByOrderByEventDateDesc() ?: return
         val eventId = event.id!!.toInt()
+        val defaultAbsentTs = OffsetDateTime.of(event.eventDate, event.startTime, hkt.rules.getOffset(Instant.now()))
 
         val allMembers = databaseMemberService.getAllMembers()
         val memberNameToId = allMembers.associate { (it["name"] as String) to (it["id"] as Int) }
@@ -258,30 +338,45 @@ class EventDbService(
 
         fun upsert(name: String, status: String, checkInTime: OffsetDateTime?) {
             val memberId = memberNameToId[name] ?: return
-            val ts = checkInTime ?: OffsetDateTime.now(hkt)
+            val normalized = normalizeStatus(status)
+            // check_in_time is NOT NULL in schema; for absent rows we use event start time as a stable placeholder.
+            val ts = checkInTime ?: if (normalized == "absent") defaultAbsentTs else OffsetDateTime.now(hkt)
             val existing = byMemberId[memberId]
             if (existing != null) {
-                existing.status = normalizeStatus(status)
+                existing.status = normalized
                 existing.checkInTime = ts
             } else {
                 byMemberId[memberId] = Attendance(
                     memberId = memberId,
                     eventId = eventId,
                     checkInTime = ts,
-                    status = normalizeStatus(status)
+                    status = normalized
                 )
             }
         }
 
         if (reportData != null) {
             for (a in reportData.attendees) {
-                upsert(a.memberName, a.status, parseCheckInTimeToOffset(a.checkInTime))
+                upsert(a.memberName, a.status, parseCheckInTimeToOffset(a.checkInTime, event.eventDate))
+            }
+            // Ensure absentees are persisted as well
+            for (ab in reportData.absentees) {
+                upsert(ab.memberName, "absent", null)
             }
         }
 
         for (r in records) {
             if (r.type.equals("guest", ignoreCase = true)) continue
-            upsert(r.name, "on-time", parseCheckInTimeToOffset(r.timestamp))
+            upsert(r.name, "on-time", parseCheckInTimeToOffset(r.timestamp, event.eventDate))
+        }
+
+        // Final guard: ensure every member has a row for this event (default absent).
+        for (m in allMembers) {
+            val memberId = m["id"] as Int
+            if (!byMemberId.containsKey(memberId)) {
+                val memberName = m["name"] as String
+                upsert(memberName, "absent", null)
+            }
         }
 
         attendanceRepository.saveAll(byMemberId.values.toList())

@@ -1,15 +1,18 @@
+/** Attendance summary for a member across events. */
 export type MemberAttendance = {
   eventName: string;
   eventDate: string;
   status: string;
 };
 
+/** Single event attendance entry (member name, optional ID, status). */
 export type EventAttendance = {
   memberName: string;
   membershipId?: string;
   status: string;
 };
 
+/** One check-in record (name, domain, type, timestamps, role, tags, referrer). */
 export type CheckInRecord = {
   name: string;
   domain: string;
@@ -21,9 +24,10 @@ export type CheckInRecord = {
   referrer?: string;
 };
 
-// Role types for attendees
+/** Role types for attendees. */
 export type AttendeeRole = "MEMBER" | "GUEST" | "VIP" | "SPEAKER";
 
+/** Request body for manual check-in (name, type, currentTime, domain, role, tags, standing). */
 export type CheckInRequest = {
   name: string;
   type: string;
@@ -35,8 +39,10 @@ export type CheckInRequest = {
   standing?: MemberStanding;
 };
 
+/** Member standing / status. */
 export type MemberStanding = "GREEN" | "YELLOW" | "RED" | "BLACK";
 
+/** Member list item (id, name, domain, standing, professionGroupName). */
 export type MemberInfo = {
   id?: number;
   name: string;
@@ -56,6 +62,21 @@ const jsonHeaders = {
 
 const FETCH_TIMEOUT_MS = 25000;
 
+/** Normalizes event id for `?eventId=` (handles numeric strings from JSON). */
+export function normalizeApiEventId(eventId?: number | string | null): number | undefined {
+  if (eventId === undefined || eventId === null || eventId === "") return undefined;
+  if (typeof eventId === "number" && Number.isFinite(eventId)) return Math.trunc(eventId);
+  const n = Number.parseInt(String(eventId).trim(), 10);
+  return Number.isNaN(n) ? undefined : n;
+}
+
+/**
+ * Fetch with abort after timeout. Side effect: network I/O. Does not throw on HTTP errors.
+ * @param {string} url
+ * @param {RequestInit} [options]
+ * @param {number} [timeoutMs]
+ * @returns {Promise<Response>}
+ */
 function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = FETCH_TIMEOUT_MS): Promise<Response> {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
@@ -64,19 +85,36 @@ function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = FE
 
 const RETRY_DELAYS_MS = [0, 1000, 3000];
 
+/**
+ * Resolves after given milliseconds. No side effects.
+ * @param {number} ms
+ * @returns {Promise<void>}
+ */
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** True if HTTP status is retriable (5xx or 429). */
 function isRetriableStatus(status: number): boolean {
   return status >= 500 || status === 429;
 }
 
+/** True if error looks like a transient network/abort error. */
 function isRetriableNetworkError(e: unknown): boolean {
   if (!(e instanceof Error)) return false;
   return e.name === "AbortError" || e.message.includes("fetch") || e.message.includes("NetworkError");
 }
 
+/**
+ * Fetch with timeout and retries on 5xx/429 or retriable network errors.
+ * Side effect: network I/O. Throws last error after maxAttempts.
+ * @param {string} url
+ * @param {RequestInit} [options]
+ * @param {number} [timeoutMs]
+ * @param {number} [maxAttempts]
+ * @returns {Promise<Response>}
+ * @throws {Error} After retries exhausted
+ */
 async function fetchWithRetry(
   url: string,
   options: RequestInit = {},
@@ -102,6 +140,13 @@ async function fetchWithRetry(
   throw (lastError instanceof Error ? lastError : new Error("Request failed after retries"));
 }
 
+/**
+ * Parse JSON from response; if !response.ok throws Error with backend message.
+ * Side effect: consumes response body.
+ * @param {Response} response
+ * @returns {Promise<T>} Parsed JSON
+ * @throws {Error} When response.ok is false (message from body or status)
+ */
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const text = await response.text();
@@ -119,6 +164,14 @@ async function handleResponse<T>(response: Response): Promise<T> {
   return response.json();
 }
 
+/**
+ * Record attendance using a QR scan payload. POST /api/attendance/scan.
+ * Side effect: network call to backend.
+ * @param {string} qrPayload - JSON string from QR (member or guest payload)
+ * @returns {Promise<{ message: string }>}
+ * @throws {Error} On HTTP error or invalid payload (message from backend)
+ * @example const res = await recordAttendance(JSON.stringify({ name: "Alice", type: "member", membershipId: "X" }));
+ */
 export async function recordAttendance(
   qrPayload: string
 ): Promise<{ message: string }> {
@@ -131,6 +184,14 @@ export async function recordAttendance(
   return handleResponse(response);
 }
 
+/**
+ * Search attendance history by member name. GET /api/attendance/member?name=...
+ * Side effect: network call.
+ * @param {string} name - Member name (query)
+ * @param {AbortSignal} [signal] - Optional abort for request
+ * @returns {Promise<MemberAttendance[]>}
+ * @throws {Error} On HTTP error
+ */
 export async function searchMemberAttendance(
   name: string,
   signal?: AbortSignal
@@ -142,6 +203,14 @@ export async function searchMemberAttendance(
   return handleResponse(response);
 }
 
+/**
+ * Get attendance roster for an event date. GET /api/attendance/event?date=...
+ * Side effect: network call.
+ * @param {string} date - Event date (YYYY-MM-DD)
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<EventAttendance[]>}
+ * @throws {Error} On HTTP error
+ */
 export async function searchEventAttendance(
   date: string,
   signal?: AbortSignal
@@ -153,7 +222,12 @@ export async function searchEventAttendance(
   return handleResponse(response);
 }
 
-// Get list of members with domain info (backend only)
+/**
+ * Get list of members with domain/standing (backend only). GET /api/members. Uses retry.
+ * Side effect: network call.
+ * @returns {Promise<{ members: MemberInfo[] }>}
+ * @throws {Error} On failure; AbortError mapped to 連線逾時 message
+ */
 export async function getMembers(): Promise<{ members: MemberInfo[] }> {
   try {
     const response = await fetchWithRetry(`${API_BASE}/api/members`, { mode: "cors" }, 12000, 3);
@@ -166,18 +240,31 @@ export async function getMembers(): Promise<{ members: MemberInfo[] }> {
   }
 }
 
-// Guest info type
+/**
+ * Pre-registered guest item (name, profession, referrer, optional eventDate).
+ * @typedef {Object} GuestInfo
+ */
 export type GuestInfo = {
   name: string;
   profession: string;
   referrer: string;
   eventDate?: string;
+  phoneNumber?: string;
 };
 
-// Get list of pre-registered guests (backend only)
-export async function getGuests(): Promise<{ guests: GuestInfo[] }> {
+/**
+ * Get list of pre-registered guests (backend only). GET /api/guests. Optional eventDate returns only guests for that event (onsite support).
+ * Side effect: network call.
+ * @param eventDate Optional YYYY-MM-DD; when set, returns only guests for this event (e.g. latest event for check-in form).
+ * @returns {Promise<{ guests: GuestInfo[] }>}
+ * @throws {Error} AbortError → 連線逾時 message
+ */
+export async function getGuests(eventDate?: string): Promise<{ guests: GuestInfo[] }> {
   try {
-    const response = await fetchWithRetry(`${API_BASE}/api/guests`, { mode: "cors" }, 12000, 3);
+    const url = eventDate
+      ? `${API_BASE}/api/guests?eventDate=${encodeURIComponent(eventDate)}`
+      : `${API_BASE}/api/guests`;
+    const response = await fetchWithRetry(url, { mode: "cors" }, 12000, 3);
     return handleResponse(response);
   } catch (e) {
     if ((e as Error).name === "AbortError") {
@@ -187,7 +274,68 @@ export async function getGuests(): Promise<{ guests: GuestInfo[] }> {
   }
 }
 
-// Check-in (manual entry)
+export type PublicCaptchaChallenge = {
+  a: number;
+  b: number;
+  op: string;
+  nonce: string;
+  signature: string;
+};
+
+export type PublicGuestCreateRequest = {
+  name: string;
+  profession: string;
+  phoneNumber: string;
+  referrer?: string;
+  eventDate?: string;
+  eventId?: number;
+  notes?: string;
+  captcha: {
+    a: number;
+    b: number;
+    op: string;
+    nonce: string;
+    signature: string;
+    answer: number;
+  };
+};
+
+/** Issue a server-signed CAPTCHA challenge for public forms. GET /api/public/captcha. */
+export async function getPublicCaptcha(): Promise<PublicCaptchaChallenge> {
+  const response = await fetch(`${API_BASE}/api/public/captcha`, { mode: "cors" });
+  return handleResponse(response);
+}
+
+/**
+ * Public walk-in guest registration. POST /api/public/guests.
+ * Side effect: network; backend inserts into bni_anchor_guests.
+ * @throws {Error} 403 captcha_failed, 409 duplicate_guest_phone_event, 400 validation errors
+ */
+export async function createPublicGuest(request: PublicGuestCreateRequest): Promise<{
+  status: string;
+  guest: { id?: number; name: string };
+}> {
+  const response = await fetch(`${API_BASE}/api/public/guests`, {
+    method: "POST",
+    headers: jsonHeaders,
+    body: JSON.stringify(request),
+    mode: "cors"
+  });
+  return handleResponse(response);
+}
+
+/** Get one event by id. GET /api/events/{id}. Side effect: network. */
+export async function getEventById(eventId: number): Promise<EventData> {
+  const response = await fetch(`${API_BASE}/api/events/${encodeURIComponent(String(eventId))}`, { mode: "cors" });
+  return handleResponse(response);
+}
+
+/**
+ * Manual check-in. POST /api/checkin. Side effect: network; backend may persist member to DB.
+ * @param {CheckInRequest} request
+ * @returns {Promise<{ status: string; message: string }>}
+ * @throws {Error} On HTTP error or duplicate check-in (已經簽到)
+ */
 export async function checkIn(
   request: CheckInRequest
 ): Promise<{ status: string; message: string }> {
@@ -200,13 +348,22 @@ export async function checkIn(
   return handleResponse(response);
 }
 
-// Get all check-in records
+/**
+ * Get all check-in records (DB + in-memory merged). GET /api/records.
+ * Side effect: network call.
+ * @returns {Promise<{ records: CheckInRecord[] }>}
+ * @throws {Error} On HTTP error
+ */
 export async function getRecords(): Promise<{ records: CheckInRecord[] }> {
   const response = await fetch(`${API_BASE}/api/records`, { mode: "cors" });
   return handleResponse(response);
 }
 
-// Clear all records
+/**
+ * Clear all check-in records. DELETE /api/records. Side effect: network; backend clears in-memory (and may DB).
+ * @returns {Promise<{ status: string; message: string }>}
+ * @throws {Error} On HTTP error
+ */
 export async function clearRecords(): Promise<{ status: string; message: string }> {
   const response = await fetch(`${API_BASE}/api/records`, {
     method: "DELETE",
@@ -215,7 +372,12 @@ export async function clearRecords(): Promise<{ status: string; message: string 
   return handleResponse(response);
 }
 
-// Delete a specific record by index
+/**
+ * Delete one record by index. DELETE /api/records/:index. Side effect: network.
+ * @param {number} index - 0-based index in records list
+ * @returns {Promise<{ status: string; message: string }>}
+ * @throws {Error} On HTTP error or 404
+ */
 export async function deleteRecord(index: number): Promise<{ status: string; message: string }> {
   const response = await fetch(`${API_BASE}/api/records/${index}`, {
     method: "DELETE",
@@ -224,16 +386,28 @@ export async function deleteRecord(index: number): Promise<{ status: string; mes
   return handleResponse(response);
 }
 
-// Export records as CSV (returns blob URL)
-export async function exportRecords(): Promise<Blob> {
-  const response = await fetch(`${API_BASE}/api/export`, { mode: "cors" });
+/**
+ * Export records as CSV blob. GET /api/export. Side effect: network.
+ * @returns {Promise<Blob>} CSV file blob
+ * @throws {Error} "Failed to export records" when !response.ok
+ */
+export async function exportRecords(eventId?: number | string | null): Promise<Blob> {
+  const id = normalizeApiEventId(eventId);
+  const q = id !== undefined ? `?eventId=${encodeURIComponent(String(id))}` : "";
+  const response = await fetch(`${API_BASE}/api/export${q}`, { mode: "cors" });
   if (!response.ok) {
     throw new Error("Failed to export records");
   }
   return response.blob();
 }
 
-// Helper: convert "Failed to fetch" / network errors to a clearer message
+/**
+ * Rethrow with a clearer 無法連接後端服務 message when error looks like network/fetch failure.
+ * Side effect: none (throws).
+ * @param {unknown} e
+ * @param {string} fallback - Used if not a network error
+ * @throws {Error} Always (either wrapped message or e/fallback)
+ */
 function wrapNetworkError(e: unknown, fallback: string): never {
   const msg = e instanceof Error ? e.message : String(e);
   if (msg === "Failed to fetch" || msg.includes("fetch") || msg.includes("NetworkError")) {
@@ -244,8 +418,18 @@ function wrapNetworkError(e: unknown, fallback: string): never {
   throw e instanceof Error ? e : new Error(fallback);
 }
 
-// Create event with time settings (backend only).
-// Times must be HH:mm or HH:mm:ss; date must be YYYY-MM-DD.
+/**
+ * Create event with time settings (backend only). POST /api/events. Times: HH:mm or HH:mm:ss; date: YYYY-MM-DD.
+ * Side effect: network. Backend initializes all members as absent.
+ * @param {string} name - Event name
+ * @param {string} date - YYYY-MM-DD
+ * @param {string} startTime
+ * @param {string} endTime
+ * @param {string} registrationStartTime
+ * @param {string} onTimeCutoff
+ * @returns {Promise<{ status: string; message: string; event?: unknown }>}
+ * @throws {Error} On HTTP error or invalid format; network errors wrapped via wrapNetworkError
+ */
 export async function createEvent(
   name: string,
   date: string,
@@ -281,7 +465,11 @@ export async function createEvent(
   }
 }
 
-// Delete all events and attendance records
+/**
+ * Delete all events and attendance records. DELETE /api/events/clear-all. Side effect: network.
+ * @returns {Promise<{ status: string; message: string }>}
+ * @throws {Error} On HTTP error
+ */
 export async function clearAllEventsAndAttendance(): Promise<{ status: string; message: string }> {
   const response = await fetch(`${API_BASE}/api/events/clear-all`, {
     method: "DELETE",
@@ -290,7 +478,10 @@ export async function clearAllEventsAndAttendance(): Promise<{ status: string; m
   return handleResponse(response);
 }
 
-// Event data type
+/**
+ * Event metadata (id, name, date, times, createdAt).
+ * @typedef {Object} EventData
+ */
 export type EventData = {
   id: number;
   name: string;
@@ -302,7 +493,17 @@ export type EventData = {
   createdAt: string;
 };
 
-// Get current event
+/** List all events (latest first). GET /api/events. Side effect: network. */
+export async function listEvents(): Promise<EventData[]> {
+  const response = await fetch(`${API_BASE}/api/events`, { mode: "cors" });
+  return handleResponse(response);
+}
+
+/**
+ * Get current event. GET /api/events/current. Returns null on 404 or network error.
+ * Side effect: network.
+ * @returns {Promise<EventData | null>}
+ */
 export async function getCurrentEvent(): Promise<EventData | null> {
   try {
     const response = await fetch(`${API_BASE}/api/events/current`, { mode: "cors" });
@@ -315,9 +516,44 @@ export async function getCurrentEvent(): Promise<EventData | null> {
   }
 }
 
-// Report page types
+/**
+ * Set event as active for check-in. POST /api/events/{id}/activate. exclusive=true clears is_active on other events.
+ */
+export async function activateEvent(
+  eventId: number,
+  exclusive = true
+): Promise<{ status: string; exclusive?: boolean; event?: unknown; message?: string }> {
+  const response = await fetch(`${API_BASE}/api/events/${eventId}/activate`, {
+    method: "POST",
+    headers: jsonHeaders,
+    body: JSON.stringify({ exclusive }),
+    mode: "cors"
+  });
+  return handleResponse(response);
+}
+
+/**
+ * Soft-delete one event. DELETE /api/events/{id}?force=true cascades attendance rows.
+ */
+export async function deleteEvent(
+  eventId: number,
+  force = false
+): Promise<{ status: string; message?: string }> {
+  const q = force ? "?force=true" : "?force=false";
+  const response = await fetch(`${API_BASE}/api/events/${eventId}${q}`, {
+    method: "DELETE",
+    mode: "cors"
+  });
+  return handleResponse(response);
+}
+
+/** Report page: attendance status. */
 export type AttendanceStatus = "on-time" | "late" | "absent";
 
+/**
+ * Single attendee in report (name, status, checkInTime, role, tags, sessionId).
+ * @typedef {Object} ReportAttendance
+ */
 export type ReportAttendance = {
   memberName: string;
   status: AttendanceStatus;
@@ -327,7 +563,7 @@ export type ReportAttendance = {
   sessionId?: string;
 };
 
-// Statistics for the report dashboard
+/** Report dashboard statistics. */
 export type ReportStats = {
   totalAttendees: number;
   onTimeCount: number;
@@ -339,6 +575,10 @@ export type ReportStats = {
   speakerCount: number;
 };
 
+/**
+ * Full report for current event (event info, attendees, absentees, stats).
+ * @typedef {Object} ReportData
+ */
 export type ReportData = {
   eventId: number;
   eventName: string;
@@ -349,12 +589,13 @@ export type ReportData = {
   stats?: ReportStats;
 };
 
-// AI Insight types for future integration
+/** Request for AI insights (eventId + analysisType). */
 export type AIInsightRequest = {
   eventId: number;
   analysisType: "interest" | "retention" | "target_audience";
 };
 
+/** Single insight item (title, description, confidence, dataPoints). */
 export type InsightItem = {
   title: string;
   description: string;
@@ -362,6 +603,7 @@ export type InsightItem = {
   dataPoints: Record<string, unknown>;
 };
 
+/** AI insight response (eventId, analysisType, generatedAt, insights, recommendations). */
 export type AIInsightResponse = {
   eventId: number;
   analysisType: string;
@@ -370,9 +612,16 @@ export type AIInsightResponse = {
   recommendations: string[];
 };
 
-// Get report data for the current/latest event (backend only)
-export async function getReportData(): Promise<ReportData | null> {
-  const response = await fetch(`${API_BASE}/api/report`, { mode: "cors" });
+/**
+ * Get report data for current/latest event (backend only). GET /api/report. Returns null on 404.
+ * Side effect: network. Errors other than 404 throw.
+ * @returns {Promise<ReportData | null>}
+ * @throws {Error} On non-404 HTTP error
+ */
+export async function getReportData(eventId?: number | string | null): Promise<ReportData | null> {
+  const id = normalizeApiEventId(eventId);
+  const q = id !== undefined ? `?eventId=${encodeURIComponent(String(id))}` : "";
+  const response = await fetch(`${API_BASE}/api/report${q}`, { mode: "cors" });
   if (response.ok) {
     return handleResponse(response);
   }
@@ -390,7 +639,12 @@ export async function getReportData(): Promise<ReportData | null> {
   throw new Error(msg);
 }
 
-// Check if event exists for a date (backend only)
+/**
+ * Check if an event exists for a date. GET /api/events/check?date=... Returns false on error.
+ * Side effect: network.
+ * @param {string} date - YYYY-MM-DD
+ * @returns {Promise<boolean>}
+ */
 export async function checkEventExists(date: string): Promise<boolean> {
   const response = await fetch(`${API_BASE}/api/events/check?date=${encodeURIComponent(date)}`, { mode: "cors" });
   if (response.ok) {
@@ -400,7 +654,12 @@ export async function checkEventExists(date: string): Promise<boolean> {
   return false;
 }
 
-// Get event for date (backend only)
+/**
+ * Get event for date (backend only). GET /api/events/for-date?date=... Uses retry. Null on 404 or timeout.
+ * Side effect: network. AbortError → throws 連線逾時.
+ * @param {string} date - YYYY-MM-DD
+ * @returns {Promise<{ id: number; name: string } | null>}
+ */
 export async function getEventForDate(date: string): Promise<{ id: number; name: string } | null> {
   try {
     const response = await fetchWithRetry(
@@ -421,7 +680,11 @@ export async function getEventForDate(date: string): Promise<{ id: number; name:
   }
 }
 
-// Check if event exists this week (backend only)
+/**
+ * Check if an event exists in the current week. GET /api/events/check-this-week. Returns false on error.
+ * Side effect: network.
+ * @returns {Promise<boolean>}
+ */
 export async function checkEventThisWeek(): Promise<boolean> {
   try {
     const response = await fetch(`${API_BASE}/api/events/check-this-week`, { mode: "cors" });
@@ -435,7 +698,19 @@ export async function checkEventThisWeek(): Promise<boolean> {
   return false;
 }
 
-// Log attendance directly (backend only)
+/**
+ * Log attendance directly (backend only). POST /api/attendance/log. Members → DB; guests → in-memory.
+ * Side effect: network.
+ * @param {number | null} attendeeId
+ * @param {string} attendeeType - "member" | "guest" | "vip" | "speaker"
+ * @param {string} attendeeName
+ * @param {string} attendeeProfession
+ * @param {string} eventDate - YYYY-MM-DD
+ * @param {string} checkedInAt - ISO or time
+ * @param {string} status - e.g. "on-time" | "late"
+ * @returns {Promise<{ status: string; message: string }>}
+ * @throws {Error} On HTTP error; 409 for already checked in
+ */
 export async function logAttendance(
   attendeeId: number | null,
   attendeeType: string,
@@ -462,7 +737,10 @@ export async function logAttendance(
   return handleResponse(response);
 }
 
-// Get WebSocket URL for report updates
+/**
+ * Get WebSocket URL for report live updates (derived from API_BASE). No side effects.
+ * @returns {string} e.g. ws://localhost:10000/ws/report
+ */
 export function getReportWebSocketUrl(): string {
   const wsBase = API_BASE.replace(/^http/, "ws");
   return `${wsBase}/ws/report`;
@@ -470,7 +748,12 @@ export function getReportWebSocketUrl(): string {
 
 // ===== AI Insights API (Phase 2) =====
 
-// Generate AI insights for an event
+/**
+ * Generate AI insights for an event. POST /api/insights/generate. Side effect: network.
+ * @param {AIInsightRequest} request
+ * @returns {Promise<AIInsightResponse>}
+ * @throws {Error} On HTTP error
+ */
 export async function generateAIInsights(
   request: AIInsightRequest
 ): Promise<AIInsightResponse> {
@@ -481,7 +764,14 @@ export async function generateAIInsights(
     mode: "cors"
   });
   return handleResponse(response);
-}// Get previously generated insights for an event
+}
+
+/**
+ * Get previously generated insights for an event. GET /api/insights/:eventId. Side effect: network.
+ * @param {number} eventId
+ * @returns {Promise<AIInsightResponse[]>}
+ * @throws {Error} On HTTP error
+ */
 export async function getEventInsights(
   eventId: number
 ): Promise<AIInsightResponse[]> {
@@ -489,7 +779,14 @@ export async function getEventInsights(
     mode: "cors"
   });
   return handleResponse(response);
-}// Export AI-ready data for external processing
+}
+
+/**
+ * Export AI-ready data for an event. GET /api/insights/data-export/:eventId. Side effect: network.
+ * @param {number} eventId
+ * @returns {Promise<Record<string, unknown>>}
+ * @throws {Error} On HTTP error
+ */
 export async function exportAIReadyData(
   eventId: number
 ): Promise<Record<string, unknown>> {
@@ -501,12 +798,19 @@ export async function exportAIReadyData(
 
 // ===== Strategic Matching API =====
 
-// Quick match for guest check-in
+/** Quick match result (matches JSON string, provider name). */
 export type QuickMatchResult = {
   matches: string;
   provider: string;
 };
 
+/**
+ * Quick match for guest check-in. POST /api/matching/quick. Side effect: network (DeepSeek).
+ * @param {string} guestName
+ * @param {string} guestProfession
+ * @returns {Promise<QuickMatchResult>}
+ * @throws {Error} On HTTP error
+ */
 export async function quickMatch(
   guestName: string,
   guestProfession: string
@@ -520,13 +824,14 @@ export async function quickMatch(
   return handleResponse(response);
 }
 
-// Batch matching for multiple guests
+/** Single guest for batch match. */
 export type BatchGuestInfo = {
   name: string;
   profession: string;
   remarks?: string;
 };
 
+/** One matched member in batch result. */
 export type MatchedMember = {
   memberName: string;
   profession: string;
@@ -534,17 +839,25 @@ export type MatchedMember = {
   reason: string;
 };
 
+/** Per-guest batch match result. */
 export type BatchMatchResult = {
   guestName: string;
   guestProfession: string;
   matchedMembers: MatchedMember[];
 };
 
+/** Batch match response (results + provider). */
 export type BatchMatchResponse = {
   results: BatchMatchResult[];
   provider: string;
 };
 
+/**
+ * Batch matching for multiple guests. POST /api/matching/batch. Side effect: network (DeepSeek per guest).
+ * @param {BatchGuestInfo[]} guests
+ * @returns {Promise<BatchMatchResponse>}
+ * @throws {Error} On HTTP error
+ */
 export async function batchMatch(
   guests: BatchGuestInfo[]
 ): Promise<BatchMatchResponse> {
@@ -559,6 +872,7 @@ export async function batchMatch(
 
 // ===== Bulk Import API =====
 
+/** Single row for bulk import (member or guest fields). */
 export type ImportRecord = {
   name: string;
   profession: string;
@@ -572,11 +886,13 @@ export type ImportRecord = {
   eventDate?: string;
 };
 
+/** Bulk import request (type + records). */
 export type BulkImportRequest = {
   type: "member" | "guest";
   records: ImportRecord[];
 };
 
+/** Bulk import result (counts + error messages). */
 export type ImportResult = {
   total: number;
   inserted: number;
@@ -585,6 +901,13 @@ export type ImportResult = {
   errors: string[];
 };
 
+/**
+ * Bulk import members or guests. POST /api/bulk-import-members or /api/bulk-import-guest. Uses retry.
+ * Side effect: network; backend DB writes.
+ * @param {BulkImportRequest} request
+ * @returns {Promise<ImportResult>}
+ * @throws {Error} AbortError → 連線逾時
+ */
 export async function bulkImport(
   request: BulkImportRequest
 ): Promise<ImportResult> {
@@ -611,11 +934,19 @@ export async function bulkImport(
 
 // ===== Member Management API =====
 
+/** Update member payload (profession, standing). */
 export type UpdateMemberRequest = {
   profession?: string;
   standing?: string;
 };
 
+/**
+ * Update member by name. PUT /api/members/:name. Side effect: network; backend DB update.
+ * @param {string} name - Member name (path)
+ * @param {UpdateMemberRequest} request
+ * @returns {Promise<{ status: string; message: string }>}
+ * @throws {Error} On HTTP error
+ */
 export async function updateMember(
   name: string,
   request: UpdateMemberRequest
@@ -629,12 +960,20 @@ export async function updateMember(
   return handleResponse(response);
 }
 
+/** Update guest payload (profession, referrer, eventDate). */
 export type UpdateGuestRequest = {
   profession?: string;
   referrer?: string;
   eventDate?: string;
 };
 
+/**
+ * Update guest by name. PUT /api/guests/:name. Side effect: network; backend DB update.
+ * @param {string} name - Guest name (path)
+ * @param {UpdateGuestRequest} request
+ * @returns {Promise<{ status: string; message: string }>}
+ * @throws {Error} On HTTP error
+ */
 export async function updateGuest(
   name: string,
   request: UpdateGuestRequest
@@ -648,6 +987,12 @@ export async function updateGuest(
   return handleResponse(response);
 }
 
+/**
+ * Delete member by name. DELETE /api/members/:name. Side effect: network; backend DB delete.
+ * @param {string} name - Member name (path)
+ * @returns {Promise<{ status: string; message: string }>}
+ * @throws {Error} On HTTP error
+ */
 export async function deleteMember(
   name: string
 ): Promise<{ status: string; message: string }> {
@@ -658,6 +1003,12 @@ export async function deleteMember(
   return handleResponse(response);
 }
 
+/**
+ * Delete guest by name. DELETE /api/guests/:name. Side effect: network; backend DB delete.
+ * @param {string} name - Guest name (path)
+ * @returns {Promise<{ status: string; message: string }>}
+ * @throws {Error} On HTTP error
+ */
 export async function deleteGuest(
   name: string
 ): Promise<{ status: string; message: string }> {

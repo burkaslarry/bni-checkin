@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { getGuests, GuestInfo, deleteGuest, updateGuest } from "../api";
 
 type GuestsPageProps = {};
 
 export default function GuestsPage({}: GuestsPageProps) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [guests, setGuests] = useState<GuestInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedEventDate, setSelectedEventDate] = useState<string>("all");
@@ -21,6 +22,14 @@ export default function GuestsPage({}: GuestsPageProps) {
   useEffect(() => {
     fetchGuests();
   }, []);
+
+  // Optional URL param: /admin/guests?eventDate=YYYY-MM-DD
+  useEffect(() => {
+    const d = searchParams.get("eventDate");
+    if (d && d !== "all") {
+      setSelectedEventDate(d);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (!loadFailedRedirect) return;

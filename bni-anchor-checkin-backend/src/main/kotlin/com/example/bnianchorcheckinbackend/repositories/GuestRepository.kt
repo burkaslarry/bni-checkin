@@ -9,7 +9,9 @@ import java.util.Optional
 interface GuestRepository : JpaRepository<Guest, Long> {
     fun findByName(name: String): Optional<Guest>
     fun findByNameIgnoreCase(name: String): Optional<Guest>
+    fun findByNameIgnoreCaseAndEventDate(name: String, eventDate: String): Optional<Guest>
     fun existsByNameIgnoreCase(name: String): Boolean
+    fun existsByPhoneNumberAndEventDate(phoneNumber: String, eventDate: String): Boolean
     fun findAllByOrderByNameAsc(): List<Guest>
     fun findByEventDate(eventDate: String): List<Guest>
 }

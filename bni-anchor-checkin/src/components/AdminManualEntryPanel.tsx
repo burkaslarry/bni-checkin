@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { checkIn, getMembers, getGuests, MemberInfo, GuestInfo, AttendeeRole, checkEventThisWeek } from "../api";
+import { checkIn, getMembers, getGuests, getCurrentEvent, MemberInfo, GuestInfo, AttendeeRole, type EventData } from "../api";
 
 type AdminManualEntryPanelProps = {
   onNotify: (message: string, type: "success" | "error" | "info") => void;
@@ -30,6 +30,7 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
   const [mode, setMode] = useState<"single" | "batch">("batch"); // Default to batch
   const [members, setMembers] = useState<MemberInfo[]>([]);
   const [guests, setGuests] = useState<GuestInfo[]>([]);
+  const [currentEvent, setCurrentEvent] = useState<EventData | null>(null);
   const [batchList, setBatchList] = useState<BatchPerson[]>([]);
   const [name, setName] = useState("");
   const [domain, setDomain] = useState("");
@@ -43,35 +44,33 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
   const [selectedPeople, setSelectedPeople] = useState<Set<string>>(new Set());
   const [batchSubmitting, setBatchSubmitting] = useState(false);
 
-  // Event check - must have event this week
-  const [noEventThisWeek, setNoEventThisWeek] = useState(false);
+  // Event check - must have a current/latest event
+  const [noCurrentEvent, setNoCurrentEvent] = useState(false);
+  const [loadingEvent, setLoadingEvent] = useState(true);
 
-  // Check if event exists this week
-  useEffect(() => {
-    checkEventThisWeek().then((exists) => {
-      setNoEventThisWeek(!exists);
-    });
-  }, []);
-
-  // Fetch members and guests list
+  // Fetch members and guests list (guests: only for current/latest event date; do not fetch all or past-date guests)
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [membersData, guestsData] = await Promise.all([
-          getMembers(),
-          getGuests()
-        ]);
+        setLoadingEvent(true);
+        const ev = await getCurrentEvent();
+        setCurrentEvent(ev ?? null);
+        const eventDate = ev?.date ?? "";
+        setNoCurrentEvent(!eventDate);
+        const membersData = await getMembers();
+        const guestList = eventDate
+          ? (await getGuests(eventDate)).guests ?? []
+          : [];
         setMembers(membersData.members);
-        setGuests(guestsData.guests || []);
-        
-        // Combine into batch list
+        setGuests(guestList);
+
         const combined: BatchPerson[] = [
           ...membersData.members.map(m => ({
             name: m.name,
             domain: m.domain,
             type: "member" as const
           })),
-          ...(guestsData.guests || []).map(g => ({
+          ...guestList.map(g => ({
             name: g.name,
             domain: g.profession,
             type: "guest" as const,
@@ -81,6 +80,10 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
         setBatchList(combined);
       } catch {
         onNotify("無法載入名單", "error");
+        setNoCurrentEvent(true);
+        setCurrentEvent(null);
+      } finally {
+        setLoadingEvent(false);
       }
     };
     fetchData();
@@ -222,7 +225,7 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
     }
   };
 
-  if (noEventThisWeek) {
+  if (!loadingEvent && noCurrentEvent) {
     return (
       <section className="section manual-entry-panel">
         <div
@@ -235,9 +238,9 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
           }}
         >
           <div style={{ fontSize: "2.5rem", marginBottom: "0.75rem" }}>⚠️</div>
-          <h3 style={{ margin: "0 0 0.5rem 0", color: "#b91c1c" }}>本週尚未建立活動</h3>
+          <h3 style={{ margin: "0 0 0.5rem 0", color: "#b91c1c" }}>尚未建立活動</h3>
           <p style={{ margin: "0 0 1rem 0", color: "#991b1b" }}>
-            請主辦單位先在管理頁面建立本週活動後，再進行手動簽到。
+            請先在「📅 活動管理」建立活動後，再進行手動簽到。
           </p>
           <p style={{ margin: 0, fontSize: "0.9rem", color: "#7f1d1d" }}>
             Please ask the organizer to create the event first.
@@ -251,7 +254,10 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
     <section className="section manual-entry-panel">
       <div className="section-header">
         <h2>✍️ 管理員手動輸入</h2>
-        <p className="hint">直接新增簽到記錄</p>
+        <p className="hint">
+          直接新增簽到記錄
+          {currentEvent?.date ? `（最新活動：${currentEvent.name} · ${currentEvent.date}）` : ""}
+        </p>
       </div>
 
       {/* Mode Toggle */}

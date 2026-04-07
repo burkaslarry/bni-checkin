@@ -28,6 +28,9 @@ data class Guest(
     @Column(name = "event_date")
     var eventDate: String? = null,
 
+    @Column(name = "check_in_time")
+    var checkInTime: OffsetDateTime? = null,
+
     @Column(name = "created_at", insertable = false, updatable = false)
     var createdAt: OffsetDateTime? = null,
 

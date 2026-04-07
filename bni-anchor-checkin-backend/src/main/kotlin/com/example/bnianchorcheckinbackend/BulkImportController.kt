@@ -2,6 +2,7 @@ package com.example.bnianchorcheckinbackend
 
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
@@ -9,11 +10,18 @@ import org.springframework.web.bind.annotation.*
 @RestController
 @Tag(name = "Bulk Import", description = "Endpoints for bulk importing members and guests")
 class BulkImportController(
-    @org.springframework.beans.factory.annotation.Autowired(required = false) private val bulkImportService: BulkImportService?,
-    private val guestService: GuestService
+    @Autowired(required = false) private val bulkImportService: BulkImportService?,
+    private val guestService: GuestService,
+    @Autowired(required = false) private val attendanceWebSocketHandler: AttendanceWebSocketHandler?,
 ) {
 
     private val log = org.slf4j.LoggerFactory.getLogger(BulkImportController::class.java)
+
+    private fun notifyGuestRegistryUpdated(result: ImportResult) {
+        if (result.inserted + result.updated > 0) {
+            attendanceWebSocketHandler?.broadcast(mapOf("type" to "guest_registry_updated"))
+        }
+    }
 
     private fun isDbConnectionError(errors: List<String>): Boolean {
         if (errors.isEmpty()) return false
@@ -28,6 +36,7 @@ class BulkImportController(
         if (bulkImportService == null) {
             return if (request.type.lowercase() == "guest") {
                 val fallback = guestService.addBulkImportedGuests(request.records)
+                notifyGuestRegistryUpdated(fallback)
                 ResponseEntity.ok(fallback)
             } else {
                 ResponseEntity.ok(ImportResult(
@@ -41,14 +50,17 @@ class BulkImportController(
             if (result.failed > 0 && request.type.lowercase() == "guest" && isDbConnectionError(result.errors)) {
                 log.warn("DB unavailable for guest import, falling back to in-memory store")
                 val fallback = guestService.addBulkImportedGuests(request.records)
+                notifyGuestRegistryUpdated(fallback)
                 return ResponseEntity.ok(fallback)
             }
+            if (request.type.lowercase() == "guest") notifyGuestRegistryUpdated(result)
             ResponseEntity.ok(result)
         } catch (e: Exception) {
             log.error("Bulk import failed: {}", e.message, e)
             if (request.type.lowercase() == "guest") {
                 try {
                     val fallback = guestService.addBulkImportedGuests(request.records)
+                    notifyGuestRegistryUpdated(fallback)
                     return ResponseEntity.ok(fallback)
                 } catch (e2: Exception) {
                     log.error("Guest fallback also failed: {}", e2.message)
@@ -86,14 +98,20 @@ class BulkImportController(
     fun bulkImportGuests(@RequestBody records: List<ImportRecord>): ResponseEntity<ImportResult> {
         return try {
             if (bulkImportService != null) {
-                ResponseEntity.ok(bulkImportService.bulkImportGuests(records))
+                val r = bulkImportService.bulkImportGuests(records)
+                notifyGuestRegistryUpdated(r)
+                ResponseEntity.ok(r)
             } else {
-                ResponseEntity.ok(guestService.addBulkImportedGuests(records))
+                val r = guestService.addBulkImportedGuests(records)
+                notifyGuestRegistryUpdated(r)
+                ResponseEntity.ok(r)
             }
         } catch (e: Exception) {
             log.error("Bulk import guests failed: {}", e.message)
             return try {
-                ResponseEntity.ok(guestService.addBulkImportedGuests(records))
+                val r = guestService.addBulkImportedGuests(records)
+                notifyGuestRegistryUpdated(r)
+                ResponseEntity.ok(r)
             } catch (e2: Exception) {
                 ResponseEntity.ok(ImportResult(
                     total = records.size, inserted = 0, updated = 0, failed = records.size,

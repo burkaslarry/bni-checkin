@@ -3,9 +3,13 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
+/**
+ * Supabase client (url + anon key from env). Side effect: none at creation; client used for DB/auth later.
+ * @type {ReturnType<typeof createClient>}
+ */
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// Table name constants
+/** Table name constants for BNI Anchor (members, guests, events, attendances, logs, profession_groups). */
 export const TABLES = {
   MEMBERS: "bni_anchor_members",
   GUESTS: "bni_anchor_guests",

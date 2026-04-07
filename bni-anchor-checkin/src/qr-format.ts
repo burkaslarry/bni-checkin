@@ -1,9 +1,8 @@
 /**
- * QR Code Data Format for BNI Anchor Attendance
- * 
- * Two types: "member" (BNI Anchor member) and "guest" (visitor)
+ * QR Code data format for BNI Anchor attendance: "member" (BNI member) or "guest" (visitor).
  */
 
+/** Member QR payload (name, time, type "member", membershipId). */
 export interface MemberQRData {
   name: string;
   time: string;
@@ -11,6 +10,7 @@ export interface MemberQRData {
   membershipId: string;
 }
 
+/** Guest QR payload (name, time, type "guest", referrer). */
 export interface GuestQRData {
   name: string;
   time: string;
@@ -18,10 +18,15 @@ export interface GuestQRData {
   referrer: string;
 }
 
+/** Union of member or guest QR payload. */
 export type AttendanceQRData = MemberQRData | GuestQRData;
 
 /**
- * Generate a member check-in payload
+ * Generate a member check-in JSON payload. Side effect: uses current time (new Date()).
+ * @param {string} name - Trimmed
+ * @param {string} membershipId - Trimmed
+ * @returns {string} JSON string for QR / API
+ * @example generateMemberPayload("Alice", "ANCHOR-001")
  */
 export function generateMemberPayload(
   name: string,
@@ -37,7 +42,10 @@ export function generateMemberPayload(
 }
 
 /**
- * Generate a guest check-in payload
+ * Generate a guest check-in JSON payload. Side effect: uses current time (new Date()).
+ * @param {string} name - Trimmed
+ * @param {string} referrer - Trimmed
+ * @returns {string} JSON string for QR / API
  */
 export function generateGuestPayload(
   name: string,
@@ -52,9 +60,7 @@ export function generateGuestPayload(
   return JSON.stringify(payload);
 }
 
-/**
- * Test payloads for quick testing
- */
+/** Pre-built test payloads for member and guest (quick testing). */
 export const TEST_PAYLOADS = {
   member: generateMemberPayload("larrylo", "ANCHOR-001"),
   guest: generateGuestPayload("karinyeung", "larrylo")

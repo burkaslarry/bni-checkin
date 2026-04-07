@@ -29,6 +29,7 @@ describe("ReportPage", () => {
     );
     // Wait for async data
     await screen.findByText(/即時簽到狀態/i);
-    expect(screen.getByText(/匯出 CSV/i)).toBeInTheDocument();
+    // Export button lives under the "📋 簽到記錄 CSV" tab
+    expect(screen.getByText(/簽到記錄 CSV/i)).toBeInTheDocument();
   });
 });

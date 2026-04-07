@@ -3,8 +3,12 @@ import { matchMembersWithAI } from "./aiClient";
 import { matchMembersByKeyword, buildKeywordNote } from "./keywordMatch";
 
 /**
- * Match guest with recommended members for networking
- * No table assignment - pure member-to-member recommendations
+ * Match guest with recommended members for networking (AI first, keyword fallback). No table assignment.
+ * Side effects: network (AI); console logging.
+ * @param {Guest} guest
+ * @param {Member[]} members
+ * @returns {Promise<MatchResult & { provider?: "deepseek" | "gemini" | "keyword" | null }>}
+ * @example const result = await matchGuestWithMembers(guest, members); result.recommendedMembers; result.matchNote;
  */
 export async function matchGuestWithMembers(
   guest: Guest,

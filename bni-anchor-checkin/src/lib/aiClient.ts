@@ -1,6 +1,5 @@
 import type { Guest, Member, MemberMatch } from "../types/seating";
 
-// Backend API URL (same as api.ts)
 const BACKEND_API_URL = import.meta.env.VITE_API_BASE || "http://localhost:10000";
 
 type AIProvider = "deepseek" | "gemini" | "keyword" | null;
@@ -11,7 +10,13 @@ type AIMatchResponse = {
   reason: string;
 };
 
-
+/**
+ * Calls backend POST /api/matching/members with guest + members. Returns parsed matches or null on error.
+ * Side effects: network call; console logging.
+ * @param {Guest} guest
+ * @param {Member[]} members
+ * @returns {Promise<AIMatchResponse[] | null>}
+ */
 const callDeepSeekViaBackend = async (
   guest: Guest,
   members: Member[]
@@ -83,7 +88,13 @@ const callDeepSeekViaBackend = async (
   }
 };
 
-// Direct DeepSeek API when backend unreachable
+/**
+ * Calls DeepSeek API directly when backend is unreachable. Requires VITE_DEEPSEEK_API_KEY. Returns null if key missing or API fails.
+ * Side effects: network call to api.deepseek.com; no logging.
+ * @param {Guest} guest
+ * @param {Member[]} members
+ * @returns {Promise<AIMatchResponse[] | null>}
+ */
 const callDeepSeekDirect = async (
   guest: Guest,
   members: Member[]
@@ -130,13 +141,24 @@ Return JSON only: {"matches": [{"memberName": "name", "matchStrength": "High"|"M
   }
 };
 
-// Gemini fallback is deprecated - all AI calls should go through backend
-// Keeping this for backwards compatibility only
+/**
+ * Deprecated: Gemini fallback. Always returns null. Kept for backwards compatibility; AI calls should use backend.
+ * Side effects: console.warn.
+ * @returns {Promise<AIMatchResponse[] | null>}
+ */
 const callGeminiDEPRECATED = async (): Promise<AIMatchResponse[] | null> => {
   console.warn("⚠️ Gemini direct API is deprecated. Using backend API instead.");
   return null;
 };
 
+/**
+ * Match a guest to members using AI (backend DeepSeek first, then direct DeepSeek fallback). Converts AI response to MemberMatch[].
+ * Side effects: network (backend or DeepSeek); console logging.
+ * @param {Guest} guest
+ * @param {Member[]} members
+ * @returns {Promise<{ matches: MemberMatch[]; provider: AIProvider }>} provider is "deepseek" or "keyword" or null
+ * @example const { matches, provider } = await matchMembersWithAI(guest, members);
+ */
 export const matchMembersWithAI = async (
   guest: Guest,
   members: Member[]

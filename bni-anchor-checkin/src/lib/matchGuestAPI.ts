@@ -1,15 +1,16 @@
 /**
- * API Service for Strategic Seating Matchmaker
- * Handles communication with /api/match-guest endpoint
+ * API service for Strategic Seating Matchmaker: /api/match-guest (guest + members → match result).
  */
 
 import type { Guest, Member, MatchResult } from "../types/seating";
 
+/** Request body for match-guest API. */
 export type MatchGuestRequest = {
   guest: Guest;
   members: Member[];
 };
 
+/** Response: MatchResult plus optional provider. */
 export type MatchGuestResponse = MatchResult & {
   provider?: "deepseek" | "gemini" | "keyword" | null;
 };
@@ -17,7 +18,11 @@ export type MatchGuestResponse = MatchResult & {
 const API_BASE = import.meta.env.VITE_API_BASE || window.location.origin;
 
 /**
- * Call the match-guest API endpoint to get seating recommendations
+ * Call match-guest API for seating recommendations. Side effect: network.
+ * @param {Guest} guest
+ * @param {Member[]} members
+ * @returns {Promise<MatchGuestResponse>}
+ * @throws {Error} On HTTP error (status + body)
  */
 export async function callMatchGuestAPI(
   guest: Guest,
@@ -48,7 +53,8 @@ export async function callMatchGuestAPI(
 }
 
 /**
- * Health check for the API endpoint
+ * Health check for match-guest API (OPTIONS request). Side effect: network. Returns false on error.
+ * @returns {Promise<boolean>}
  */
 export async function checkMatchGuestAPIHealth(): Promise<boolean> {
   try {
@@ -62,7 +68,9 @@ export async function checkMatchGuestAPIHealth(): Promise<boolean> {
 }
 
 /**
- * Validate guest data before sending to API
+ * Validate guest before API call. No side effects.
+ * @param {Guest} guest
+ * @returns {string[]} List of error messages (empty if valid)
  */
 export function validateGuestData(guest: Guest): string[] {
   const errors: string[] = [];
@@ -85,7 +93,9 @@ export function validateGuestData(guest: Guest): string[] {
 }
 
 /**
- * Validate members data before sending to API
+ * Validate members array before API call. No side effects.
+ * @param {Member[]} members
+ * @returns {string[]} List of error messages (empty if valid)
  */
 export function validateMembersData(members: Member[]): string[] {
   const errors: string[] = [];
@@ -115,7 +125,10 @@ export function validateMembersData(members: Member[]): string[] {
 }
 
 /**
- * Validate complete request payload
+ * Validate full request (guest + members). No side effects.
+ * @param {Guest} guest
+ * @param {Member[]} members
+ * @returns {string[]} Combined errors from validateGuestData and validateMembersData
  */
 export function validateMatchGuestRequest(
   guest: Guest,

@@ -13,7 +13,7 @@ echo -e "${YELLOW}🔄 清理佔用的埠口...${NC}"
 lsof -ti:10000 | xargs kill -9 2>/dev/null || true
 lsof -ti:5173 | xargs kill -9 2>/dev/null || true
 
-# 2. 載入資料庫密碼 (可選: 專案根目錄或 backend 目錄的 .env)
+# 2. 載入 .env（production 需 DATABASE_JDBC_URL / DATABASE_USERNAME / DATABASE_PASSWORD）
 if [ -f ".env" ]; then
   set -a; source .env; set +a
   echo -e "${GREEN}✓ 已載入 .env${NC}"
@@ -21,15 +21,13 @@ elif [ -f "bni-anchor-checkin-backend/.env" ]; then
   set -a; source bni-anchor-checkin-backend/.env; set +a
   echo -e "${GREEN}✓ 已載入 backend .env${NC}"
 fi
-if [ -z "${SUPABASE_DB_PASSWORD}" ]; then
-  echo -e "${YELLOW}⚠ SUPABASE_DB_PASSWORD 未設定，後端可能無法連接 Supabase。可建立 .env 並設定 SUPABASE_DB_PASSWORD=your_password${NC}"
-fi
+export SPRING_PROFILES_ACTIVE=render
+echo -e "${GREEN}✓ 使用 Production PostgreSQL (profile=render)${NC}"
 
-# 3. 啟動後端
+# 3. 啟動後端（production profile = application-render.properties + .env 的 DATABASE_*）
 echo -e "${GREEN}📦 啟動後端 (Spring Boot)...${NC}"
-
 cd bni-anchor-checkin-backend
-  ./gradlew bootRun --args='--spring.profiles.active=render' > backend.log 2>&1 &
+./gradlew bootRun --args='--spring.profiles.active=render' > backend.log 2>&1 &
 BACKEND_PID=$!
 cd ..
 

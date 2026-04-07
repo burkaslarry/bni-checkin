@@ -114,6 +114,7 @@ CREATE TABLE bni_anchor_guests (
     email TEXT,
     phone_number TEXT,
     event_date TEXT,
+    check_in_time TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -129,7 +130,10 @@ CREATE TABLE bni_anchor_events (
     start_time TIME NOT NULL,
     end_time TIME,
     on_time_cutoff_time TIME NOT NULL,
-    late_cutoff_time TIME
+    late_cutoff_time TIME,
+    status TEXT NOT NULL DEFAULT 'ACTIVE',
+    is_active BOOLEAN NOT NULL DEFAULT FALSE,
+    deleted_at TIMESTAMP WITH TIME ZONE
 );
 
 
