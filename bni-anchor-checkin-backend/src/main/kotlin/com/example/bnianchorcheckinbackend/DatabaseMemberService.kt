@@ -114,6 +114,24 @@ class DatabaseMemberService(
     }
 
     @Transactional
+    fun createGuest(name: String, profession: String, referrer: String?, eventDate: String): Guest {
+        val existing = guestRepository.findByNameIgnoreCaseAndEventDate(name, eventDate).orElse(null)
+        if (existing != null) {
+            existing.profession = profession
+            existing.referrer = referrer
+            return guestRepository.save(existing)
+        }
+        return guestRepository.save(
+            Guest(
+                name = name,
+                profession = profession,
+                referrer = referrer,
+                eventDate = eventDate
+            )
+        )
+    }
+
+    @Transactional
     fun deleteGuest(name: String): Boolean {
         val guest = guestRepository.findByNameIgnoreCase(name).orElse(null) ?: return false
         guestRepository.delete(guest)

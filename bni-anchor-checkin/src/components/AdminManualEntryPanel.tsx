@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { checkIn, getMembers, getGuests, getCurrentEvent, MemberInfo, GuestInfo, AttendeeRole, type EventData } from "../api";
+import { checkIn, createGuest, getMembers, getGuests, getCurrentEvent, MemberInfo, GuestInfo, AttendeeRole, type EventData } from "../api";
 
 type AdminManualEntryPanelProps = {
   onNotify: (message: string, type: "success" | "error" | "info") => void;
@@ -35,6 +35,7 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
   const [name, setName] = useState("");
   const [domain, setDomain] = useState("");
   const [isGuest, setIsGuest] = useState(true); // Default to guest
+  const [walkInCheckIn, setWalkInCheckIn] = useState(true);
   const [guestRole, setGuestRole] = useState<GuestRole>("GUEST");
   const [referrer, setReferrer] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -93,6 +94,7 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
   useEffect(() => {
     setGuestRole("GUEST");
     setReferrer("");
+    setWalkInCheckIn(true);
   }, [isGuest]);
 
   const handleSubmit = async () => {
@@ -114,6 +116,27 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
       const selectedTime = new Date(customTime);
       const timeString = `${selectedTime.getFullYear()}-${String(selectedTime.getMonth() + 1).padStart(2, '0')}-${String(selectedTime.getDate()).padStart(2, '0')}T${String(selectedTime.getHours()).padStart(2, '0')}:${String(selectedTime.getMinutes()).padStart(2, '0')}:${String(selectedTime.getSeconds()).padStart(2, '0')}`;
 
+      if (isGuest && !walkInCheckIn) {
+        const createResult = await createGuest({
+          name: submitName,
+          profession: submitDomain,
+          referrer: referrer.trim() ? referrer.trim() : undefined,
+          eventDate: currentEvent?.date
+        });
+        if (createResult.status !== "success") {
+          throw new Error(createResult.message);
+        }
+        onNotify(`✅ ${submitName} (嘉賓) 已加入名單（未簽到）`, "success");
+        setName("");
+        setDomain("");
+        setIsGuest(false);
+        setGuestRole("GUEST");
+        setReferrer("");
+        setWalkInCheckIn(true);
+        setCustomTime(formatDateTimeLocal(new Date()));
+        return;
+      }
+
       const result = await checkIn({
         name: submitName,
         type: isGuest ? "guest" : "member",
@@ -131,6 +154,7 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
         setIsGuest(false);
         setGuestRole("GUEST");
         setReferrer("");
+        setWalkInCheckIn(true);
         setCustomTime(formatDateTimeLocal(new Date()));
       } else {
         throw new Error(result.message);
@@ -359,6 +383,20 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
                   autoComplete="off"
                 />
               </div>
+
+              <div className="form-group checkbox-group">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={walkInCheckIn}
+                    onChange={(e) => setWalkInCheckIn(e.target.checked)}
+                  />
+                  <span className="checkbox-text">🚶 Walk-in（即時簽到）</span>
+                </label>
+                <p className="hint">
+                  {walkInCheckIn ? "ON：新增後即時簽到" : "OFF：只加入嘉賓名單，不簽到"}
+                </p>
+              </div>
             </>
           )}
 
@@ -379,7 +417,7 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
             onClick={handleSubmit}
             disabled={!name.trim() || !domain.trim() || isSubmitting}
           >
-            {isSubmitting ? "處理中..." : "✅ 確認新增"}
+            {isSubmitting ? "處理中..." : isGuest && !walkInCheckIn ? "✅ 確認加入名單" : "✅ 確認新增"}
           </button>
         </>
       ) : (

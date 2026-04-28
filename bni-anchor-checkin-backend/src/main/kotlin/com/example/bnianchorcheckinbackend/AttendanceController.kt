@@ -59,6 +59,31 @@ class AttendanceController(
     @Autowired(required = false) private val attendanceWebSocketHandler: AttendanceWebSocketHandler?,
 ) {
     private val log = org.slf4j.LoggerFactory.getLogger(AttendanceController::class.java)
+    private val hkt: java.time.ZoneId = java.time.ZoneId.of("Asia/Hong_Kong")
+
+    private fun parseClientTimeToHktOffset(raw: String): java.time.OffsetDateTime {
+        val fallbackNow = java.time.OffsetDateTime.now(hkt)
+        val offset = hkt.rules.getOffset(java.time.Instant.now())
+        return try {
+            java.time.OffsetDateTime.parse(raw).withOffsetSameInstant(offset)
+        } catch (_: Exception) {
+            try {
+                java.time.ZonedDateTime.parse(raw).withZoneSameInstant(hkt).toOffsetDateTime()
+            } catch (_: Exception) {
+                try {
+                    java.time.Instant.parse(raw).atZone(hkt).toOffsetDateTime()
+                } catch (_: Exception) {
+                    try {
+                        java.time.LocalDateTime.parse(raw.replace("Z", ""))
+                            .atZone(hkt)
+                            .toOffsetDateTime()
+                    } catch (_: Exception) {
+                        fallbackNow
+                    }
+                }
+            }
+        }
+    }
 
     /**
      * Run a DB operation with retries (delays 0, 1s, 3s + jitter). Side effect: [block] may perform DB I/O.
@@ -228,8 +253,7 @@ class AttendanceController(
                     if (!eventDate.isNullOrBlank()) {
                         val guest = guestRepository.findByNameIgnoreCaseAndEventDate(request.name.trim(), eventDate).orElse(null)
                         if (guest != null) {
-                            val hkt = java.time.ZoneId.of("Asia/Hong_Kong")
-                            guest.checkInTime = java.time.OffsetDateTime.now(hkt)
+                            guest.checkInTime = parseClientTimeToHktOffset(request.currentTime)
                             guestRepository.save(guest)
                         }
                     }

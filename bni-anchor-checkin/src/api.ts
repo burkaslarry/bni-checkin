@@ -967,6 +967,13 @@ export type UpdateGuestRequest = {
   eventDate?: string;
 };
 
+export type CreateGuestRequest = {
+  name: string;
+  profession: string;
+  referrer?: string;
+  eventDate?: string;
+};
+
 /**
  * Update guest by name. PUT /api/guests/:name. Side effect: network; backend DB update.
  * @param {string} name - Guest name (path)
@@ -980,6 +987,22 @@ export async function updateGuest(
 ): Promise<{ status: string; message: string }> {
   const response = await fetch(`${API_BASE}/api/guests/${encodeURIComponent(name)}`, {
     method: "PUT",
+    headers: jsonHeaders,
+    body: JSON.stringify(request),
+    mode: "cors"
+  });
+  return handleResponse(response);
+}
+
+/**
+ * Create a guest registration record without checking in. POST /api/guests.
+ * Side effect: network; backend DB insert/update.
+ */
+export async function createGuest(
+  request: CreateGuestRequest
+): Promise<{ status: string; message: string; guest?: GuestInfo }> {
+  const response = await fetch(`${API_BASE}/api/guests`, {
+    method: "POST",
     headers: jsonHeaders,
     body: JSON.stringify(request),
     mode: "cors"

@@ -19,11 +19,19 @@ data class UpdateGuestRequest(
     val eventDate: String? = null
 )
 
+data class CreateGuestRequest(
+    val name: String,
+    val profession: String,
+    val referrer: String? = null,
+    val eventDate: String? = null
+)
+
 @RestController
 @Tag(name = "Member Management", description = "Endpoints for managing member records")
 @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = ["spring.datasource.url"])
 class MemberManagementController(
     private val databaseMemberService: DatabaseMemberService,
+    @Autowired(required = false) private val eventDbService: EventDbService?,
     @Autowired(required = false) private val attendanceWebSocketHandler: AttendanceWebSocketHandler?,
 ) {
 
@@ -134,6 +142,50 @@ class MemberManagementController(
             ResponseEntity.ok(mapOf("status" to "success", "message" to "Guest deleted successfully"))
         } else {
             ResponseEntity.status(HttpStatus.NOT_FOUND).body(mapOf("status" to "error", "message" to "Guest not found"))
+        }
+    }
+
+    @PostMapping("/api/guests")
+    @Operation(summary = "Create guest (registration only, no check-in)")
+    fun createGuest(@RequestBody request: CreateGuestRequest): ResponseEntity<Map<String, Any>> {
+        val name = request.name.trim()
+        val profession = request.profession.trim()
+        if (name.isBlank() || profession.isBlank()) {
+            return ResponseEntity.badRequest().body(
+                mapOf("status" to "error", "message" to "name and profession are required")
+            )
+        }
+        val resolvedDate = request.eventDate?.trim().takeUnless { it.isNullOrEmpty() }
+            ?: eventDbService?.getCurrentEvent()?.date
+        if (resolvedDate.isNullOrBlank()) {
+            return ResponseEntity.badRequest().body(
+                mapOf("status" to "error", "message" to "eventDate is required when no current event is active")
+            )
+        }
+        return try {
+            val created = databaseMemberService.createGuest(
+                name = name,
+                profession = profession,
+                referrer = request.referrer?.trim()?.takeIf { it.isNotEmpty() },
+                eventDate = resolvedDate
+            )
+            attendanceWebSocketHandler?.broadcast(mapOf("type" to "guest_registry_updated"))
+            ResponseEntity.status(HttpStatus.CREATED).body(
+                mapOf(
+                    "status" to "success",
+                    "message" to "Guest created successfully",
+                    "guest" to mapOf(
+                        "name" to created.name,
+                        "profession" to created.profession,
+                        "referrer" to (created.referrer ?: ""),
+                        "eventDate" to (created.eventDate ?: "")
+                    )
+                )
+            )
+        } catch (e: Exception) {
+            ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(
+                mapOf("status" to "error", "message" to "資料庫暫時無法連線，無法新增嘉賓。")
+            )
         }
     }
 }
