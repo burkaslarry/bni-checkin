@@ -39,8 +39,19 @@ class EventDbService(
         val v = value.trim()
         return try {
             when {
-                v.contains("T") -> OffsetDateTime.parse(v).withOffsetSameInstant(hkt.rules.getOffset(Instant.now()))
-                    ?: Instant.parse(v).atZone(hkt).toOffsetDateTime()
+                v.contains("T") -> {
+                    try {
+                        OffsetDateTime.parse(v).withOffsetSameInstant(hkt.rules.getOffset(Instant.now()))
+                    } catch (_: Exception) {
+                        try {
+                            Instant.parse(v).atZone(hkt).toOffsetDateTime()
+                        } catch (_: Exception) {
+                            LocalDateTime.parse(v.replace("Z", ""))
+                                .atZone(hkt)
+                                .toOffsetDateTime()
+                        }
+                    }
+                }
                 Regex("^\\d{2}:\\d{2}:\\d{2}$").matches(v) -> {
                     val lt = LocalTime.parse(v, DateTimeFormatter.ofPattern("HH:mm:ss"))
                     OffsetDateTime.of(baseDate ?: LocalDate.now(hkt), lt, hkt.rules.getOffset(Instant.now()))
