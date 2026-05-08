@@ -97,6 +97,9 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
     setWalkInCheckIn(true);
   }, [isGuest]);
 
+  /*
+   * F03 -- Admin manual entry (single + batch check-in) --- AdminManualEntryPanel.handleSubmit
+   */
   const handleSubmit = async () => {
     const submitName = name.trim();
     const submitDomain = domain.trim();

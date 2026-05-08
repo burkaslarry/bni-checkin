@@ -252,6 +252,9 @@ export default function ReportPage() {
     );
   }
 
+  /*
+   * F04 -- Report page no-event action buttons --- ReportPage.noEvent
+   */
   if (noEvent) {
     return (
       <div className="report-page">

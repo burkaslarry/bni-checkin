@@ -34,6 +34,9 @@ class EventDbService(
         }
     }
 
+    /*
+     * F02 -- Manual check-in datetime without timezone --- EventDbService.parseCheckInTimeToOffset
+     */
     private fun parseCheckInTimeToOffset(value: String?, baseDate: LocalDate? = null): OffsetDateTime? {
         if (value.isNullOrBlank()) return null
         val v = value.trim()

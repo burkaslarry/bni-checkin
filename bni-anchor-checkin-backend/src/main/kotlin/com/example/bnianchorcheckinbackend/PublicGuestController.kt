@@ -81,7 +81,10 @@ class PublicGuestController(
             return ResponseEntity.status(HttpStatus.CONFLICT).body(mapOf("error" to "duplicate_guest_phone_event"))
         }
 
-        // Register on guest list only; actual check-in is done elsewhere (e.g. scan / admin manual).
+        /*
+         * F01 -- Public guest list only (no auto check-in) --- PublicGuestController.createGuest
+         * Register on guest list only; actual check-in is done elsewhere (e.g. scan / admin manual).
+         */
         val saved = guestRepository.save(
             Guest(
                 name = name,

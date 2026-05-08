@@ -22,6 +22,9 @@ import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.util.Optional
 
+/*
+ * F02 -- Regression: yyyy-MM-ddTHH:mm:ss in DB log path --- EventDbServiceTimeParsingTest
+ */
 @ExtendWith(MockitoExtension::class)
 class EventDbServiceTimeParsingTest {
 

@@ -265,7 +265,7 @@ EOF
 done
 ok "Checked-in 4 pre-registered guests."
 
-log "6) Walk-in 2 guests via PUBLIC form (CAPTCHA), then mark as arrived via /api/checkin"
+log "6) Walk-in 2 guests via PUBLIC form (CAPTCHA); list-only (no auto check-in); optional /api/checkin below"
 run_nonce="$(date +%s | tail -c 6)"
 for i in 1 2; do
   captcha_json="$(curl -sS "${BASE_URL}/api/public/captcha")"
@@ -295,7 +295,18 @@ EOF
     exit 1
   fi
 done
-ok "Created 2 walk-in guests + checked them in."
+ok "Created 2 walk-in guests on the guest list (not auto checked-in)."
+
+log "6b) Mark walk-in guests as arrived via /api/checkin (optional manual step for sim)"
+for i in 1 2; do
+  wname="Walkin Guest 0${i}"
+  wprof="Walkin Profession 0${i}"
+  post_json "${BASE_URL}/api/checkin" "$(cat <<EOF
+{"name":"${wname}","type":"guest","currentTime":"${EVENT_DATE}T07:00:0${i}+08:00","domain":"${wprof}","role":"GUEST","referrer":"Larry Lo"}
+EOF
+)" >/dev/null || true
+done
+ok "Attempted /api/checkin for 2 walk-in guests (ignore if duplicate)."
 
 log "7) Export attendance CSV: GET /api/export (expect filename attendance_${EVENT_DATE_YYYYMMDD}.csv)"
 tmp_body="$(mktemp)"

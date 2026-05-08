@@ -2210,6 +2210,7 @@ td {
   color: var(--muted);
 }
 
+/* F04 -- No-event action button styles --- styles.no-event-actions */
 .no-event-actions {
   display: flex;
   flex-wrap: wrap;
