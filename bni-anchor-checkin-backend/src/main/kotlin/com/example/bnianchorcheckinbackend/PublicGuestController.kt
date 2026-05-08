@@ -38,7 +38,6 @@ class PublicGuestController(
     private val guestRepository: GuestRepository,
     private val eventRepository: EventRepository,
     private val captchaService: CaptchaService,
-    private val attendanceService: AttendanceService
 ) {
     @PostMapping("/guests")
     @Operation(summary = "Create a guest for an event date (public walk-in form)")
@@ -82,8 +81,7 @@ class PublicGuestController(
             return ResponseEntity.status(HttpStatus.CONFLICT).body(mapOf("error" to "duplicate_guest_phone_event"))
         }
 
-        val hkt = java.time.ZoneId.of("Asia/Hong_Kong")
-        val now = java.time.OffsetDateTime.now(hkt)
+        // Register on guest list only; actual check-in is done elsewhere (e.g. scan / admin manual).
         val saved = guestRepository.save(
             Guest(
                 name = name,
@@ -91,27 +89,9 @@ class PublicGuestController(
                 referrer = referrer,
                 phoneNumber = phone,
                 eventDate = resolvedEventDate,
-                checkInTime = now
+                checkInTime = null
             )
         )
-
-        // Treat walk-in registration as "arrived" (check-in) so /report and /export include guests immediately.
-        // This is in-memory (same as /api/checkin guest) and does not touch bni_anchor_attendances.
-        try {
-            val nowIso = now.toString()
-            attendanceService.recordCheckIn(
-                CheckInRequest(
-                    name = name,
-                    type = "guest",
-                    currentTime = nowIso,
-                    domain = profession,
-                    role = "GUEST",
-                    referrer = referrer
-                )
-            )
-        } catch (_: Exception) {
-            // Ignore duplicate/parse errors; guest is still registered in DB.
-        }
 
         return ResponseEntity.status(HttpStatus.CREATED).body(
             mapOf(
