@@ -2210,21 +2210,40 @@ td {
   color: var(--muted);
 }
 
-.go-admin-button {
+.no-event-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+  align-items: stretch;
   margin-top: 1rem;
-  padding: 1rem 2rem;
-  background: var(--accent);
+  width: 100%;
+  max-width: 56rem;
+}
+
+.no-event-action-button {
+  flex: 1 1 12rem;
+  min-height: 3.25rem;
+  padding: 1rem 1.25rem;
+  background: #facc15;
   color: #030712;
   border: none;
   border-radius: 0.9rem;
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   font-weight: 600;
+  font-family: inherit;
   cursor: pointer;
   transition: all 0.2s ease;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  box-sizing: border-box;
 }
 
-.go-admin-button:hover {
-  opacity: 0.9;
+.no-event-action-button:hover {
+  background: #eab308;
   transform: translateY(-2px);
 }
 

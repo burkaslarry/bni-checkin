@@ -259,12 +259,16 @@ export default function ReportPage() {
           <div className="no-event-icon">📅</div>
           <h2>尚未建立活動</h2>
           <p>請先在管理頁面建立今日活動</p>
-          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", justifyContent: "center", marginTop: "1rem" }}>
-            <button onClick={() => navigate("/admin?view=generate")} className="go-admin-button">
+          <div className="no-event-actions">
+            <button type="button" onClick={() => navigate("/admin?view=generate")} className="no-event-action-button">
               🔧 前往管理頁面建立活動
             </button>
-            <Link to="/" className="ghost-button">📱 返回簽到頁</Link>
-            <Link to="/admin" className="ghost-button">🛠️ 管理後台</Link>
+            <Link to="/" className="no-event-action-button">
+              📱 返回簽到頁
+            </Link>
+            <Link to="/admin" className="no-event-action-button">
+              🛠️ 管理後台
+            </Link>
           </div>
         </div>
       </div>
