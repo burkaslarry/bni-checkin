@@ -12,10 +12,15 @@
 - **🚫 防止重複**：同一個人唔可以簽到兩次
 
 ### 管理工具（喺 `/admin`）
-- **🔳 QR 碼生成器**：生成活動 QR 碼
+- **🔳 QR 碼生成器**：建立活動、下載 PNG／PDF 宣傳單（PDF 用內嵌 SVG 商標，避免匯出失敗）
 - **📋 記錄管理**：查看、搜尋、篩選同刪除記錄
 - **📥 CSV 匯出**：下載出席記錄做 CSV
 - **🔍 會員搜尋**：搜尋出席歷史
+
+### 即時簽到報表
+- **`/report`**：即時出席儀表板（WebSocket 更新）；頂部有 **簽到頁**／**管理後台** 捷徑
+
+> **建立活動：** 喺 QR 分頁按建立後，後端支援時會自動設為 **當前活動**，簽到同匯出會即刻用新活動。
 
 ## 🚀 快速開始
 
@@ -41,6 +46,7 @@ npm run build
 
 - 前端首頁：http://localhost:5173
 - 管理頁面：http://localhost:5173/admin
+- 即時簽到報表：http://localhost:5173/report
 
 ## 📱 頁面說明
 
@@ -89,7 +95,7 @@ npx vercel env add VITE_API_BASE production
 創建 `.env.local` 檔案：
 
 ```env
-VITE_API_BASE=http://localhost:8080
+VITE_API_BASE=http://localhost:10000
 ```
 
 ### 生產環境（Vercel）
@@ -147,6 +153,9 @@ src/
 ```
 
 ## ❓ 常見問題
+
+### Q: 點樣睇即時出席？
+A: 開 https://…/report （本機：`http://localhost:5173/report`）。未有當前活動時請先去管理員建立並設為當前活動。
 
 ### Q: 點解會員名單係空嘅？
 A: 確保後端伺服器正常運行，同埋 `VITE_API_BASE` 環境變數設定正確。

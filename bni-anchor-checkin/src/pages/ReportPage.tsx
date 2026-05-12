@@ -296,12 +296,22 @@ export default function ReportPage() {
 
   return (
     <div className="report-page">
+      {/*
+       * Primary report chrome: title + same ghost-button pattern as error/no-event states so operators can jump
+       * straight to public check-in (`/`) or admin (`/admin`) without using the browser back stack.
+       */}
       <header className="report-header">
         <div className="header-content">
-          <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+          <div className="report-header-toolbar">
             <h1 style={{ margin: 0 }}>📊 即時簽到狀態</h1>
-            <Link to="/" className="ghost-button" style={{ fontSize: "0.9rem" }}>📱 簽到頁</Link>
-            <Link to="/admin" className="ghost-button" style={{ fontSize: "0.9rem" }}>🛠️ 管理後台</Link>
+            <div className="report-quick-actions">
+              <Link to="/" className="ghost-button">
+                📱 簽到頁
+              </Link>
+              <Link to="/admin" className="ghost-button">
+                🛠️ 管理後台
+              </Link>
+            </div>
           </div>
           {reportData && (
             <div className="event-info" style={{ marginTop: "0.5rem" }}>

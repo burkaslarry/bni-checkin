@@ -1,282 +1,181 @@
-# 🎯 EventXP - Intelligent Event Management Platform
+# EventXP / BNI Anchor Check-in
 
-> **Transform your events with AI-powered networking, real-time insights, and seamless check-in experiences.**
+EventXP is a full-stack event check-in platform built for BNI Anchor Chapter events. It combines QR-based attendance, member and guest registration, admin reporting, CSV export, and AI-assisted networking recommendations.
 
-EventXP is a next-generation event management platform that combines intelligent attendee matching, real-time analytics, and automated networking to create exceptional event experiences.
+The repository contains a React PWA frontend and a Kotlin/Spring Boot backend.
 
----
+## Features
 
-## ✨ Key Features
+- Member and guest check-in with duplicate prevention
+- QR code generation and scanning for faster event entry
+- Admin dashboard for attendance records, search, deletion, and CSV export
+- Real-time updates through WebSocket support
+- Progressive Web App behavior for mobile-friendly use
+- DeepSeek-powered networking and strategic seating guidance
+- Local PostgreSQL support, with deployment profiles for Render and Supabase
 
-### 🤖 AI-Powered Networking
-- **Smart Member Matching**: DeepSeek AI analyzes attendee profiles to suggest high-value connections
-- **Strategic Seating**: Automated recommendations based on professional synergies
-- **Contextual Introductions**: AI-generated conversation starters and networking insights
+### Operator-facing frontend behaviour
 
-### 📊 Real-Time Analytics
-- **Live Dashboard**: Monitor attendance, engagement, and networking patterns
-- **VIP Tracking**: Special attention for guests and key stakeholders
-- **Export & Reporting**: Comprehensive data export for post-event analysis
+- Creating an event from **Admin → 產生 QR 碼** calls `activate` so the new event becomes the server **current event** when the API is database-backed. In-memory-only backends may return HTTP 501 for activate; the UI still treats create as success.
+- **即時簽到狀態** lives at `/report` (linked from the admin flow). The report header includes quick links back to the public check-in page and admin.
+- PDF flyers for QR distribution are generated from a hidden print layout: the BNI mark is **inline SVG** in that layout so `html2canvas` is not tainted by external assets (avoids `SecurityError` on `toDataURL`).
 
-### ✅ Seamless Check-In
-- **QR Code Scanner**: Fast, contactless check-in
-- **Offline Support**: Works without internet connection
-- **Multi-Device**: Sync across tablets, phones, and desktops
+## Project Structure
 
-### 🎨 Modern UX
-- **Progressive Web App**: Install on any device
-- **Responsive Design**: Works on all screen sizes
-- **Dark/Light Mode**: Comfortable viewing in any environment
+```text
+.
+├── bni-anchor-checkin/             # React, TypeScript, Vite PWA
+├── bni-anchor-checkin-backend/     # Kotlin, Spring Boot API
+├── data/templates/                 # Import templates and sample data formats
+├── docs/                           # User, setup, deployment, and training docs
+├── init-database.sql               # Local database schema/bootstrap script
+├── Makefile                        # Root-level command shortcuts
+└── run.sh                          # Local full-stack launcher
+```
 
----
+## Tech Stack
 
-## 🚀 Quick Start
+- Frontend: React 19, TypeScript, Vite, React Router, PWA tooling
+- Backend: Kotlin, Spring Boot 3.4, Gradle, Spring Data JPA
+- Database: PostgreSQL locally, with Render and Supabase profiles
+- Integrations: DeepSeek API, WebSocket, CSV import/export
+
+## Quick Start
 
 ### Prerequisites
-- Node.js 18+ and npm
-- Java 17+ (for backend)
-- Modern web browser
 
-### One-Command Launch
+- Node.js 20.19+ and npm
+- Java 17+
+- PostgreSQL, if running the full local stack
+
+### 1. Clone and install
+
 ```bash
-git clone <your-repo-url>
+git clone <repo-url>
 cd bni-checkin
+make install
+```
+
+### 2. Prepare the local database
+
+Create a local PostgreSQL database named `bni_checkin`, then run:
+
+```bash
+psql bni_checkin < init-database.sql
+```
+
+If your local database needs a password or custom user, set the matching environment variables before starting the backend:
+
+```bash
+export LOCAL_DB_USER=<your-db-user>
+export LOCAL_DB_PASSWORD=<your-db-password>
+```
+
+### 3. Run the full stack
+
+```bash
 sh run.sh
 ```
 
-Access the platform:
-- **Frontend**: http://localhost:5173
-- **Backend API**: http://localhost:10000
-- **API Docs**: http://localhost:10000/swagger-ui.html
+The launcher starts both services and opens the main app and admin page.
 
----
+- Frontend: <http://localhost:5173>
+- Admin: <http://localhost:5173/admin>
+- Backend API: <http://localhost:10000>
+- API docs: <http://localhost:10000/swagger-ui.html>
 
-## 📦 Architecture
+## Manual Development
 
-```
-┌─────────────────────────────────────────────────────┐
-│                    EventXP Platform                  │
-├─────────────────────────────────────────────────────┤
-│                                                      │
-│  Frontend (React + TypeScript + Vite)               │
-│  ├─ Real-time Dashboard                             │
-│  ├─ AI Networking Matchmaker                        │
-│  ├─ QR Code Check-in Scanner                        │
-│  └─ Progressive Web App (PWA)                       │
-│                                                      │
-├─────────────────────────────────────────────────────┤
-│                                                      │
-│  Backend API (Kotlin + Spring Boot)                 │
-│  ├─ RESTful API Endpoints                           │
-│  ├─ WebSocket Real-time Updates                     │
-│  ├─ DeepSeek AI Integration                         │
-│  └─ CSV Data Management                             │
-│                                                      │
-├─────────────────────────────────────────────────────┤
-│                                                      │
-│  AI Engine (DeepSeek v3)                            │
-│  ├─ Profile Analysis                                │
-│  ├─ Match Scoring                                   │
-│  └─ Networking Insights                             │
-│                                                      │
-└─────────────────────────────────────────────────────┘
+Common commands are available from the repo root:
+
+```bash
+make help
+make dev
+make frontend-dev
+make backend-dev
+make test
+make build
 ```
 
----
+The underlying commands still work if you prefer running each app directly.
 
-## 🛠️ Technology Stack
+Run the backend:
 
-### Frontend
-- **React 18** - UI framework
-- **TypeScript** - Type-safe development
-- **Vite** - Lightning-fast build tool
-- **PWA** - Offline-first architecture
-- **WebSocket** - Real-time updates
+```bash
+cd bni-anchor-checkin-backend
+./gradlew bootRun
+```
 
-### Backend
-- **Kotlin** - Modern JVM language
-- **Spring Boot 3** - Enterprise-grade framework
-- **Java HttpClient** - HTTP/2 support
-- **Jackson** - JSON processing
+Run the frontend:
 
-### AI & Analytics
-- **DeepSeek Reasoner** - Advanced AI matching
-- **CSV Analytics** - Member data processing
-- **Real-time WebSocket** - Live updates
+```bash
+cd bni-anchor-checkin
+npm run dev
+```
 
----
+## Visuals
 
-## 📚 Documentation
+Illustrative docs assets are available while live product screenshots are being captured:
 
-### Setup Guides
-- [**Complete Setup Guide**](./SETUP.md) - Detailed installation and configuration
-- [**Quick Reference**](./QUICK_REFERENCE.md) - Common commands and workflows
-- [**DeepSeek AI Setup**](./DEEPSEEK_SETUP.md) - AI configuration guide
+![Check-in flow](./docs/assets/screenshots/checkin-flow.svg)
 
-### User Guides
-- [**User Guide**](./USER_GUIDE.md) - Feature walkthrough
-- [**Admin Guide**](./ADMIN_GUIDE.md) - Administrative features
-- [**Strategic Networking**](./STRATEGIC_SEATING_GUIDE.md) - AI matching best practices
+![Admin dashboard](./docs/assets/screenshots/admin-dashboard.svg)
 
-### Technical Documentation
-- [**API Documentation**](./bni-anchor-checkin-backend/README.md) - Backend API reference
-- [**Frontend Architecture**](./bni-anchor-checkin/README.md) - Frontend structure
-- [**Deployment Guide**](./DEPLOYMENT.md) - Production deployment
+Demo recording storyboard:
 
----
+![Check-in demo storyboard](./docs/assets/demo/checkin-demo-storyboard.svg)
 
-## 🎯 Use Cases
+Recommended final demo asset path: `docs/assets/demo/checkin-demo.gif`.
 
-### 1. Business Networking Events
-Perfect for BNI chapters, chambers of commerce, and professional associations:
-- Automated member matching based on business synergies
-- Real-time attendance tracking for accountability
-- VIP guest management and personalized introductions
+## CSV Imports
 
-### 2. Corporate Events
-Ideal for conferences, seminars, and team-building:
-- Department-wise seating arrangements
-- Speaker and VIP tracking
-- Post-event networking analytics
+CSV import templates are stored in `data/templates/`.
 
-### 3. Trade Shows & Exhibitions
-Enhanced for large-scale events:
-- Exhibitor-visitor matching
-- Booth traffic analytics
-- Lead generation insights
+- `data/templates/guest-import-template.csv`
+- `data/templates/member-import-template.csv`
 
-### 4. Educational Events
-Optimized for workshops and training sessions:
-- Participant skill matching
-- Session attendance tracking
-- Engagement analytics
+See [CSV Import Schema](./docs/CSV_IMPORT_SCHEMA.md) for required fields, optional fields, accepted aliases, and import behavior.
 
----
+## Configuration
 
-## 🔐 Security & Privacy
+The frontend reads its backend URL from `VITE_API_BASE`.
 
-- ✅ **Secure API Keys**: Backend-only storage
-- ✅ **CORS Protection**: Configurable origins
-- ✅ **Data Encryption**: HTTPS in production
-- ✅ **GDPR Compliance**: Export and delete capabilities
-- ✅ **Role-Based Access**: Admin, staff, and user roles
+```env
+VITE_API_BASE=http://localhost:10000
+```
 
----
+The backend defaults to local PostgreSQL on `localhost:5432/bni_checkin`. Deployment-specific database settings are defined in:
 
-## 🌟 Key Differentiators
+- `bni-anchor-checkin-backend/src/main/resources/application-render.properties`
+- `bni-anchor-checkin-backend/src/main/resources/application-supabase.properties`
 
-| Feature | EventXP | Traditional Platforms |
-|---------|---------|----------------------|
-| **AI Matching** | ✅ DeepSeek-powered | ❌ Manual or basic |
-| **Offline Mode** | ✅ Full functionality | ❌ Online only |
-| **Real-time Updates** | ✅ WebSocket | ❌ Polling/refresh |
-| **Strategic Insights** | ✅ AI-generated | ❌ Basic reports |
-| **Cost** | 💰 Open-source prototype | 💰💰💰 Enterprise pricing |
+Use `.env.example` as the template for local and deployment-specific values. Do not commit production API keys, database passwords, or private connection strings.
 
----
+## Continuous Integration
 
-## 🚦 Roadmap
+GitHub Actions runs frontend tests/build and backend tests/build on pull requests and pushes to `main` or `master`.
 
-### Phase 1: Core Platform ✅
-- [x] Check-in system
-- [x] Real-time dashboard
-- [x] Basic reporting
+Workflow: `.github/workflows/ci.yml`
 
-### Phase 2: AI Integration ✅
-- [x] DeepSeek AI matching
-- [x] Strategic networking
-- [x] Smart recommendations
+## Documentation
 
-### Phase 3: Enterprise Features (In Progress)
-- [ ] Supabase integration
-- [ ] Multi-tenant support
-- [ ] Advanced analytics dashboard
-- [ ] Email notifications
+- [Setup Guide](./docs/guides/SETUP.md)
+- [Quick Reference](./docs/guides/QUICK_REFERENCE.md)
+- [User Guide](./docs/guides/USER_GUIDE.md)
+- [CSV Import Schema](./docs/CSV_IMPORT_SCHEMA.md)
+- [Deployment Guide](./docs/guides/DEPLOYMENT.md)
+- [DeepSeek Setup](./docs/guides/DEEPSEEK_SETUP.md)
+- [Strategic Seating Guide](./docs/guides/STRATEGIC_SEATING_GUIDE.md)
+- [Frontend README](./bni-anchor-checkin/README.md)
+- [Frontend Quickstart (ZH)](./bni-anchor-checkin/QUICKSTART.md)
+- [Backend README](./bni-anchor-checkin-backend/README.md)
 
-### Phase 4: Scaling (Planned)
-- [ ] Mobile native apps
-- [ ] Calendar integrations
-- [ ] CRM integrations
-- [ ] White-label solution
+## Deployment
 
----
+The frontend can be deployed to Vercel or any static hosting provider that supports Vite builds. Set `VITE_API_BASE` to the deployed backend URL.
 
-## 💼 Pricing (Future Commercial Version)
+The backend is designed for container deployment and includes profiles for Render and Supabase-backed PostgreSQL. See the [Deployment Guide](./docs/guides/DEPLOYMENT.md) for the production checklist.
 
-### 🎯 Tier 1: Essentials - $480/year
-- Basic check-in
-- Real-time dashboard
-- CSV export
-- Up to 100 attendees/event
+## License
 
-### 🚀 Tier 2: Professional - $2,880/year
-- **All Tier 1 features**
-- AI-powered networking
-- Strategic seating
-- VIP management
-- Up to 500 attendees/event
-
-### 🏢 Tier 3: Enterprise - Custom Pricing
-- **All Tier 2 features**
-- Multi-event support
-- Custom branding
-- Dedicated support
-- Unlimited attendees
-
----
-
-## 🤝 Contributing
-
-This is a prototype for commercial development. For partnership or licensing inquiries:
-
-📧 **Email**: [your-email@example.com]  
-🌐 **Website**: [your-website.com]  
-💼 **LinkedIn**: [Your LinkedIn Profile]
-
----
-
-## 📄 License
-
-**Proprietary Software** - EventXP Prototype  
-© 2026 EventXP. All rights reserved.
-
-This software is a commercial prototype. Unauthorized copying, distribution, or use is prohibited.
-
-For licensing inquiries, please contact: [your-email@example.com]
-
----
-
-## 🙏 Acknowledgments
-
-Built with:
-- [React](https://react.dev/) - UI Framework
-- [Spring Boot](https://spring.io/projects/spring-boot) - Backend Framework
-- [DeepSeek AI](https://www.deepseek.com/) - AI Engine
-- [Vite](https://vitejs.dev/) - Build Tool
-
-Special thanks to the open-source community for making this possible.
-
----
-
-## 📞 Support
-
-### Getting Started
-1. Read the [Setup Guide](./SETUP.md)
-2. Check [Quick Reference](./QUICK_REFERENCE.md)
-3. Review [User Guide](./USER_GUIDE.md)
-
-### Need Help?
-- 📖 Documentation: [View all guides](./docs/)
-- 🐛 Issues: [Report a bug](#)
-- 💬 Discussions: [Ask questions](#)
-- 📧 Email: [support@eventxp.com](#)
-
----
-
-<div align="center">
-
-**Made with ❤️ by EventXP Team**
-
-[Website](#) • [Documentation](#) • [Demo](#) • [Contact](#)
-
-</div>
+Proprietary commercial prototype. See [LICENSE.md](./LICENSE.md) before distribution, reuse, or production deployment.
