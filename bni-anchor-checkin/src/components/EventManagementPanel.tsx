@@ -5,7 +5,8 @@ import {
   exportRecords,
   listEvents,
   activateEvent,
-  deleteEvent
+  deleteEvent,
+  normalizeApiEventId
 } from "../api";
 import { EventSummaryCard } from "./EventSummaryCard";
 import { EventAttendanceDetailModal } from "./EventAttendanceDetailModal";
@@ -112,18 +113,27 @@ export const EventManagementPanel = ({ onNotify, onNavigateToGenerate }: EventMa
     }
   };
 
-  /** 「當前活動」置頂；其餘維持 API 順序（通常係最新優先）。 */
+  /** 「當前活動」一定置頂：先挑出與後端 `/events/current` 相同 id，再將其餘維持原 API 順序（通常係 id 大到細）。 */
   const sortedEvents = useMemo(() => {
-    const currentId = currentEvent?.id;
     if (!allEvents.length) return allEvents;
-    if (currentId == null) return allEvents;
-    return [...allEvents].sort((a, b) => {
-      const rank = (id: number) => (id === currentId ? 0 : 1);
-      const d = rank(a.id) - rank(b.id);
-      if (d !== 0) return d;
-      return b.id - a.id;
-    });
+    const cid = normalizeApiEventId(currentEvent?.id);
+    if (cid === undefined) return allEvents;
+
+    let currentEv: EventData | undefined;
+    const rest: EventData[] = [];
+    for (const ev of allEvents) {
+      if (normalizeApiEventId(ev.id) === cid) {
+        if (!currentEv) currentEv = ev;
+        else rest.push(ev);
+      } else {
+        rest.push(ev);
+      }
+    }
+    return currentEv ? [currentEv, ...rest] : [...allEvents];
   }, [allEvents, currentEvent?.id]);
+
+  const isSameEventCurrent = (ev: EventData) =>
+    normalizeApiEventId(ev.id) === normalizeApiEventId(currentEvent?.id);
 
   const handleExportEvent = async (ev: EventData) => {
     setExportingEventId(ev.id);
@@ -170,10 +180,10 @@ export const EventManagementPanel = ({ onNotify, onNavigateToGenerate }: EventMa
               <EventSummaryCard
                 key={ev.id}
                 event={ev}
-                isCurrent={currentEvent?.id === ev.id}
+                isCurrent={isSameEventCurrent(ev)}
                 onRefresh={fetchCurrentEvent}
                 onSetActive={() => void handleActivate(ev.id)}
-                setActiveDisabled={currentEvent?.id === ev.id}
+                setActiveDisabled={isSameEventCurrent(ev)}
                 activating={activatingId === ev.id}
                 onDelete={() => void handleDeleteClick(ev.id)}
                 deleting={deletingId === ev.id}
@@ -195,9 +205,9 @@ export const EventManagementPanel = ({ onNotify, onNavigateToGenerate }: EventMa
                 >
                   {exportingEventId === ev.id ? "⏳ 匯出中..." : "📥 匯出 CSV"}
                 </button>
-                {currentEvent?.id === ev.id ? (
+                {isSameEventCurrent(ev) ? (
                   <a
-                    href={`/admin/guests?eventDate=${encodeURIComponent(currentEvent.date)}`}
+                    href={`/admin/guests?eventDate=${encodeURIComponent(ev.date)}`}
                     className="button"
                     style={{ backgroundColor: "#10b981" }}
                   >
