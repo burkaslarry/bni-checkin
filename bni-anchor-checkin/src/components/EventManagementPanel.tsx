@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   getCurrentEvent,
   EventData,
@@ -112,6 +112,19 @@ export const EventManagementPanel = ({ onNotify, onNavigateToGenerate }: EventMa
     }
   };
 
+  /** 「當前活動」置頂；其餘維持 API 順序（通常係最新優先）。 */
+  const sortedEvents = useMemo(() => {
+    const currentId = currentEvent?.id;
+    if (!allEvents.length) return allEvents;
+    if (currentId == null) return allEvents;
+    return [...allEvents].sort((a, b) => {
+      const rank = (id: number) => (id === currentId ? 0 : 1);
+      const d = rank(a.id) - rank(b.id);
+      if (d !== 0) return d;
+      return b.id - a.id;
+    });
+  }, [allEvents, currentEvent?.id]);
+
   const handleExportEvent = async (ev: EventData) => {
     setExportingEventId(ev.id);
     try {
@@ -153,7 +166,7 @@ export const EventManagementPanel = ({ onNotify, onNavigateToGenerate }: EventMa
       ) : allEvents.length > 0 ? (
         <div className="event-details">
           <div className="event-card-stack">
-            {allEvents.map((ev) => (
+            {sortedEvents.map((ev) => (
               <EventSummaryCard
                 key={ev.id}
                 event={ev}

@@ -2304,8 +2304,9 @@ td {
 }
 
 .event-card.event-card-current {
-  border-color: rgba(34, 197, 94, 0.45);
-  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.12);
+  /* 比一般卡粗兩倍：預設 1px → 當前活動 2px 綠邊框 */
+  border: 2px solid rgba(34, 197, 94, 0.65);
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.14);
 }
 
 .event-card-stack {
