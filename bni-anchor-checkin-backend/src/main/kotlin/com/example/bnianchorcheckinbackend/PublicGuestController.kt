@@ -18,6 +18,7 @@ data class PublicGuestCreateRequest(
     val eventDate: String? = null,
     val eventId: Int? = null,
     val notes: String? = null,
+    val isWalkIn: Boolean = false,
     val captcha: PublicCaptchaAnswer
 )
 
@@ -38,6 +39,7 @@ class PublicGuestController(
     private val guestRepository: GuestRepository,
     private val eventRepository: EventRepository,
     private val captchaService: CaptchaService,
+    private val attendanceService: AttendanceService,
 ) {
     @PostMapping("/guests")
     @Operation(summary = "Create a guest for an event date (public walk-in form)")
@@ -48,6 +50,7 @@ class PublicGuestController(
         val referrer = request.referrer?.trim()?.takeIf { it.isNotEmpty() }
         val eventDate = request.eventDate?.trim().orEmpty()
         val eventId = request.eventId
+        val isWalkIn = request.isWalkIn
 
         if (name.isEmpty() || profession.isEmpty() || phone.isEmpty() || (eventId == null && eventDate.isEmpty())) {
             return ResponseEntity.badRequest().body(mapOf("error" to "missing_required_fields"))
@@ -81,10 +84,9 @@ class PublicGuestController(
             return ResponseEntity.status(HttpStatus.CONFLICT).body(mapOf("error" to "duplicate_guest_phone_event"))
         }
 
-        /*
-         * F01 -- Public guest list only (no auto check-in) --- PublicGuestController.createGuest
-         * Register on guest list only; actual check-in is done elsewhere (e.g. scan / admin manual).
-         */
+        val hkt = java.time.ZoneId.of("Asia/Hong_Kong")
+        val checkInAt = if (isWalkIn) java.time.OffsetDateTime.now(hkt) else null
+
         val saved = guestRepository.save(
             Guest(
                 name = name,
@@ -92,9 +94,26 @@ class PublicGuestController(
                 referrer = referrer,
                 phoneNumber = phone,
                 eventDate = resolvedEventDate,
-                checkInTime = null
+                checkInTime = checkInAt
             )
         )
+
+        if (isWalkIn && checkInAt != null) {
+            try {
+                attendanceService.recordCheckIn(
+                    CheckInRequest(
+                        name = name,
+                        type = "guest",
+                        currentTime = checkInAt.toString(),
+                        domain = profession,
+                        role = "GUEST",
+                        referrer = referrer
+                    )
+                )
+            } catch (_: Exception) {
+                // Duplicate/parse errors acceptable; DB row remains.
+            }
+        }
 
         return ResponseEntity.status(HttpStatus.CREATED).body(
             mapOf(

@@ -10,6 +10,7 @@ export default function PublicGuestWalkinPage({}: Props) {
   const [referrer, setReferrer] = useState("");
   const [eventDate, setEventDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [notes, setNotes] = useState("");
+  const [isWalkIn, setIsWalkIn] = useState(false);
 
   const [eventId, setEventId] = useState<number | null>(null);
   const [eventDetails, setEventDetails] = useState<EventData | null>(null);
@@ -192,6 +193,7 @@ export default function PublicGuestWalkinPage({}: Props) {
         eventId: eventId ?? undefined,
         eventDate: eventId ? undefined : trimmedEventDate,
         notes: trimmedNotes || undefined,
+        ...(isWalkIn ? { isWalkIn: true } : {}),
         captcha: {
           a: captcha.a,
           b: captcha.b,
@@ -311,6 +313,16 @@ export default function PublicGuestWalkinPage({}: Props) {
             </select>
             <p className="hint" style={{ margin: 0 }}>
               會從 Anchor 會員名單載入；如載入失敗可稍後重試。
+            </p>
+          </div>
+
+          <div className="form-group" style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+            <label style={{ margin: 0, display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
+              <input type="checkbox" checked={isWalkIn} onChange={(e) => setIsWalkIn(e.target.checked)} />
+              <span>現場已到，同時簽到（自動 check-in）</span>
+            </label>
+            <p className="hint" style={{ margin: 0 }}>
+              預設只會加入嘉賓名單；剔選並提交後，系統會一併記錄簽到時間及出席。
             </p>
           </div>
 

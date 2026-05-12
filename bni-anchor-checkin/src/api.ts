@@ -290,6 +290,8 @@ export type PublicGuestCreateRequest = {
   eventDate?: string;
   eventId?: number;
   notes?: string;
+  /** When true, backend sets check-in time and records guest attendance */
+  isWalkIn?: boolean;
   captcha: {
     a: number;
     b: number;
