@@ -12,6 +12,12 @@ import { EventSummaryCard } from "./EventSummaryCard";
 import { EventAttendanceDetailModal } from "./EventAttendanceDetailModal";
 import { buildAttendanceCsvFilename } from "../lib/attendanceExportFilename";
 
+/*
+ * Admin「活動管理」：載入 `GET /events/current` + `GET /events`，可啟用、匯出、刪除活動。
+ *
+ * 「當前活動」置頂顯示；與後端現時活動比較 id 時必須經過 normalizeApiEventId（JSON 可能係 number 或數字字串）。
+ * 若在本地／記憶體模式唔存在任何活動，可經 props 自動導去「產生 QR」頁。
+ */
 type EventManagementPanelProps = {
   onNotify: (message: string, type: "success" | "error" | "info") => void;
   onNavigateToGenerate?: () => void;

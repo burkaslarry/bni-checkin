@@ -62,7 +62,11 @@ const jsonHeaders = {
 
 const FETCH_TIMEOUT_MS = 25000;
 
-/** Normalizes event id for `?eventId=` (handles numeric strings from JSON). */
+/*
+ * Backend payloads may expose event ids as JSON numbers or numeric strings; query params are always strings.
+ * Use before activate/delete/export partitioning and when comparing `events/current` ↔ list items so `"21"` and `21`
+ * behave as the same key.
+ */
 export function normalizeApiEventId(eventId?: number | string | null): number | undefined {
   if (eventId === undefined || eventId === null || eventId === "") return undefined;
   if (typeof eventId === "number" && Number.isFinite(eventId)) return Math.trunc(eventId);

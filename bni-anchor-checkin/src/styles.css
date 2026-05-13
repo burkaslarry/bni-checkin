@@ -123,6 +123,29 @@ button:disabled {
   border: 1px solid var(--border);
 }
 
+/*
+ * Ghost style is shared between <button type="button"> and React Router <Link> (renders <a>).
+ * Without these rules anchors keep inline text sizing and awkward tap targets beside real buttons.
+ */
+a.ghost-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.55rem 1rem;
+  border-radius: 0.75rem;
+  font-weight: 600;
+  font-size: 0.925rem;
+  text-decoration: none;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+a.ghost-button:hover {
+  opacity: 0.92;
+  border-color: var(--accent);
+}
+
 .input-field,
 .select-field {
   width: 100%;
@@ -1527,6 +1550,35 @@ td {
 
 .event-date {
   color: var(--muted);
+}
+
+/*
+ * `.report-page` chrome: title stays left; quick-actions are real links styled like pills on the dark header.
+ */
+.report-header-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem 1rem;
+}
+
+.report-quick-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.report-header .report-quick-actions a.ghost-button {
+  background: rgba(30, 41, 59, 0.9);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  color: #f1f5f9;
+}
+
+.report-header .report-quick-actions a.ghost-button:hover {
+  background: rgba(56, 189, 248, 0.18);
+  border-color: #38bdf8;
+  opacity: 1;
 }
 
 .header-meta {
