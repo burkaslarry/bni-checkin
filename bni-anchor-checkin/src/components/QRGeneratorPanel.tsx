@@ -65,12 +65,35 @@ const addMinutesToTime = (time: string, minutes: number): string => {
   return `${String(newHours).padStart(2, "0")}:${String(newMins).padStart(2, "0")}`;
 };
 
+const formatLocalYmd = (d: Date): string => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+
+/*
+ * Week = Monday–Sunday (typical chapter cadence). Return the calendar Thursday in the same week as `ref`.
+ */
+const thursdayOfWeekContaining = (ref: Date): Date => {
+  const d = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
+  const dow = d.getDay();
+  const daysSinceMonday = (dow + 6) % 7;
+  d.setDate(d.getDate() - daysSinceMonday + 3);
+  return d;
+};
+
 export const QRGeneratorPanel = ({ onNotify }: QRGeneratorPanelProps) => {
-  const [eventName, setEventName] = useState("EventXP for BNI Anchor Meeting");
-  const [eventDate, setEventDate] = useState(() => {
-    const today = new Date();
-    return today.toISOString().split("T")[0];
-  });
+  const meetingDefaults = useMemo(() => {
+    const ymd = formatLocalYmd(thursdayOfWeekContaining(new Date()));
+    return {
+      name: `BNI Anchor Regular Meeting ${ymd}`,
+      date: ymd
+    };
+  }, []);
+
+  const [eventName, setEventName] = useState(meetingDefaults.name);
+  const [eventDate, setEventDate] = useState(meetingDefaults.date);
   const [registrationStartTime, setRegistrationStartTime] = useState("06:30");
   const [startTime, setStartTime] = useState("07:00");
   const [onTimeCutoff, setOnTimeCutoff] = useState("07:05");
