@@ -25,10 +25,10 @@ Set environment variable:
 export DEEPSEEK_API_KEY="sk-your-api-key-here"
 ```
 
-Or add to `application.properties`:
+Or add it to `.env` and load the file before starting the backend:
 
-```properties
-deepseek.api.key=sk-your-api-key-here
+```bash
+DEEPSEEK_API_KEY=sk-your-api-key-here
 ```
 
 ### Production (Render/Vercel)

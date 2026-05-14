@@ -42,9 +42,10 @@ docs/assets/
 - [ ] `dashboard-analytics.png` - Analytics view
 
 ### Check-in System
-- [ ] `checkin-qr-scan.png` - QR code scanning
-- [ ] `checkin-manual.png` - Manual entry
-- [ ] `checkin-guest.png` - Guest check-in
+- [x] `screenshots/checkin-flow.svg` - Check-in flow placeholder/story image
+- [ ] `screenshots/checkin-qr-scan.png` - QR code scanning
+- [ ] `screenshots/checkin-manual.png` - Manual entry
+- [ ] `screenshots/checkin-guest.png` - Guest check-in
 
 ### AI Matchmaker
 - [ ] `ai-matchmaker-input.png` - Guest profile input
@@ -52,9 +53,10 @@ docs/assets/
 - [ ] `ai-matchmaker-details.png` - Individual match details
 
 ### Admin Panel
-- [ ] `admin-event-management.png` - Event setup
-- [ ] `admin-batch-checkin.png` - Batch check-in
-- [ ] `admin-export.png` - Data export
+- [x] `screenshots/admin-dashboard.svg` - Admin dashboard placeholder/story image
+- [ ] `screenshots/admin-event-management.png` - Event setup
+- [ ] `screenshots/admin-batch-checkin.png` - Batch check-in
+- [ ] `screenshots/admin-export.png` - Data export
 
 ---
 
@@ -79,12 +81,13 @@ docs/assets/
 ## 🎥 Videos
 
 ### Demo Videos (to be created)
+- [x] `demo/checkin-demo-storyboard.svg` - Recording storyboard for check-in demo GIF
 - [ ] Product Overview (2-3 minutes)
 - [ ] AI Matchmaker Demo (1-2 minutes)
 - [ ] Real-time Dashboard (1 minute)
 - [ ] Check-in Process (30 seconds)
 
-**Storage**: YouTube or Vimeo (embed links in documentation)
+**Storage**: short GIFs can live in `docs/assets/demo/`; longer demos should use YouTube or Vimeo links.
 
 ---
 

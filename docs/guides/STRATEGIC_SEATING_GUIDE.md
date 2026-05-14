@@ -221,7 +221,7 @@ npm run dev
 
 ## 📞 支援
 
-如有任何問題，請聯繫系統管理員或參考 [README.md](./README.md)
+如有任何問題，請聯繫系統管理員或參考 [README.md](../../README.md)
 
 ---
 

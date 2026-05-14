@@ -115,10 +115,8 @@ Larry Lo | 客戶服務系統 | Member | ANCHOR-007 |
 
 ### Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `SERVER_PORT` | 8080 | Server port |
-| `JAVA_OPTS` | -Xmx256m | JVM options |
+- `SERVER_PORT`: defaults to `8080`; controls the server port.
+- `JAVA_OPTS`: defaults to `-Xmx256m`; controls JVM options.
 
 ## 📖 Related
 
@@ -127,4 +125,4 @@ Larry Lo | 客戶服務系統 | Member | ANCHOR-007 |
 
 ## 📄 License
 
-MIT License
+Proprietary commercial prototype. See [the root license](../LICENSE.md) before distribution, reuse, or production deployment.

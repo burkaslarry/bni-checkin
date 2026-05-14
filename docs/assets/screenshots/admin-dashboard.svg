@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-labelledby="title desc">
+  <title id="title">EventXP admin dashboard screenshot placeholder</title>
+  <desc id="desc">Illustrative screenshot showing the EventXP admin dashboard with event, import, report, and QR tools.</desc>
+  <rect width="1280" height="720" fill="#0f172a"/>
+  <rect x="64" y="52" width="1152" height="616" rx="28" fill="#f8fafc"/>
+  <text x="112" y="120" font-family="Arial, sans-serif" font-size="34" font-weight="700" fill="#0f172a">Admin Dashboard</text>
+  <text x="112" y="158" font-family="Arial, sans-serif" font-size="18" fill="#64748b">Manage events, QR codes, imports, and attendance reports</text>
+  <rect x="112" y="210" width="230" height="150" rx="18" fill="#dbeafe"/>
+  <text x="142" y="270" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#1d4ed8">Events</text>
+  <text x="142" y="306" font-family="Arial, sans-serif" font-size="16" fill="#475569">Create current event</text>
+  <rect x="386" y="210" width="230" height="150" rx="18" fill="#dcfce7"/>
+  <text x="416" y="270" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#15803d">QR Codes</text>
+  <text x="416" y="306" font-family="Arial, sans-serif" font-size="16" fill="#475569">Generate check-in links</text>
+  <rect x="660" y="210" width="230" height="150" rx="18" fill="#fef3c7"/>
+  <text x="690" y="270" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#b45309">Imports</text>
+  <text x="690" y="306" font-family="Arial, sans-serif" font-size="16" fill="#475569">Upload member/guest CSV</text>
+  <rect x="934" y="210" width="230" height="150" rx="18" fill="#ede9fe"/>
+  <text x="964" y="270" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#6d28d9">Reports</text>
+  <text x="964" y="306" font-family="Arial, sans-serif" font-size="16" fill="#475569">Export attendance CSV</text>
+  <rect x="112" y="420" width="1052" height="148" rx="18" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="146" y="470" font-family="Arial, sans-serif" font-size="20" font-weight="700" fill="#334155">Live event summary</text>
+  <rect x="146" y="505" width="970" height="18" rx="9" fill="#e2e8f0"/>
+  <rect x="146" y="505" width="610" height="18" rx="9" fill="#38bdf8"/>
+  <text x="146" y="615" font-family="Arial, sans-serif" font-size="16" fill="#64748b">Replace with a live product screenshot after running the app locally.</text>
+</svg>

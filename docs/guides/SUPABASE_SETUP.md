@@ -3,8 +3,8 @@
 ## ✅ Database Information
 
 **Database Name:** `bni-anchor-checking-system`  
-**Project URL:** https://xovzbkrxxuthjczcrnwz.supabase.co  
-**Project Reference:** `xovzbkrxxuthjczcrnwz`
+**Project URL:** `https://<your-project-ref>.supabase.co`  
+**Project Reference:** `<your-project-ref>`
 
 ---
 
@@ -36,7 +36,7 @@
 ### Step 1: Get Your Database Password
 
 1. Go to [Supabase Dashboard](https://supabase.com/dashboard)
-2. Select your project: `bni-anchor-checking-system`
+2. Select your project
 3. Navigate to: **Settings** → **Database**
 4. Find the **Database password** section
 5. Copy your password (or reset if forgotten)
@@ -48,23 +48,24 @@
 # Copy the example file
 cp .env.example .env
 
-# Edit .env and add your password
-# SUPABASE_DB_PASSWORD=your_actual_password_here
+# Edit .env and add your Supabase connection details
+# SUPABASE_DATABASE_JDBC_URL=jdbc:postgresql://db.<your-project-ref>.supabase.co:5432/postgres?connectTimeout=3&socketTimeout=5
+# SUPABASE_DATABASE_USERNAME=postgres
+# SUPABASE_DATABASE_PASSWORD=your_actual_password_here
 
 # Load environment variables before running
 export $(cat .env | xargs)
-./run.sh
+cd bni-anchor-checkin-backend
+./gradlew bootRun --args='--spring.profiles.active=supabase'
 ```
 
 **Option B: Export directly**
 ```bash
-export SUPABASE_DB_PASSWORD=your_actual_password_here
-./run.sh
-```
-
-**Option C: Edit application.properties directly**
-```properties
-spring.datasource.password=your_actual_password_here
+export SUPABASE_DATABASE_JDBC_URL="jdbc:postgresql://db.<your-project-ref>.supabase.co:5432/postgres?connectTimeout=3&socketTimeout=5"
+export SUPABASE_DATABASE_USERNAME="postgres"
+export SUPABASE_DATABASE_PASSWORD="your_actual_password_here"
+cd bni-anchor-checkin-backend
+./gradlew bootRun --args='--spring.profiles.active=supabase'
 ```
 
 ### Step 3: Verify Connection
@@ -86,17 +87,17 @@ You should see:
 
 **Supabase URL:**
 ```
-https://xovzbkrxxuthjczcrnwz.supabase.co
+https://<your-project-ref>.supabase.co
 ```
 
 **Publishable API Key (Anon):**
 ```
-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhvdnpia3J4eHV0aGpjemNybnd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkwMTIxMzgsImV4cCI6MjA4NDU4ODEzOH0.xUTHFiLxH19vgYEEGLucboo9ib7fGbvuI9QkqdZMXC8
+<your-supabase-anon-key>
 ```
 
 **Modern Publishable Key:**
 ```
-sb_publishable_kXvmAVQmUPkUI7m8NtOs9A_thVfzOrG
+<your-supabase-publishable-key>
 ```
 
 ---

@@ -31,3 +31,10 @@ gradle-app.setting
 tmp/
 temp/
 
+# Local logs
+logs/
+*.log
+
+# Ad-hoc exports (keep templates in repo)
+data/exports/
+

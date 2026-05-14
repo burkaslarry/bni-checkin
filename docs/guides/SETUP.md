@@ -552,7 +552,7 @@ See [Troubleshooting Section](#troubleshooting) or:
 
 - 📖 [User Guide](./USER_GUIDE.md)
 - 📖 [Quick Reference](./QUICK_REFERENCE.md)
-- 📖 [API Documentation](./bni-anchor-checkin-backend/README.md)
+- 📖 [API Documentation](../../bni-anchor-checkin-backend/README.md)
 
 ### Contact Support
 
@@ -567,6 +567,6 @@ See [Troubleshooting Section](#troubleshooting) or:
 **EventXP Setup Guide**  
 Version 1.0 | Last Updated: January 2026
 
-[Back to Main README](./README.md)
+[Back to Main README](../../README.md)
 
 </div>
