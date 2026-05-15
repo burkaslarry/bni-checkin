@@ -2601,6 +2601,26 @@ td {
   background: rgba(56, 189, 248, 0.05);
 }
 
+.radio-button.is-checked-member {
+  border-color: #3b82f6;
+  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+  font-weight: 600;
+}
+
+.radio-button.is-checked-member .radio-label {
+  color: #1e40af;
+}
+
+.radio-button.is-checked-guest {
+  border-color: #22c55e;
+  background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+  font-weight: 600;
+}
+
+.radio-button.is-checked-guest .radio-label {
+  color: #15803d;
+}
+
 .radio-button input[type="radio"] {
   width: 1rem;
   height: 1rem;

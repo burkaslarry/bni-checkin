@@ -341,58 +341,36 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
         </p>
       </div>
 
-      {/* Step 1: Member / Guest Selector */}
+      {/* Step 1: Member / Guest — mutually exclusive radios */}
       <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: "1rem",
-          marginBottom: "1.5rem",
-        }}
+        className="checkin-type-selector"
+        role="radiogroup"
+        aria-label="簽到類型（會員或嘉賓）Check-in type"
       >
-        <button
-          type="button"
-          onClick={() => setCheckinType("member")}
-          style={{
-            padding: "1.25rem",
-            borderRadius: "12px",
-            border: `2px solid ${checkinType === "member" ? "#3b82f6" : "var(--border-color)"}`,
-            background:
-              checkinType === "member"
-                ? "linear-gradient(135deg, #eff6ff, #dbeafe)"
-                : "var(--card-bg)",
-            color: checkinType === "member" ? "#1e40af" : "inherit",
-            fontWeight: checkinType === "member" ? 700 : 500,
-            fontSize: "1rem",
-            cursor: "pointer",
-            transition: "all 0.2s",
-          }}
+        <label
+          className={`radio-button ${checkinType === "member" ? "is-checked-member" : ""}`}
         >
-          <div style={{ fontSize: "1.75rem", marginBottom: "0.25rem" }}>👤</div>
-          <div>會員 Member</div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setCheckinType("guest")}
-          style={{
-            padding: "1.25rem",
-            borderRadius: "12px",
-            border: `2px solid ${checkinType === "guest" ? "#22c55e" : "var(--border-color)"}`,
-            background:
-              checkinType === "guest"
-                ? "linear-gradient(135deg, #f0fdf4, #dcfce7)"
-                : "var(--card-bg)",
-            color: checkinType === "guest" ? "#15803d" : "inherit",
-            fontWeight: checkinType === "guest" ? 700 : 500,
-            fontSize: "1rem",
-            cursor: "pointer",
-            transition: "all 0.2s",
-          }}
+          <input
+            type="radio"
+            name="checkin-type"
+            value="member"
+            checked={checkinType === "member"}
+            onChange={() => setCheckinType("member")}
+          />
+          <span className="radio-label">會員 Member</span>
+        </label>
+        <label
+          className={`radio-button ${checkinType === "guest" ? "is-checked-guest" : ""}`}
         >
-          <div style={{ fontSize: "1.75rem", marginBottom: "0.25rem" }}>🎫</div>
-          <div>嘉賓 Guest</div>
-        </button>
+          <input
+            type="radio"
+            name="checkin-type"
+            value="guest"
+            checked={checkinType === "guest"}
+            onChange={() => setCheckinType("guest")}
+          />
+          <span className="radio-label">嘉賓 Guest</span>
+        </label>
       </div>
 
       {/* Step 2: Search（獨立區塊）+ Refresh（隔開） */}

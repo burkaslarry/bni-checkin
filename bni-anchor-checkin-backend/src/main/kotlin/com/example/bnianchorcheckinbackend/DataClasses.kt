@@ -28,7 +28,7 @@ data class MemberQRData(
 
 data class GuestQRData(
     val name: String,
-    val domain: String, 
+    val domain: String = "",
     val time: LocalDateTime,
     val type: String = "guest",
     val referrer: String

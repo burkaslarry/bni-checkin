@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   getCurrentEvent,
   EventData,
   exportRecords,
+  importAttendanceCsv,
   listEvents,
   activateEvent,
   deleteEvent,
@@ -13,7 +14,7 @@ import { EventAttendanceDetailModal } from "./EventAttendanceDetailModal";
 import { buildAttendanceCsvFilename } from "../lib/attendanceExportFilename";
 
 /*
- * Admin「活動管理」：載入 `GET /events/current` + `GET /events`，可啟用、匯出、刪除活動。
+ * Admin「活動管理」：載入 `GET /events/current` + `GET /events`，可啟用、匯入／匯出簽到 CSV、刪除活動。
  *
  * 「當前活動」置頂顯示；與後端現時活動比較 id 時必須經過 normalizeApiEventId（JSON 可能係 number 或數字字串）。
  * 若在本地／記憶體模式唔存在任何活動，可經 props 自動導去「產生 QR」頁。
@@ -30,6 +31,9 @@ export const EventManagementPanel = ({ onNotify, onNavigateToGenerate }: EventMa
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [exportingEventId, setExportingEventId] = useState<number | null>(null);
+  const [importingEventId, setImportingEventId] = useState<number | null>(null);
+  const importFileRef = useRef<HTMLInputElement>(null);
+  const [pendingImport, setPendingImport] = useState<{ eventId: number; date: string } | null>(null);
   const [activatingId, setActivatingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [gridEvent, setGridEvent] = useState<EventData | null>(null);
@@ -141,6 +145,40 @@ export const EventManagementPanel = ({ onNotify, onNavigateToGenerate }: EventMa
   const isSameEventCurrent = (ev: EventData) =>
     normalizeApiEventId(ev.id) === normalizeApiEventId(currentEvent?.id);
 
+  const handlePickImportFile = (ev: EventData) => {
+    setPendingImport({ eventId: ev.id, date: ev.date });
+    importFileRef.current?.click();
+  };
+
+  const handleImportFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const target = pendingImport;
+    e.target.value = "";
+    setPendingImport(null);
+    if (!file || !target) return;
+    setImportingEventId(target.eventId);
+    try {
+      const result = await importAttendanceCsv(target.date, file);
+      const w = result.warnings?.length ?? 0;
+      const detail = [
+        `會員 ${result.memberRowsApplied ?? 0} 筆`,
+        `嘉賓 ${result.guestRowsApplied ?? 0} 筆`,
+        w > 0 ? `警告 ${w} 則（詳見 console）` : null
+      ]
+        .filter(Boolean)
+        .join("；");
+      onNotify(`已匯入簽到 CSV（${detail}）`, w > 0 ? "info" : "success");
+      if (w > 0 && result.warnings?.length) {
+        console.warn("[import-attendance-csv]", result.warnings);
+      }
+      await fetchCurrentEvent();
+    } catch (err) {
+      onNotify("匯入失敗: " + (err instanceof Error ? err.message : "未知錯誤"), "error");
+    } finally {
+      setImportingEventId(null);
+    }
+  };
+
   const handleExportEvent = async (ev: EventData) => {
     setExportingEventId(ev.id);
     try {
@@ -163,8 +201,17 @@ export const EventManagementPanel = ({ onNotify, onNavigateToGenerate }: EventMa
     <section className="section event-management-panel">
       <div className="section-header">
         <h2>📅 活動管理</h2>
-        <p className="hint">查看和管理目前的活動</p>
+        <p className="hint">查看和管理目前的活動；可匯入與「匯出 CSV」相同格式的簽到檔（須後端資料庫模式）。</p>
       </div>
+
+      <input
+        ref={importFileRef}
+        type="file"
+        accept=".csv,text/csv"
+        style={{ display: "none" }}
+        aria-hidden
+        onChange={(e) => void handleImportFileChange(e)}
+      />
 
       {gridEvent && (
         <EventAttendanceDetailModal
@@ -210,6 +257,15 @@ export const EventManagementPanel = ({ onNotify, onNavigateToGenerate }: EventMa
                   onClick={() => void handleExportEvent(ev)}
                 >
                   {exportingEventId === ev.id ? "⏳ 匯出中..." : "📥 匯出 CSV"}
+                </button>
+                <button
+                  type="button"
+                  className="button"
+                  style={{ backgroundColor: "#d97706" }}
+                  disabled={importingEventId === ev.id || exportingEventId === ev.id}
+                  onClick={() => handlePickImportFile(ev)}
+                >
+                  {importingEventId === ev.id ? "⏳ 匯入中..." : "📤 匯入簽到 CSV"}
                 </button>
                 {isSameEventCurrent(ev) ? (
                   <a

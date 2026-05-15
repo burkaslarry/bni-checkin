@@ -5,6 +5,7 @@ import com.example.bnianchorcheckinbackend.entities.Event
 import com.example.bnianchorcheckinbackend.entities.Member
 import com.example.bnianchorcheckinbackend.repositories.AttendanceRepository
 import com.example.bnianchorcheckinbackend.repositories.EventRepository
+import com.example.bnianchorcheckinbackend.repositories.GuestRepository
 import com.example.bnianchorcheckinbackend.repositories.MemberRepository
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -38,6 +39,9 @@ class EventDbServiceTimeParsingTest {
     lateinit var memberRepository: MemberRepository
 
     @Mock
+    lateinit var guestRepository: GuestRepository
+
+    @Mock
     lateinit var databaseMemberService: DatabaseMemberService
 
     private lateinit var eventDbService: EventDbService
@@ -48,6 +52,7 @@ class EventDbServiceTimeParsingTest {
             eventRepository = eventRepository,
             attendanceRepository = attendanceRepository,
             memberRepository = memberRepository,
+            guestRepository = guestRepository,
             databaseMemberService = databaseMemberService
         )
     }

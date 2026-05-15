@@ -6,7 +6,7 @@ import {
 } from "../api";
 import { buildAttendanceCsvBasename, buildAttendanceCsvFilename } from "../lib/attendanceExportFilename";
 
-type FilterType = "all" | "members" | "guests" | "vip";
+type FilterType = "all" | "members" | "guests";
 type ViewTab = "report" | "records";
 
 export default function ReportPage() {
@@ -134,15 +134,33 @@ export default function ReportPage() {
     } catch { return isoString; }
   };
 
+  /** Align with backend / loose JSON (role may be missing or lower-case). */
+  const normalizeReportRole = (raw?: string): AttendeeRole => {
+    const u = (raw ?? "MEMBER").trim().toUpperCase();
+    if (u === "GUEST" || u === "VIP" || u === "SPEAKER" || u === "MEMBER") return u;
+    return "MEMBER";
+  };
+
   // Report filters
   const filteredAttendees = useMemo(() => {
     if (!reportData) return [];
     return reportData.attendees.filter((record) => {
-      const role = record.role || "MEMBER";
+      const role = normalizeReportRole(record.role);
       switch (filter) {
         case "members": return role === "MEMBER";
         case "guests": return role === "GUEST" || role === "VIP" || role === "SPEAKER";
-        case "vip": return role === "VIP" || role === "SPEAKER";
+        default: return true;
+      }
+    });
+  }, [reportData, filter]);
+
+  const filteredAbsentees = useMemo(() => {
+    if (!reportData) return [];
+    return reportData.absentees.filter((record) => {
+      const role = normalizeReportRole(record.role);
+      switch (filter) {
+        case "members": return role === "MEMBER";
+        case "guests": return role === "GUEST" || role === "VIP" || role === "SPEAKER";
         default: return true;
       }
     });
@@ -200,20 +218,21 @@ export default function ReportPage() {
   };
 
   const getRoleBadge = (role?: AttendeeRole) => {
-    if (!role || role === "MEMBER") return null;
+    const r = normalizeReportRole(role);
+    if (r === "MEMBER") return null;
     const badges: Record<string, { icon: string; label: string; className: string }> = {
       VIP: { icon: "⭐", label: "VIP", className: "role-badge vip" },
       GUEST: { icon: "👤", label: "Guest", className: "role-badge guest" },
       SPEAKER: { icon: "🎤", label: "Speaker", className: "role-badge speaker" },
     };
-    const badge = badges[role];
+    const badge = badges[r];
     if (!badge) return null;
     return <span className={badge.className}>{badge.icon} {badge.label}</span>;
   };
 
   const renderAttendee = (record: ReportAttendance) => {
     const isLate = record.status === "late";
-    const role = record.role || "MEMBER";
+    const role = normalizeReportRole(record.role);
     const isVIP = role === "VIP" || role === "SPEAKER";
     const isGuest = role === "GUEST";
     return (
@@ -235,11 +254,15 @@ export default function ReportPage() {
     );
   };
 
-  const renderAbsentee = (record: ReportAttendance) => (
-    <div key={record.memberName} className="absentee-item">
-      <span className="absentee-name">{record.memberName}</span>
-    </div>
-  );
+  const renderAbsentee = (record: ReportAttendance) => {
+    const role = normalizeReportRole(record.role);
+    return (
+      <div key={`${record.memberName}-${role}-absent`} className="absentee-item">
+        <span className="absentee-name">{record.memberName}</span>
+        {role !== "MEMBER" ? getRoleBadge(record.role) : null}
+      </div>
+    );
+  };
 
   if (loading) {
     return (
@@ -344,7 +367,7 @@ export default function ReportPage() {
             onClick={() => setViewTab("report")}
             style={{ borderRadius: "8px 0 0 0", borderRight: "1px solid #475569" }}
           >
-            📊 會員出席報告
+            📊 出席報告
           </button>
           <button
             className={`filter-btn ${viewTab === "records" ? "active" : ""}`}
@@ -400,9 +423,9 @@ export default function ReportPage() {
           <div className="filter-bar">
             <span className="filter-label">篩選:</span>
             <div className="filter-buttons">
-              {(["all", "members", "guests", "vip"] as FilterType[]).map((f) => (
+              {(["all", "members", "guests"] as FilterType[]).map((f) => (
                 <button key={f} className={`filter-btn ${filter === f ? "active" : ""}`} onClick={() => setFilter(f)}>
-                  {f === "all" ? "全部" : f === "members" ? "會員" : f === "guests" ? "嘉賓" : "⭐ VIP"}
+                  {f === "all" ? "全部" : f === "members" ? "會員" : "嘉賓"}
                 </button>
               ))}
             </div>
@@ -422,7 +445,6 @@ export default function ReportPage() {
                       <span className="filter-indicator">
                         {filter === "members" && "會員"}
                         {filter === "guests" && "嘉賓"}
-                        {filter === "vip" && "VIP"}
                       </span>
                     )}
                   </div>
@@ -431,7 +453,7 @@ export default function ReportPage() {
                   {filteredAttendees.length === 0 ? (
                     <div className="empty-state">
                       <span className="empty-icon">👤</span>
-                      <p>{filter === "all" ? "尚無簽到記錄" : `沒有符合的${filter === "members" ? "會員" : filter === "guests" ? "嘉賓" : "VIP"}`}</p>
+                      <p>{filter === "all" ? "尚無簽到記錄" : `沒有符合的${filter === "members" ? "會員" : "嘉賓"}`}</p>
                     </div>
                   ) : (
                     <div className="attendee-list">{filteredAttendees.map(renderAttendee)}</div>
@@ -442,16 +464,32 @@ export default function ReportPage() {
               <div className="report-column absentees-column">
                 <div className="column-header">
                   <h2>❌ 缺席 Absentees</h2>
-                  <span className="count-badge absent">{reportData?.absentees.length || 0}</span>
+                  <div className="count-badges">
+                    <span className="count-badge absent">
+                      {filteredAbsentees.length}
+                      {filter !== "all" && ` / ${reportData?.absentees.length || 0}`}
+                    </span>
+                    {filter !== "all" && (
+                      <span className="filter-indicator">
+                        {filter === "members" && "會員"}
+                        {filter === "guests" && "嘉賓"}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="column-content">
-                  {reportData?.absentees.length === 0 ? (
+                  {(reportData?.absentees.length ?? 0) === 0 ? (
                     <div className="empty-state success">
                       <span className="empty-icon">🎉</span>
                       <p>全員出席!</p>
                     </div>
+                  ) : filteredAbsentees.length === 0 ? (
+                    <div className="empty-state">
+                      <span className="empty-icon">👤</span>
+                      <p>{filter === "guests" ? "沒有未簽到的嘉賓" : filter === "members" ? "沒有缺席會員" : "—"}</p>
+                    </div>
                   ) : (
-                    <div className="absentee-list">{reportData?.absentees.map(renderAbsentee)}</div>
+                    <div className="absentee-list">{filteredAbsentees.map(renderAbsentee)}</div>
                   )}
                 </div>
               </div>

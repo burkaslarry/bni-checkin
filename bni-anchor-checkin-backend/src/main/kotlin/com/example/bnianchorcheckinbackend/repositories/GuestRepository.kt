@@ -2,6 +2,8 @@ package com.example.bnianchorcheckinbackend.repositories
 
 import com.example.bnianchorcheckinbackend.entities.Guest
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Query
+import org.springframework.data.repository.query.Param
 import org.springframework.stereotype.Repository
 import java.util.Optional
 
@@ -14,4 +16,14 @@ interface GuestRepository : JpaRepository<Guest, Long> {
     fun existsByPhoneNumberAndEventDate(phoneNumber: String, eventDate: String): Boolean
     fun findAllByOrderByNameAsc(): List<Guest>
     fun findByEventDate(eventDate: String): List<Guest>
+
+    /** Match guests even when `event_date` has stray whitespace vs API `YYYY-MM-DD`. */
+    @Query("SELECT g FROM Guest g WHERE TRIM(g.eventDate) = TRIM(:eventDate)")
+    fun findGuestsByEventDateTrimmed(@Param("eventDate") eventDate: String): List<Guest>
+
+    fun findAllByCheckInTimeIsNotNull(): List<Guest>
+
+    /** All rows for this display name (case-insensitive, trimmed); newest id first for tie-breaks. */
+    @Query("SELECT g FROM Guest g WHERE LOWER(TRIM(g.name)) = LOWER(TRIM(:name)) ORDER BY g.id DESC")
+    fun findAllByNameNormalized(@Param("name") name: String): List<Guest>
 }

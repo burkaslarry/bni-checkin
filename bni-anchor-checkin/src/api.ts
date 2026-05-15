@@ -407,6 +407,48 @@ export async function exportRecords(eventId?: number | string | null): Promise<B
   return response.blob();
 }
 
+/** Response from POST /api/events/import-attendance-csv (multipart). */
+export type ImportAttendanceCsvResult = {
+  status: string;
+  message?: string;
+  eventId?: number;
+  eventDate?: string;
+  memberRowsApplied?: number;
+  guestRowsApplied?: number;
+  warnings?: string[];
+};
+
+/**
+ * Import attendance from export-format CSV for an event date. POST /api/events/import-attendance-csv.
+ * Requires backend database mode. Side effect: network.
+ */
+export async function importAttendanceCsv(eventDate: string, file: File): Promise<ImportAttendanceCsvResult> {
+  const form = new FormData();
+  form.append("eventDate", eventDate.trim());
+  form.append("file", file);
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/api/events/import-attendance-csv`, {
+      method: "POST",
+      body: form,
+      mode: "cors"
+    });
+  } catch (e: unknown) {
+    wrapNetworkError(e, "匯入失敗");
+  }
+  const text = await response.text();
+  let data: ImportAttendanceCsvResult & { message?: string };
+  try {
+    data = JSON.parse(text) as ImportAttendanceCsvResult & { message?: string };
+  } catch {
+    throw new Error(text.slice(0, 240) || `HTTP ${response.status}`);
+  }
+  if (!response.ok || data.status === "error") {
+    throw new Error(data.message || `HTTP ${response.status}`);
+  }
+  return data;
+}
+
 /**
  * Rethrow with a clearer 無法連接後端服務 message when error looks like network/fetch failure.
  * Side effect: none (throws).
@@ -426,7 +468,7 @@ function wrapNetworkError(e: unknown, fallback: string): never {
 
 /**
  * Create event with time settings (backend only). POST /api/events. Times: HH:mm or HH:mm:ss; date: YYYY-MM-DD.
- * Side effect: network. Backend initializes all members as absent.
+ * Side effect: network. With PostgreSQL, inserts one absent row per member in `bni_anchor_attendances` when members exist.
  * @param {string} name - Event name
  * @param {string} date - YYYY-MM-DD
  * @param {string} startTime
@@ -705,7 +747,7 @@ export async function checkEventThisWeek(): Promise<boolean> {
 }
 
 /**
- * Log attendance directly (backend only). POST /api/attendance/log. Members → DB; guests → in-memory.
+ * Log attendance directly (backend only). POST /api/attendance/log. Members → DB; guests → in-memory + DB `check_in_time` when a guest row resolves.
  * Side effect: network.
  * @param {number | null} attendeeId
  * @param {string} attendeeType - "member" | "guest" | "vip" | "speaker"
