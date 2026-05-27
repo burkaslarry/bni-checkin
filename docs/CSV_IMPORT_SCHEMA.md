@@ -14,7 +14,7 @@ Required fields:
 Optional fields:
 
 - `email`: Guest email address. If provided, it must be a valid email format.
-- `phone`: Guest phone number.
+- `phone`: Guest phone number. Template placeholders such as `12345678` are stored as empty in the database so multiple guests can share the same event without unique-index conflicts.
 - `referrer`: Member or contact who invited the guest.
 - `event_date`: Event date in `YYYY-MM-DD` format. The importer also accepts `eventdate`. If omitted, the current event date is used.
 

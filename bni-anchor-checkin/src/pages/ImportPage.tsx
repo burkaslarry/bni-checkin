@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useDropzone } from "react-dropzone";
 import Papa from "papaparse";
-import { bulkImport, ImportRecord, getEventForDate, getCurrentEvent } from "../api";
+import { bulkImport, ImportRecord, getEventForDate, getCurrentEvent, createEvent } from "../api";
 
 type ImportType = "member" | "guest";
 
@@ -20,6 +20,13 @@ const normalizeHeader = (key: string): string =>
   key.replace(/^\uFEFF/, "").trim().toLowerCase().replace(/[\s-]/g, "_");
 
 const aliasSet = (aliases: string[]) => new Set(aliases.map(normalizeHeader));
+
+const normalizeEventDate = (raw: string): string => {
+  const t = raw.trim();
+  if (!t) return "";
+  if (/^\d{8}$/.test(t)) return `${t.slice(0, 4)}-${t.slice(4, 6)}-${t.slice(6, 8)}`;
+  return t;
+};
 
 const pickValue = (row: Record<string, unknown>, aliases: string[]): string => {
   const keys = aliasSet(aliases);
@@ -116,20 +123,47 @@ export default function ImportPage() {
       if (importType === "guest") {
         const currentEvent = await getCurrentEvent();
         if (currentEvent?.date) guestEventDateDefault = currentEvent.date;
-        const eventDates = [...new Set(importData.map((r) => (r.eventDate || guestEventDateDefault).trim()).filter(Boolean))];
+        const eventDates = [
+          ...new Set(
+            importData
+              .map((r) => normalizeEventDate((r.eventDate || guestEventDateDefault).trim()))
+              .filter(Boolean)
+          ),
+        ];
         for (const d of eventDates) {
           if (!d) continue;
-          const normalized = d.includes("-") ? d : `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`;
-          const event = await getEventForDate(normalized);
+          const normalized = normalizeEventDate(d);
+          let event = await getEventForDate(normalized);
           if (!event) {
-            showNotification(`活動日期 ${d} 尚未建立活動，請先建立活動後再匯入嘉賓`, "error");
-            setIsImporting(false);
-            return;
+            const autoCreate = window.confirm(
+              `活動日期 ${normalized} 尚未建立。\n\n是否自動建立活動「BNI Anchor ${normalized}」並繼續匯入嘉賓？\n\nAuto-create event for ${normalized} and continue import?`
+            );
+            if (!autoCreate) {
+              showNotification(`活動日期 ${normalized} 尚未建立活動，請先建立活動後再匯入嘉賓`, "error");
+              setIsImporting(false);
+              return;
+            }
+            await createEvent(
+              `BNI Anchor ${normalized}`,
+              normalized,
+              "07:00",
+              "09:00",
+              "06:30",
+              "07:05"
+            );
+            event = await getEventForDate(normalized);
+            if (!event) {
+              showNotification(`無法建立活動 ${normalized}，請稍後重試`, "error");
+              setIsImporting(false);
+              return;
+            }
+            showNotification(`已建立活動 ${normalized}`, "info");
           }
         }
       }
       const records: ImportRecord[] = importData.map((row) => {
-        const eventDate = (row.eventDate || "").trim() || (importType === "guest" ? guestEventDateDefault : "");
+        const rawDate = (row.eventDate || "").trim() || (importType === "guest" ? guestEventDateDefault : "");
+        const eventDate = rawDate ? normalizeEventDate(rawDate) : "";
         return {
           name: row.name,
           profession: row.profession || "",

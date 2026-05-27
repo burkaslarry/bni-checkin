@@ -116,23 +116,12 @@ class GuestService(
 
                 // Single insert into bni_anchor_guests (name, profession, referrer, phone, event_date)
                 if (guestRepository != null) {
-                    val eventDateVal = eventDate.ifBlank { null }
-                    val existing = guestRepository.findByNameIgnoreCase(record.name).orElse(null)
+                    val normalizedRecord = record.copy(eventDate = eventDate.ifBlank { record.eventDate })
+                    val existing = GuestImportSupport.resolveExistingGuest(guestRepository, normalizedRecord)
                     val guestEntity = if (existing != null) {
-                        existing.apply {
-                            profession = record.profession
-                            referrer = record.referrer?.takeIf { it.isNotBlank() }
-                            phoneNumber = record.phoneNumber?.takeIf { it.isNotBlank() }
-                            this.eventDate = eventDateVal
-                        }
+                        existing.also { GuestImportSupport.applyGuestFields(it, normalizedRecord) }
                     } else {
-                        Guest(
-                            name = record.name,
-                            profession = record.profession,
-                            referrer = record.referrer?.takeIf { it.isNotBlank() },
-                            phoneNumber = record.phoneNumber?.takeIf { it.isNotBlank() },
-                            eventDate = eventDateVal
-                        )
+                        GuestImportSupport.newGuestEntity(normalizedRecord)
                     }
                     guestRepository.save(guestEntity)
                 }

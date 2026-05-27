@@ -119,29 +119,14 @@ class BulkImportService(
 
         for (record in records) {
             try {
-                val existingGuest = guestRepository.findByNameIgnoreCase(record.name)
-                
-                if (existingGuest.isPresent) {
-                    // Update existing guest
-                    val guest = existingGuest.get()
-                    guest.profession = record.profession
-                    guest.referrer = record.referrer?.takeIf { it.isNotBlank() }
-                    guest.email = record.email?.takeIf { it.isNotBlank() }
-                    guest.phoneNumber = record.phoneNumber?.takeIf { it.isNotBlank() }
-                    guest.eventDate = record.eventDate?.takeIf { it.isNotBlank() }
-                    guestRepository.save(guest)
+                val existingGuest = GuestImportSupport.resolveExistingGuest(guestRepository, record)
+
+                if (existingGuest != null) {
+                    GuestImportSupport.applyGuestFields(existingGuest, record)
+                    guestRepository.save(existingGuest)
                     updated++
                 } else {
-                    // Insert new guest
-                    val guest = Guest(
-                        name = record.name,
-                        profession = record.profession,
-                        referrer = record.referrer?.takeIf { it.isNotBlank() },
-                        email = record.email?.takeIf { it.isNotBlank() },
-                        phoneNumber = record.phoneNumber?.takeIf { it.isNotBlank() },
-                        eventDate = record.eventDate?.takeIf { it.isNotBlank() }
-                    )
-                    guestRepository.save(guest)
+                    guestRepository.save(GuestImportSupport.newGuestEntity(record))
                     inserted++
                 }
             } catch (e: Exception) {

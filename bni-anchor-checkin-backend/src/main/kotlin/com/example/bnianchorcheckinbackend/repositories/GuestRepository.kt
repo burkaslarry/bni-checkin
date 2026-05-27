@@ -26,4 +26,14 @@ interface GuestRepository : JpaRepository<Guest, Long> {
     /** All rows for this display name (case-insensitive, trimmed); newest id first for tie-breaks. */
     @Query("SELECT g FROM Guest g WHERE LOWER(TRIM(g.name)) = LOWER(TRIM(:name)) ORDER BY g.id DESC")
     fun findAllByNameNormalized(@Param("name") name: String): List<Guest>
+
+    /** Upsert key for bulk import: same guest name on the same event date. */
+    @Query(
+        "SELECT g FROM Guest g WHERE LOWER(TRIM(g.name)) = LOWER(TRIM(:name)) " +
+            "AND TRIM(g.eventDate) = TRIM(:eventDate)"
+    )
+    fun findByNameIgnoreCaseAndEventDateTrimmed(
+        @Param("name") name: String,
+        @Param("eventDate") eventDate: String
+    ): Optional<Guest>
 }
