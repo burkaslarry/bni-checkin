@@ -141,39 +141,47 @@ export default function MembersPage({}: MembersPageProps) {
           <h1>👥 EventXP for BNI Anchor 會員管理</h1>
           <p className="hint">Member Management</p>
         </div>
-        <div className="header-meta">
+        <div className="header-meta members-page-header-actions">
+          <button
+            type="button"
+            className="button members-add-button"
+            onClick={() => setShowAddMember(true)}
+          >
+            ➕ 新增會員
+          </button>
           <Link to="/admin" className="ghost-button back-home-btn">
             ← 返回管理頁
           </Link>
         </div>
       </header>
 
-      <section className="section">
-        <div className="section-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
+      <section className="section members-page-section">
+        <div className="section-header members-section-header">
           <div>
-            <h2>EventXP for BNI Anchor 會員列表</h2>
+            <h2>會員列表</h2>
             <p className="hint">管理會員資料和狀態（從資料庫載入）</p>
           </div>
-          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-            <button
-              type="button"
-              className="button"
-              onClick={() => setShowAddMember(true)}
-            >
-              ➕ 新增會員
-            </button>
-            <button
-              type="button"
-              className="ghost-button"
-              onClick={() => {
-                setLoading(true);
-                fetchMembers();
-              }}
-              disabled={loading}
-            >
-              🔄 重新載入
-            </button>
-          </div>
+        </div>
+
+        <div className="members-toolbar" role="toolbar" aria-label="會員管理操作">
+          <button
+            type="button"
+            className="button members-add-button"
+            onClick={() => setShowAddMember(true)}
+          >
+            ➕ 新增會員
+          </button>
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={() => {
+              setLoading(true);
+              fetchMembers();
+            }}
+            disabled={loading}
+          >
+            🔄 重新載入
+          </button>
         </div>
 
         {loading ? (
