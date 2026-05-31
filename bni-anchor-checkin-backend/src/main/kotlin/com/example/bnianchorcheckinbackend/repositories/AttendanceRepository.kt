@@ -16,6 +16,8 @@ interface AttendanceRepository : JpaRepository<Attendance, Long> {
     fun findByEventIdAndMemberId(eventId: Int, memberId: Int): Attendance?
     /** Remove all attendances for an event (e.g. clear-all). */
     fun deleteByEventId(eventId: Int)
+    /** Remove all attendances for a member (required before member delete due to FK). */
+    fun deleteByMemberId(memberId: Int)
     /** Count rows for integrity checks before delete. */
     fun countByEventId(eventId: Int): Long
 }

@@ -26,6 +26,15 @@ data class CreateGuestRequest(
     val eventDate: String? = null
 )
 
+data class CreateMemberRequest(
+    val name: String,
+    val profession: String,
+    val standing: String? = null,
+    val professionCode: String? = null,
+    val membershipId: String? = null,
+    val position: String? = null
+)
+
 @RestController
 @Tag(name = "Member Management", description = "Endpoints for managing member records")
 @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = ["spring.datasource.url"])
@@ -34,6 +43,56 @@ class MemberManagementController(
     @Autowired(required = false) private val eventDbService: EventDbService?,
     @Autowired(required = false) private val attendanceWebSocketHandler: AttendanceWebSocketHandler?,
 ) {
+
+    @PostMapping("/api/members")
+    @Operation(summary = "Create member (registration only, no check-in)")
+    fun createMember(@RequestBody request: CreateMemberRequest): ResponseEntity<Map<String, Any>> {
+        val name = request.name.trim()
+        val profession = request.profession.trim()
+        if (name.isBlank() || profession.isBlank()) {
+            return ResponseEntity.badRequest().body(
+                mapOf("status" to "error", "message" to "name and profession are required")
+            )
+        }
+        val standing = try {
+            request.standing?.let { MemberStanding.valueOf(it.uppercase()) } ?: MemberStanding.GREEN
+        } catch (e: Exception) {
+            return ResponseEntity.badRequest().body(mapOf(
+                "status" to "error",
+                "message" to "Invalid standing value. Must be GREEN, YELLOW, RED, or BLACK"
+            ))
+        }
+        return try {
+            val created = databaseMemberService.createMember(
+                name = name,
+                profession = profession,
+                standing = standing,
+                professionCode = request.professionCode?.trim()?.takeIf { it.isNotEmpty() } ?: "A",
+                membershipId = request.membershipId?.trim()?.takeIf { it.isNotEmpty() },
+                position = request.position?.trim()?.takeIf { it.isNotEmpty() } ?: "Member"
+            )
+            attendanceWebSocketHandler?.broadcast(mapOf("type" to "member_registry_updated"))
+            ResponseEntity.status(HttpStatus.CREATED).body(
+                mapOf(
+                    "status" to "success",
+                    "message" to "Member created successfully",
+                    "member" to mapOf(
+                        "name" to created.name,
+                        "profession" to (created.profession ?: ""),
+                        "standing" to created.standing.name
+                    )
+                )
+            )
+        } catch (e: IllegalArgumentException) {
+            ResponseEntity.status(HttpStatus.CONFLICT).body(
+                mapOf("status" to "error", "message" to (e.message ?: "Member already exists"))
+            )
+        } catch (e: Exception) {
+            ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(
+                mapOf("status" to "error", "message" to "資料庫暫時無法連線，無法新增會員。")
+            )
+        }
+    }
 
     @PutMapping("/api/members/{name}")
     @Operation(summary = "Update member information")

@@ -3,6 +3,7 @@ package com.example.bnianchorcheckinbackend
 import com.example.bnianchorcheckinbackend.entities.Member
 import com.example.bnianchorcheckinbackend.entities.Guest
 import com.example.bnianchorcheckinbackend.entities.MemberStanding
+import com.example.bnianchorcheckinbackend.repositories.AttendanceRepository
 import com.example.bnianchorcheckinbackend.repositories.MemberRepository
 import com.example.bnianchorcheckinbackend.repositories.GuestRepository
 import com.example.bnianchorcheckinbackend.repositories.ProfessionGroupRepository
@@ -15,7 +16,8 @@ import org.springframework.transaction.annotation.Transactional
 class DatabaseMemberService(
     private val memberRepository: MemberRepository,
     private val guestRepository: GuestRepository,
-    private val professionGroupRepository: ProfessionGroupRepository
+    private val professionGroupRepository: ProfessionGroupRepository,
+    private val attendanceRepository: AttendanceRepository
 ) {
 
     fun getAllMembers(): List<Map<String, Any>> {
@@ -98,8 +100,33 @@ class DatabaseMemberService(
     }
 
     @Transactional
+    fun createMember(
+        name: String,
+        profession: String,
+        standing: MemberStanding = MemberStanding.GREEN,
+        professionCode: String = "A",
+        membershipId: String? = null,
+        position: String = "Member"
+    ): Member {
+        if (memberRepository.existsByNameIgnoreCase(name)) {
+            throw IllegalArgumentException("Member already exists")
+        }
+        return memberRepository.save(
+            Member(
+                name = name,
+                profession = profession,
+                professionCode = professionCode.uppercase().take(1).ifBlank { "A" },
+                position = position.ifBlank { "Member" },
+                membershipId = membershipId?.trim()?.takeIf { it.isNotEmpty() },
+                standing = standing
+            )
+        )
+    }
+
+    @Transactional
     fun deleteMember(name: String): Boolean {
         val member = memberRepository.findByNameIgnoreCase(name).orElse(null) ?: return false
+        attendanceRepository.deleteByMemberId(member.id!!.toInt())
         memberRepository.delete(member)
         return true
     }

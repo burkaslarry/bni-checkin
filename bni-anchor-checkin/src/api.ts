@@ -988,6 +988,31 @@ export type UpdateMemberRequest = {
   standing?: string;
 };
 
+export type CreateMemberRequest = {
+  name: string;
+  profession: string;
+  standing?: MemberStanding;
+  professionCode?: string;
+  membershipId?: string;
+  position?: string;
+};
+
+/**
+ * Create a member registration record without checking in. POST /api/members.
+ * Side effect: network; backend DB insert.
+ */
+export async function createMember(
+  request: CreateMemberRequest
+): Promise<{ status: string; message: string; member?: MemberInfo }> {
+  const response = await fetch(`${API_BASE}/api/members`, {
+    method: "POST",
+    headers: jsonHeaders,
+    body: JSON.stringify(request),
+    mode: "cors"
+  });
+  return handleResponse(response);
+}
+
 /**
  * Update member by name. PUT /api/members/:name. Side effect: network; backend DB update.
  * @param {string} name - Member name (path)

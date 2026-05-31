@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { getMembers, MemberInfo, MemberStanding, updateMember, deleteMember } from "../api";
+import { getMembers, MemberInfo, MemberStanding, updateMember, deleteMember, createMember } from "../api";
 
 type MembersPageProps = {};
 
@@ -8,6 +8,10 @@ export default function MembersPage({}: MembersPageProps) {
   const [members, setMembers] = useState<MemberInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingMember, setEditingMember] = useState<MemberInfo | null>(null);
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newDomain, setNewDomain] = useState("");
+  const [newStanding, setNewStanding] = useState<MemberStanding>("GREEN");
   const [editDomain, setEditDomain] = useState("");
   const [editStanding, setEditStanding] = useState<MemberStanding>("GREEN");
   const [notification, setNotification] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
@@ -51,7 +55,30 @@ export default function MembersPage({}: MembersPageProps) {
       setEditingMember(null);
       fetchMembers();
     } catch (error) {
-      showNotification("更新失敗", "error");
+      const message = error instanceof Error ? error.message : "更新失敗";
+      showNotification(message, "error");
+    }
+  };
+
+  const handleCreateMember = async () => {
+    const name = newName.trim();
+    const profession = newDomain.trim();
+    if (!name || !profession) {
+      showNotification("請填寫姓名和專業領域", "error");
+      return;
+    }
+
+    try {
+      await createMember({ name, profession, standing: newStanding });
+      showNotification(`已新增會員 ${name}`, "success");
+      setShowAddMember(false);
+      setNewName("");
+      setNewDomain("");
+      setNewStanding("GREEN");
+      fetchMembers();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "新增失敗";
+      showNotification(message, "error");
     }
   };
 
@@ -65,7 +92,8 @@ export default function MembersPage({}: MembersPageProps) {
       showNotification(`已刪除 ${memberName}`, "success");
       fetchMembers();
     } catch (error) {
-      showNotification("刪除失敗", "error");
+      const message = error instanceof Error ? error.message : "刪除失敗";
+      showNotification(message, "error");
     }
   };
 
@@ -126,17 +154,26 @@ export default function MembersPage({}: MembersPageProps) {
             <h2>EventXP for BNI Anchor 會員列表</h2>
             <p className="hint">管理會員資料和狀態（從資料庫載入）</p>
           </div>
-          <button
-            type="button"
-            className="button"
-            onClick={() => {
-              setLoading(true);
-              fetchMembers();
-            }}
-            disabled={loading}
-          >
-            🔄 重新載入
-          </button>
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              className="button"
+              onClick={() => setShowAddMember(true)}
+            >
+              ➕ 新增會員
+            </button>
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => {
+                setLoading(true);
+                fetchMembers();
+              }}
+              disabled={loading}
+            >
+              🔄 重新載入
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -203,6 +240,91 @@ export default function MembersPage({}: MembersPageProps) {
           </div>
         )}
       </section>
+
+      {/* Add Member Modal */}
+      {showAddMember && (
+        <div className="modal-overlay" style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: "rgba(0, 0, 0, 0.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1000
+        }} onClick={() => setShowAddMember(false)}>
+          <div className="modal-content" style={{
+            background: "var(--bg)",
+            padding: "2rem",
+            borderRadius: "12px",
+            maxWidth: "500px",
+            width: "90%",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.3)"
+          }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ marginTop: 0 }}>新增會員</h3>
+
+            <div className="form-group" style={{ marginBottom: "1.5rem" }}>
+              <label htmlFor="new-name">姓名 Name *</label>
+              <input
+                id="new-name"
+                className="input-field"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="請輸入姓名"
+                style={{ width: "100%" }}
+              />
+            </div>
+
+            <div className="form-group" style={{ marginBottom: "1.5rem" }}>
+              <label htmlFor="new-domain">專業領域 Profession *</label>
+              <input
+                id="new-domain"
+                className="input-field"
+                value={newDomain}
+                onChange={(e) => setNewDomain(e.target.value)}
+                placeholder="例如：會計服務"
+                style={{ width: "100%" }}
+              />
+            </div>
+
+            <div className="form-group" style={{ marginBottom: "1.5rem" }}>
+              <label>會員狀態 Member Standing</label>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginTop: "0.5rem" }}>
+                {(["GREEN", "YELLOW", "RED", "BLACK"] as MemberStanding[]).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    className={`role-option ${newStanding === s ? "active" : ""}`}
+                    style={{
+                      padding: "0.75rem",
+                      borderRadius: "8px",
+                      border: newStanding === s ? `2px solid ${getStandingColor(s)}` : "2px solid var(--border-color)",
+                      background: newStanding === s ? `${getStandingColor(s)}20` : "transparent",
+                      color: newStanding === s ? getStandingColor(s) : "inherit",
+                      fontWeight: newStanding === s ? 600 : 400,
+                      cursor: "pointer"
+                    }}
+                    onClick={() => setNewStanding(s)}
+                  >
+                    {getStandingLabel(s)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+              <button className="ghost-button" onClick={() => setShowAddMember(false)}>
+                取消
+              </button>
+              <button className="button" onClick={handleCreateMember}>
+                ✅ 新增
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Edit Modal */}
       {editingMember && (
