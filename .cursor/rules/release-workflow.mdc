@@ -17,7 +17,19 @@ alwaysApply: true
 Production URLs:
 - Frontend: `https://bni-anchor-checkin.vercel.app`
 - Backend: `https://bni-anchor-checkin-backend.onrender.com`
+- Database: **Render Postgres only** — do NOT use Supabase for this project.
 - Env: `VITE_API_BASE` must point at the Render backend URL in Vercel production.
+- Backend DB env on Render: `DATABASE_JDBC_URL`, `DATABASE_USERNAME`, `DATABASE_PASSWORD` (profile `render`).
+
+### DB migrations (Render Postgres)
+
+Apply new SQL in `migrations/` via Render CLI (not Supabase):
+
+```bash
+render psql dpg-d6iok5q4d50c738643c0-a --confirm -c "$(grep -v '^--' migrations/your_migration.sql | tr '\n' ' ')"
+```
+
+Verify after migration: `curl -sS https://bni-anchor-checkin-backend.onrender.com/api/observers`
 
 ## When the user asks to release, ship, tag, or deploy
 

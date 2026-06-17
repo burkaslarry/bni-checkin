@@ -1,4 +1,5 @@
--- Observer registry + attendance flag (no check-in time). Run in Supabase / Render Postgres SQL editor.
+-- Observer registry + attendance flag (no check-in time). Run on Render Postgres only:
+--   render psql <postgres-id> --confirm -c "$(cat migrations/create_bni_anchor_observers.sql | grep -v '^--')"
 
 CREATE TABLE IF NOT EXISTS public.bni_anchor_observers (
     id serial PRIMARY KEY,

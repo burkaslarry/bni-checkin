@@ -1,6 +1,6 @@
 # Deploy backend to Render: connect this repo and use Blueprint (render.yaml)
-# Set env vars in Render Dashboard: SPRING_DATASOURCE_URL, SPRING_DATASOURCE_USERNAME, SPRING_DATASOURCE_PASSWORD
-# (Supabase connection string from project Settings → Database)
+# Set env vars in Render Dashboard: DATABASE_JDBC_URL (or SPRING_DATASOURCE_*), DATABASE_USERNAME, DATABASE_PASSWORD
+# Production Postgres: Render Postgres only (not Supabase). Apply SQL migrations via `render psql <postgres-id> --confirm -c "..."`.
 services:
   - type: web
     name: bni-anchor-checkin-backend
