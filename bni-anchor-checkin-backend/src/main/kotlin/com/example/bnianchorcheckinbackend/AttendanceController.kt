@@ -23,7 +23,7 @@ data class QrScanRequest(val qrPayload: String)
 /**
  * Request body for POST /api/attendance/log: direct attendance log (member or guest).
  * @param attendeeId Null for guests; member ID when type is member.
- * @param attendeeType "member" | "guest" | "vip" | "speaker"
+ * @param attendeeType "member" | "guest" | "vip" | "speaker" | "observer"
  * @param eventDate YYYY-MM-DD
  * @param checkedInAt ISO or time string
  * @param status e.g. "on-time" | "late"
@@ -885,6 +885,31 @@ class AttendanceController(
     @PostMapping("/api/attendance/log")
     @Operation(summary = "Log attendance record directly")
     fun logAttendance(@RequestBody request: AttendanceLogRequest): ResponseEntity<Map<String, String>> {
+        if (request.attendeeType.lowercase() == "observer") {
+            return try {
+                if (databaseMemberService == null) {
+                    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                        .body(mapOf("status" to "error", "message" to "觀察員簽到需要資料庫連線"))
+                }
+                withDbRetry("markObserverAttendance") {
+                    databaseMemberService.markObserverAttendance(
+                        request.attendeeId,
+                        request.attendeeName,
+                        request.eventDate
+                    )
+                }
+                attendanceWebSocketHandler?.broadcast(mapOf("type" to "attendance_updated"))
+                ResponseEntity.ok(mapOf("status" to "success", "message" to "Observer attendance marked"))
+            } catch (e: IllegalStateException) {
+                ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(mapOf("status" to "already_checked", "message" to (e.message ?: "Already checked in")))
+            } catch (e: Exception) {
+                log.error("markObserverAttendance failed", e)
+                ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(mapOf("status" to "error", "message" to (e.message ?: "Failed to mark observer attendance")))
+            }
+        }
+
         val isGuestType = request.attendeeType.lowercase() in listOf("guest", "vip", "speaker")
 
         // Members → DB (bni_anchor_attendances uses member_id FK)

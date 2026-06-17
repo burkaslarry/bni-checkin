@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { getEventForDate, getMembers, getGuests, getCurrentEvent, logAttendance, getReportWebSocketUrl } from "../api";
+import { Link } from "react-router-dom";
+import { getEventForDate, getMembers, getGuests, getObservers, getCurrentEvent, logAttendance, getReportWebSocketUrl } from "../api";
 
-type CheckinType = "member" | "guest";
+type CheckinType = "member" | "guest" | "observer";
 
 /** Resolved event for check-in UI: always from backend (current event or 3-day fallback), never from URL. */
 type EventSnapshot = { id: number; date: string; name: string };
@@ -33,6 +34,7 @@ const CHECKIN_FORM_WS_TYPES = new Set([
   "record_deleted",
   "all_cleared",
   "guest_registry_updated",
+  "observer_registry_updated",
   "current_event_changed",
   "member_registry_updated",
 ]);
@@ -52,6 +54,14 @@ type Guest = {
   event_date?: string;
 };
 
+type Observer = {
+  id: number;
+  name: string;
+  profession: string;
+  event_date?: string;
+  attended?: boolean;
+};
+
 type CheckinFormPanelProps = {
   onNotify: (message: string, type: "success" | "error" | "info") => void;
 };
@@ -60,6 +70,7 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
   const [checkinType, setCheckinType] = useState<CheckinType>("member");
   const [members, setMembers] = useState<Member[]>([]);
   const [guests, setGuests] = useState<Guest[]>([]);
+  const [observers, setObservers] = useState<Observer[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [selectedName, setSelectedName] = useState("");
@@ -77,6 +88,7 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
   checkinTypeRef.current = checkinType;
   const fetchMembersRef = useRef<() => Promise<void>>(async () => {});
   const fetchGuestsForDateRef = useRef<(d: string) => Promise<void>>(async () => {});
+  const fetchObserversForDateRef = useRef<(d: string) => Promise<void>>(async () => {});
 
   const eventContextKey = eventSnapshot ? `${eventSnapshot.id}:${eventSnapshot.date}` : "";
 
@@ -120,8 +132,30 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
     [onNotify]
   );
 
+  const fetchObserversForDate = useCallback(
+    async (forDate: string) => {
+      setIsLoading(true);
+      try {
+        const result = await getObservers(forDate);
+        const mappedObservers = (result.observers ?? []).map((o) => ({
+          id: o.id,
+          name: o.name,
+          profession: o.profession,
+          event_date: o.eventDate,
+          attended: o.attended,
+        }));
+        setObservers(mappedObservers);
+      } catch {
+        onNotify("無法載入觀察員列表", "error");
+      }
+      setIsLoading(false);
+    },
+    [onNotify]
+  );
+
   fetchMembersRef.current = () => fetchMembers();
   fetchGuestsForDateRef.current = (d: string) => fetchGuestsForDate(d);
+  fetchObserversForDateRef.current = (d: string) => fetchObserversForDate(d);
 
   const applyResolvedSnapshot = useCallback((snap: EventSnapshot | null) => {
     setEventSnapshot((prev) => {
@@ -158,15 +192,17 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
     if (hydrating || !eventSnapshot) return;
     if (checkinType === "member") {
       void fetchMembers();
-    } else {
+    } else if (checkinType === "guest") {
       void fetchGuestsForDate(eventSnapshot.date);
+    } else {
+      void fetchObserversForDate(eventSnapshot.date);
     }
     setSelectedId(null);
     setSelectedName("");
     setSearchQuery("");
     setCheckInSuccess(false);
     setAlreadyCheckedIn(false);
-  }, [checkinType, eventContextKey, hydrating, eventSnapshot, fetchMembers, fetchGuestsForDate]);
+  }, [checkinType, eventContextKey, hydrating, eventSnapshot, fetchMembers, fetchGuestsForDate, fetchObserversForDate]);
 
   const runPushRefresh = useCallback(async () => {
     try {
@@ -174,7 +210,8 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
       applyResolvedSnapshot(snap);
       const ct = checkinTypeRef.current;
       if (ct === "member") void fetchMembersRef.current();
-      else if (snap?.date) void fetchGuestsForDateRef.current(snap.date);
+      else if (ct === "guest" && snap?.date) void fetchGuestsForDateRef.current(snap.date);
+      else if (ct === "observer" && snap?.date) void fetchObserversForDateRef.current(snap.date);
     } catch {
       applyResolvedSnapshot(null);
     }
@@ -219,14 +256,20 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
           m.name.toLowerCase().includes(q) ||
           m.profession.toLowerCase().includes(q)
       );
-    } else {
+    }
+    if (checkinType === "guest") {
       return guests.filter(
         (g) =>
           g.name.toLowerCase().includes(q) ||
           g.profession.toLowerCase().includes(q)
       );
     }
-  }, [checkinType, members, guests, searchQuery]);
+    return observers.filter(
+      (o) =>
+        o.name.toLowerCase().includes(q) ||
+        o.profession.toLowerCase().includes(q)
+    );
+  }, [checkinType, members, guests, observers, searchQuery]);
 
   const handleSelect = (id: number, name: string) => {
     setSelectedId(id);
@@ -248,15 +291,17 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
       const selected =
         checkinType === "member"
           ? members.find((m) => m.id === selectedId)
-          : guests.find((g) => g.id === selectedId);
+          : checkinType === "guest"
+            ? guests.find((g) => g.id === selectedId)
+            : observers.find((o) => o.id === selectedId);
       await logAttendance(
         selectedId,
         checkinType,
         selectedName,
         selected?.profession ?? "",
         eventSnapshot.date,
-        now.toISOString(),
-        status
+        checkinType === "observer" ? "" : now.toISOString(),
+        checkinType === "observer" ? "present" : status
       );
       setCheckInSuccess(true);
     } catch (error) {
@@ -322,6 +367,21 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
     );
   }
 
+  const typeLabel =
+    checkinType === "member" ? "會員" : checkinType === "guest" ? "嘉賓" : "觀察員";
+  const typeAccent =
+    checkinType === "member" ? "#3b82f6" : checkinType === "guest" ? "#22c55e" : "#8b5cf6";
+  const typeAccentDark =
+    checkinType === "member" ? "#1e40af" : checkinType === "guest" ? "#15803d" : "#6d28d9";
+  const typeEmoji =
+    checkinType === "member" ? "👤" : checkinType === "guest" ? "🎫" : "👁️";
+  const listTotal =
+    checkinType === "member"
+      ? members.length
+      : checkinType === "guest"
+        ? guests.length
+        : observers.length;
+
   return (
     <section className="section checkin-form-panel">
       {/* Header */}
@@ -341,11 +401,11 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
         </p>
       </div>
 
-      {/* Step 1: Member / Guest — mutually exclusive radios */}
+      {/* Step 1: Member / Guest / Observer */}
       <div
         className="checkin-type-selector"
         role="radiogroup"
-        aria-label="簽到類型（會員或嘉賓）Check-in type"
+        aria-label="簽到類型 Check-in type"
       >
         <label
           className={`radio-button ${checkinType === "member" ? "is-checked-member" : ""}`}
@@ -371,7 +431,31 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
           />
           <span className="radio-label">嘉賓 Guest</span>
         </label>
+        <label
+          className={`radio-button ${checkinType === "observer" ? "is-checked-observer" : ""}`}
+        >
+          <input
+            type="radio"
+            name="checkin-type"
+            value="observer"
+            checked={checkinType === "observer"}
+            onChange={() => setCheckinType("observer")}
+          />
+          <span className="radio-label">觀察員 Observer</span>
+        </label>
       </div>
+
+      {checkinType === "observer" && (
+        <div style={{ marginBottom: "1rem", textAlign: "right" }}>
+          <Link
+            to="/admin/observers"
+            className="ghost-button"
+            style={{ textDecoration: "none", fontSize: "0.9rem" }}
+          >
+            🛠️ 觀察員維護 Observer Maintenance
+          </Link>
+        </div>
+      )}
 
       {/* Step 2: Search（獨立區塊）+ Refresh（隔開） */}
       <div
@@ -409,7 +493,7 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
           <input
             type="text"
             className="input-field"
-            placeholder={`搜尋${checkinType === "member" ? "會員" : "嘉賓"}姓名或專業...`}
+            placeholder={`搜尋${typeLabel}姓名或專業...`}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{
@@ -434,9 +518,11 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
         >
           <button
             type="button"
-            onClick={() =>
-              checkinType === "member" ? void fetchMembers() : void fetchGuestsForDate(eventSnapshot.date)
-            }
+            onClick={() => {
+              if (checkinType === "member") void fetchMembers();
+              else if (checkinType === "guest") void fetchGuestsForDate(eventSnapshot.date);
+              else void fetchObserversForDate(eventSnapshot.date);
+            }}
             disabled={isLoading}
             aria-label="重新載入名單"
             title="重新載入名單"
@@ -486,14 +572,16 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
           }}
         >
           <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>
-            {searchQuery ? "🔍" : checkinType === "guest" ? "🎫" : "👤"}
+            {searchQuery ? "🔍" : typeEmoji}
           </div>
           <p className="hint">
             {searchQuery
               ? `找不到「${searchQuery}」`
               : checkinType === "guest"
-              ? `此活動 (${eventSnapshot.date}) 暫無嘉賓登記`
-              : "暫無會員資料"}
+                ? `此活動 (${eventSnapshot.date}) 暫無嘉賓登記`
+                : checkinType === "observer"
+                  ? `此活動 (${eventSnapshot.date}) 暫無觀察員`
+                  : "暫無會員資料"}
           </p>
         </div>
       ) : (
@@ -524,14 +612,16 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
                   background: isSelected
                     ? checkinType === "member"
                       ? "#eff6ff"
-                      : "#f0fdf4"
+                      : checkinType === "guest"
+                        ? "#f0fdf4"
+                        : "#f5f3ff"
                     : idx % 2 === 0
                     ? "#1e293b"
                     : "#0f172a",
                   border: "none",
                   borderBottom: "1px solid var(--border-color)",
                   borderLeft: isSelected
-                    ? `4px solid ${checkinType === "member" ? "#3b82f6" : "#22c55e"}`
+                    ? `4px solid ${typeAccent}`
                     : "4px solid transparent",
                   cursor: "pointer",
                   transition: "all 0.15s",
@@ -546,7 +636,9 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
                     background:
                       checkinType === "member"
                         ? "linear-gradient(135deg, #3b82f6, #1e40af)"
-                        : "linear-gradient(135deg, #22c55e, #15803d)",
+                        : checkinType === "guest"
+                          ? "linear-gradient(135deg, #22c55e, #15803d)"
+                          : "linear-gradient(135deg, #8b5cf6, #6d28d9)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -566,9 +658,7 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
                       fontWeight: 600,
                       fontSize: "0.95rem",
                       color: isSelected
-                        ? checkinType === "member"
-                          ? "#1e40af"
-                          : "#15803d"
+                        ? typeAccentDark
                         : "#ffffff",
                       whiteSpace: "nowrap",
                       overflow: "hidden",
@@ -590,6 +680,11 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
                     {checkinType === "guest" && (item as Guest).referrer && (
                       <span style={{ marginLeft: "0.5rem", opacity: 0.8 }}>
                         · 邀請人: {(item as Guest).referrer}
+                      </span>
+                    )}
+                    {checkinType === "observer" && (item as Observer).attended && (
+                      <span style={{ marginLeft: "0.5rem", color: "#a78bfa" }}>
+                        · 已出席
                       </span>
                     )}
                   </div>
@@ -624,22 +719,22 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
             background: "var(--card-bg)",
             borderRadius: "12px",
             padding: "1.5rem",
-            border: `2px solid ${checkinType === "member" ? "#3b82f6" : "#22c55e"}`,
+            border: `2px solid ${typeAccent}`,
             marginBottom: "1rem",
           }}
         >
           <p style={{ margin: "0 0 1rem 0", fontWeight: 600 }}>
-            確認簽到 Confirm Check-in:
+            {checkinType === "observer" ? "確認出席 Confirm Attendance:" : "確認簽到 Confirm Check-in:"}
           </p>
           <p
             style={{
               fontSize: "1.25rem",
               fontWeight: 700,
               margin: "0 0 1rem 0",
-              color: checkinType === "member" ? "#77a6f2" : "#4ce684",
+              color: typeAccent,
             }}
           >
-            {checkinType === "member" ? "👤" : "🎫"} {selectedName}
+            {typeEmoji} {selectedName}
           </p>
           <button
             type="button"
@@ -650,12 +745,12 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
               width: "100%",
               padding: "1rem",
               fontSize: "1.1rem",
-              background: checkinType === "member" ? "#3b82f6" : "#22c55e",
+              background: typeAccent,
               border: "none",
               opacity: isSubmitting ? 0.7 : 1,
             }}
           >
-            {isSubmitting ? "⏳ 處理中..." : "✅ 確認簽到"}
+            {isSubmitting ? "⏳ 處理中..." : checkinType === "observer" ? "✅ 確認出席" : "✅ 確認簽到"}
           </button>
         </div>
       )}
@@ -698,8 +793,11 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
       {checkInSuccess && (
         <div
           style={{
-            background: "linear-gradient(135deg, #f0fdf4, #dcfce7)",
-            border: "2px solid #22c55e",
+            background:
+              checkinType === "observer"
+                ? "linear-gradient(135deg, #f5f3ff, #ede9fe)"
+                : "linear-gradient(135deg, #f0fdf4, #dcfce7)",
+            border: `2px solid ${checkinType === "observer" ? "#8b5cf6" : "#22c55e"}`,
             borderRadius: "16px",
             padding: "2rem",
             textAlign: "center",
@@ -707,26 +805,33 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
           }}
         >
           <div style={{ fontSize: "3.5rem", marginBottom: "0.75rem" }}>🎉</div>
-          <h2 style={{ margin: "0 0 0.5rem 0", color: "#15803d" }}>
-            簽到成功！Check-in Successful!
+          <h2 style={{ margin: "0 0 0.5rem 0", color: checkinType === "observer" ? "#6d28d9" : "#15803d" }}>
+            {checkinType === "observer" ? "出席已記錄！Attendance Recorded!" : "簽到成功！Check-in Successful!"}
           </h2>
           <p
             style={{
               fontSize: "1.3rem",
               fontWeight: 700,
-              color: "#166534",
+              color: checkinType === "observer" ? "#5b21b6" : "#166534",
               margin: "0 0 0.5rem 0",
             }}
           >
             {selectedName}
           </p>
-          <p style={{ color: "#15803d", margin: "0 0 1.5rem 0", fontSize: "0.9rem" }}>
-            {checkinType === "member" ? "會員" : "嘉賓"} ·{" "}
-            {new Date().toLocaleTimeString("zh-TW", {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </p>
+          {checkinType !== "observer" && (
+            <p style={{ color: "#15803d", margin: "0 0 1.5rem 0", fontSize: "0.9rem" }}>
+              {typeLabel} ·{" "}
+              {new Date().toLocaleTimeString("zh-TW", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </p>
+          )}
+          {checkinType === "observer" && (
+            <p style={{ color: "#6d28d9", margin: "0 0 1.5rem 0", fontSize: "0.9rem" }}>
+              觀察員 · 不記錄簽到時間
+            </p>
+          )}
           <button
             type="button"
             className="ghost-button"
@@ -749,7 +854,7 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
           <p className="hint">
             {isLoading
               ? "載入中..."
-              : `顯示 ${filteredList.length} / ${checkinType === "member" ? members.length : guests.length} 位${checkinType === "member" ? "會員" : "嘉賓"}`}
+              : `顯示 ${filteredList.length} / ${listTotal} 位${typeLabel}`}
           </p>
           <p className="hint" style={{ fontSize: "0.8rem", marginTop: "0.25rem", opacity: 0.8 }}>
             WebSocket 推送時自動更新（嘉賓／當前活動／簽到）· 亦可手按 🔄{wsConnected ? "" : " (WS 重新連線中…)"}

@@ -2621,6 +2621,16 @@ td {
   color: #15803d;
 }
 
+.radio-button.is-checked-observer {
+  border-color: #8b5cf6;
+  background: linear-gradient(135deg, #f5f3ff, #ede9fe);
+  font-weight: 600;
+}
+
+.radio-button.is-checked-observer .radio-label {
+  color: #6d28d9;
+}
+
 .radio-button input[type="radio"] {
   width: 1rem;
   height: 1rem;

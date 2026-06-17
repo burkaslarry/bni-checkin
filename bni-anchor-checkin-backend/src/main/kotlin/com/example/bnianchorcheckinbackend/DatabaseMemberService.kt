@@ -2,10 +2,12 @@ package com.example.bnianchorcheckinbackend
 
 import com.example.bnianchorcheckinbackend.entities.Member
 import com.example.bnianchorcheckinbackend.entities.Guest
+import com.example.bnianchorcheckinbackend.entities.Observer
 import com.example.bnianchorcheckinbackend.entities.MemberStanding
 import com.example.bnianchorcheckinbackend.repositories.AttendanceRepository
 import com.example.bnianchorcheckinbackend.repositories.MemberRepository
 import com.example.bnianchorcheckinbackend.repositories.GuestRepository
+import com.example.bnianchorcheckinbackend.repositories.ObserverRepository
 import com.example.bnianchorcheckinbackend.repositories.ProfessionGroupRepository
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Service
@@ -16,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional
 class DatabaseMemberService(
     private val memberRepository: MemberRepository,
     private val guestRepository: GuestRepository,
+    private val observerRepository: ObserverRepository,
     private val professionGroupRepository: ProfessionGroupRepository,
     private val attendanceRepository: AttendanceRepository
 ) {
@@ -163,5 +166,68 @@ class DatabaseMemberService(
         val guest = guestRepository.findByNameIgnoreCase(name).orElse(null) ?: return false
         guestRepository.delete(guest)
         return true
+    }
+
+    fun getAllObservers(): List<Map<String, Any>> {
+        return observerRepository.findAllByOrderByNameAsc().map { toObserverMap(it) }
+    }
+
+    fun getObserversForEventDate(eventDate: String): List<Map<String, Any>> {
+        if (eventDate.isBlank()) return emptyList()
+        return observerRepository.findByEventDateTrimmed(eventDate).map { toObserverMap(it) }
+    }
+
+    private fun toObserverMap(observer: Observer): Map<String, Any> = mapOf(
+        "id" to (observer.id!!.toInt()),
+        "name" to observer.name,
+        "profession" to observer.profession,
+        "eventDate" to observer.eventDate,
+        "attended" to observer.attended
+    )
+
+    @Transactional
+    fun createObserver(name: String, profession: String, eventDate: String): Observer {
+        val existing = observerRepository.findByNameIgnoreCaseAndEventDate(name, eventDate).orElse(null)
+        if (existing != null) {
+            existing.profession = profession
+            return observerRepository.save(existing)
+        }
+        return observerRepository.save(
+            Observer(
+                name = name,
+                profession = profession,
+                eventDate = eventDate,
+                attended = false
+            )
+        )
+    }
+
+    @Transactional
+    fun updateObserver(name: String, profession: String?, eventDate: String?): Observer? {
+        val observer = observerRepository.findByNameIgnoreCase(name).orElse(null) ?: return null
+        profession?.let { observer.profession = it }
+        eventDate?.let { observer.eventDate = it }
+        return observerRepository.save(observer)
+    }
+
+    @Transactional
+    fun deleteObserver(name: String): Boolean {
+        val observer = observerRepository.findByNameIgnoreCase(name).orElse(null) ?: return false
+        observerRepository.delete(observer)
+        return true
+    }
+
+    @Transactional
+    fun markObserverAttendance(observerId: Int?, observerName: String, eventDate: String): Observer {
+        val observer = when {
+            observerId != null -> observerRepository.findById(observerId.toLong()).orElse(null)
+            else -> observerRepository.findByNameIgnoreCaseAndEventDate(observerName.trim(), eventDate).orElse(null)
+        } ?: throw IllegalArgumentException("觀察員不存在 Observer not found")
+
+        if (observer.attended) {
+            throw IllegalStateException("${observer.name} 已經簽到")
+        }
+        observer.attended = true
+        return observerRepository.save(observer)
     }
 }

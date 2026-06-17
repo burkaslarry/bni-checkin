@@ -1,0 +1,81 @@
+---
+description: EventXP monorepo layout, pre-release tests/simulations/screenshots, git tag prod/X.Y, deploy Vercel + Render
+alwaysApply: true
+---
+
+# EventXP Release Workflow
+
+## Monorepo layout (always acknowledge before release work)
+
+| Area | Path | Stack | Deploy target |
+|------|------|-------|---------------|
+| **Frontend** | `bni-anchor-checkin/` | React 19 + Vite + Vitest | **Vercel** (`vercel.json`, root dir = this folder) |
+| **Backend** | `bni-anchor-checkin-backend/` | Kotlin / Spring Boot + Docker | **Render** (root `render.yaml` → `rootDir: bni-anchor-checkin-backend`) |
+| **Simulation scripts** | `scripts/` | bash + curl | Local or remote API smoke tests |
+| **Screenshots / assets** | `docs/assets/screenshots/` | PNG/SVG for docs & marketing | Commit updated captures before tagging |
+
+Production URLs:
+- Frontend: `https://bni-anchor-checkin.vercel.app`
+- Backend: `https://bni-anchor-checkin-backend.onrender.com`
+- Env: `VITE_API_BASE` must point at the Render backend URL in Vercel production.
+
+## When the user asks to release, ship, tag, or deploy
+
+Run this checklist **in order**. Stop and report failures before commit/tag/deploy.
+
+### 1. Pre-release verification
+
+**Frontend unit tests**:
+```bash
+cd bni-anchor-checkin && npm test -- --run
+```
+
+**Backend unit tests**:
+```bash
+cd bni-anchor-checkin-backend && ./gradlew test
+```
+
+**API simulation** (backend must be running; default `http://localhost:10000`):
+```bash
+./run.sh
+./scripts/api-test.sh
+./scripts/simulate_local_attendance_flow.sh
+./scripts/simulate_multi_event_workflow.sh
+RUN_STRICT=1 ./scripts/simulate_feature_regression.sh
+```
+
+Remote API (non-destructive by default):
+```bash
+BASE_URL=https://bni-anchor-checkin-backend.onrender.com ./scripts/api-test.sh
+```
+
+### 2. Screenshots
+
+Before tagging a release that changes UI:
+- Capture key flows at 2× resolution.
+- Save under `docs/assets/screenshots/` per `docs/assets/README.md`.
+
+### 3. Git commit, push, and tag
+
+Only commit/push/tag when the user explicitly requests a release.
+
+1. `git status` + `git diff` — never commit `.env` or secrets.
+2. Commit message: concise, focus on **why**.
+3. Push to `origin master`.
+4. Tag `prod/X.Y`: list `git tag -l 'prod/*' | sort -V | tail -1`, bump minor, `git tag -a prod/X.Y -m "Production release X.Y"`, `git push origin prod/X.Y`.
+
+Never force-push `master`. Never skip hooks unless user explicitly asks.
+
+### 4. Deploy
+
+**Backend → Render**: push to `master` (auto-deploy) or `render deploys create <service-id> --wait`. Verify: `curl -sS https://bni-anchor-checkin-backend.onrender.com/api/members`.
+
+**Frontend → Vercel**:
+```bash
+cd bni-anchor-checkin && npx vercel --prod
+```
+Confirm `VITE_API_BASE` in Vercel production. Deploy **backend first**, then frontend.
+
+### 5. Post-deploy report
+
+Summarize: commit SHA, tag, test results, deploy URLs, screenshots added.
