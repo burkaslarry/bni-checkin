@@ -3852,6 +3852,121 @@ td {
   color: var(--muted);
 }
 
+.batch-item-meta {
+  font-size: 0.75rem;
+}
+
+.manual-entry-type-selector {
+  margin-bottom: 1rem;
+}
+
+.manual-entry-type-selector .radio-button {
+  min-width: 0;
+  flex: 1 1 calc(33.333% - 0.5rem);
+}
+
+.batch-type-tabs {
+  margin-bottom: 1rem;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 0.25rem;
+}
+
+.batch-type-tab {
+  flex: 1 1 auto;
+  min-width: 7.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--card);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  font: inherit;
+}
+
+.batch-type-tab.is-active-member {
+  border-color: #3b82f6;
+  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+  color: #1e40af;
+  font-weight: 600;
+}
+
+.batch-type-tab.is-active-guest {
+  border-color: #22c55e;
+  background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+  color: #15803d;
+  font-weight: 600;
+}
+
+.batch-type-tab.is-active-observer {
+  border-color: #8b5cf6;
+  background: linear-gradient(135deg, #f5f3ff, #ede9fe);
+  color: #6d28d9;
+  font-weight: 600;
+}
+
+.batch-type-count {
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+
+.manual-entry-batch-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  padding: 0.75rem;
+}
+
+.manual-entry-selection-count {
+  margin-left: 0;
+  margin-bottom: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  background: var(--card);
+  border-radius: 0.75rem;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.manual-entry-batch-list-wrap {
+  margin-bottom: 1rem;
+}
+
+.manual-entry-batch-list {
+  max-height: min(52vh, 420px);
+  margin-bottom: 0;
+}
+
+.batch-member-item--member {
+  border-left: 3px solid #3b82f6;
+}
+
+.batch-member-item--guest {
+  border-left: 3px solid #22c55e;
+}
+
+.batch-member-item--observer {
+  border-left: 3px solid #8b5cf6;
+}
+
+.manual-entry-observer-note {
+  margin: 0 0 1rem;
+}
+
+.manual-entry-no-event {
+  background: #fef2f2;
+  border: 2px solid #ef4444;
+  border-radius: 12px;
+  padding: 2rem;
+  text-align: center;
+}
+
 /* Matched Members Section - Member Combinations */
 .matched-members-section {
   margin-top: 2rem;
@@ -4030,6 +4145,24 @@ td {
   .batch-controls {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .manual-entry-type-selector .radio-button {
+    flex: 1 1 100%;
+  }
+
+  .manual-entry-batch-controls {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .manual-entry-batch-list {
+    max-height: min(48vh, 360px);
+  }
+
+  .batch-type-tab {
+    min-width: 6.75rem;
+    padding: 0.65rem 0.7rem;
+    font-size: 0.9rem;
   }
 
   .selection-count {
