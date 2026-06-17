@@ -298,36 +298,36 @@ export default function GuestsPage({}: GuestsPageProps) {
                     <td style={{ padding: "1rem" }}>{guest.profession}</td>
                     <td style={{ padding: "1rem" }}>{guest.referrer || "-"}</td>
                     <td style={{ padding: "1rem" }}>
-                      {guest.eventDate ? (
-                        <span style={{ 
-                          padding: "0.25rem 0.75rem", 
-                          borderRadius: "12px", 
-                          fontSize: "0.85rem",
-                          background: "#eff6ff",
-                          color: "#1e40af",
-                          border: "1px solid #bfdbfe"
-                        }}>
-                          📅 {guest.eventDate}
-                        </span>
-                      ) : (
-                        <span style={{ color: "#94a3b8" }}>-</span>
-                      )}
+                      {guest.eventDate || "-"}
                     </td>
                     <td style={{ padding: "1rem", textAlign: "center" }}>
                       <div style={{ display: "flex", gap: "0.5rem", justifyContent: "center" }}>
                         <button
+                          type="button"
                           className="ghost-button"
                           onClick={() => handleEdit(guest)}
-                          style={{ padding: "0.5rem 1rem", fontSize: "0.875rem" }}
+                          aria-label={`編輯 ${guest.name}`}
+                          title={`編輯 ${guest.name}`}
+                          style={{ padding: "0.5rem", fontSize: "1rem", lineHeight: 1, minWidth: "2.25rem" }}
                         >
-                          ✏️ 編輯
+                          ✏️
                         </button>
                         <button
+                          type="button"
                           className="ghost-button"
                           onClick={() => handleDeleteGuest(guest.name)}
-                          style={{ padding: "0.5rem 1rem", fontSize: "0.875rem", color: "#ef4444", borderColor: "#ef4444" }}
+                          aria-label={`刪除 ${guest.name}`}
+                          title={`刪除 ${guest.name}`}
+                          style={{
+                            padding: "0.5rem",
+                            fontSize: "1rem",
+                            lineHeight: 1,
+                            minWidth: "2.25rem",
+                            color: "#ef4444",
+                            borderColor: "#ef4444",
+                          }}
                         >
-                          🗑️ 刪除
+                          🗑️
                         </button>
                       </div>
                     </td>
