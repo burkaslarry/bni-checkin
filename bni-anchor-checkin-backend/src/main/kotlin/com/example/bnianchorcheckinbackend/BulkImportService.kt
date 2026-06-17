@@ -3,8 +3,10 @@ package com.example.bnianchorcheckinbackend
 import com.example.bnianchorcheckinbackend.entities.Guest
 import com.example.bnianchorcheckinbackend.entities.Member
 import com.example.bnianchorcheckinbackend.entities.MemberStanding
+import com.example.bnianchorcheckinbackend.entities.Observer
 import com.example.bnianchorcheckinbackend.repositories.GuestRepository
 import com.example.bnianchorcheckinbackend.repositories.MemberRepository
+import com.example.bnianchorcheckinbackend.repositories.ObserverRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -38,7 +40,8 @@ data class ImportResult(
 @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = ["spring.datasource.url"])
 class BulkImportService(
     private val memberRepository: MemberRepository,
-    private val guestRepository: GuestRepository
+    private val guestRepository: GuestRepository,
+    private val observerRepository: ObserverRepository,
 ) {
 
     @Transactional
@@ -144,16 +147,65 @@ class BulkImportService(
         )
     }
 
+    @Transactional
+    fun bulkImportObservers(records: List<ImportRecord>): ImportResult {
+        var inserted = 0
+        var updated = 0
+        var failed = 0
+        val errors = mutableListOf<String>()
+
+        for (record in records) {
+            try {
+                val name = record.name.trim()
+                val profession = record.profession.trim()
+                val eventDate = record.eventDate?.trim().orEmpty()
+                if (name.isBlank() || profession.isBlank() || eventDate.isBlank()) {
+                    failed++
+                    errors.add("Failed to import ${record.name}: name, profession, and eventDate are required")
+                    continue
+                }
+                val existing = observerRepository.findByNameIgnoreCaseAndEventDate(name, eventDate).orElse(null)
+                if (existing != null) {
+                    existing.profession = profession
+                    observerRepository.save(existing)
+                    updated++
+                } else {
+                    observerRepository.save(
+                        Observer(
+                            name = name,
+                            profession = profession,
+                            eventDate = eventDate,
+                            attended = false
+                        )
+                    )
+                    inserted++
+                }
+            } catch (e: Exception) {
+                failed++
+                errors.add("Failed to import ${record.name}: ${e.message}")
+            }
+        }
+
+        return ImportResult(
+            total = records.size,
+            inserted = inserted,
+            updated = updated,
+            failed = failed,
+            errors = errors
+        )
+    }
+
     fun bulkImport(request: BulkImportRequest): ImportResult {
         return when (request.type.lowercase()) {
             "member" -> bulkImportMembers(request.records)
             "guest" -> bulkImportGuests(request.records)
+            "observer" -> bulkImportObservers(request.records)
             else -> ImportResult(
                 total = 0,
                 inserted = 0,
                 updated = 0,
                 failed = 0,
-                errors = listOf("Invalid type: ${request.type}. Must be 'member' or 'guest'")
+                errors = listOf("Invalid type: ${request.type}. Must be 'member', 'guest', or 'observer'")
             )
         }
     }

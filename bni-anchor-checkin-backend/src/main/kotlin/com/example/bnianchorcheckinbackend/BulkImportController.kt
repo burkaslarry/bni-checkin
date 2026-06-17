@@ -23,6 +23,12 @@ class BulkImportController(
         }
     }
 
+    private fun notifyObserverRegistryUpdated(result: ImportResult) {
+        if (result.inserted + result.updated > 0) {
+            attendanceWebSocketHandler?.broadcast(mapOf("type" to "observer_registry_updated"))
+        }
+    }
+
     private fun isDbConnectionError(errors: List<String>): Boolean {
         if (errors.isEmpty()) return false
         val msg = errors.joinToString(" ").lowercase()
@@ -118,6 +124,28 @@ class BulkImportController(
                     errors = listOf("資料庫暫時無法連線，無法儲存匯入資料。")
                 ))
             }
+        }
+    }
+
+    @PostMapping("/api/bulk-import/observers", "/api/bulk-import-observers")
+    @Operation(summary = "Bulk import observers only")
+    fun bulkImportObservers(@RequestBody records: List<ImportRecord>): ResponseEntity<ImportResult> {
+        if (bulkImportService == null) {
+            return ResponseEntity.ok(ImportResult(
+                total = records.size, inserted = 0, updated = 0, failed = records.size,
+                errors = listOf("匯入觀察員需要資料庫連線")
+            ))
+        }
+        return try {
+            val r = bulkImportService.bulkImportObservers(records)
+            notifyObserverRegistryUpdated(r)
+            ResponseEntity.ok(r)
+        } catch (e: Exception) {
+            log.error("Bulk import observers failed: {}", e.message)
+            ResponseEntity.ok(ImportResult(
+                total = records.size, inserted = 0, updated = 0, failed = records.size,
+                errors = listOf("資料庫暫時無法連線，無法儲存匯入資料。")
+            ))
         }
     }
 }

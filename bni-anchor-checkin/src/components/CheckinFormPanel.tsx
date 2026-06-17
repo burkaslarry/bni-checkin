@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { Link } from "react-router-dom";
 import { getEventForDate, getMembers, getGuests, getObservers, getCurrentEvent, logAttendance, getReportWebSocketUrl } from "../api";
 
 type CheckinType = "member" | "guest" | "observer";
@@ -444,18 +443,6 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
           <span className="radio-label">觀察員 Observer</span>
         </label>
       </div>
-
-      {checkinType === "observer" && (
-        <div style={{ marginBottom: "1rem", textAlign: "right" }}>
-          <Link
-            to="/admin/observers"
-            className="ghost-button"
-            style={{ textDecoration: "none", fontSize: "0.9rem" }}
-          >
-            🛠️ 觀察員維護 Observer Maintenance
-          </Link>
-        </div>
-      )}
 
       {/* Step 2: Search（獨立區塊）+ Refresh（隔開） */}
       <div

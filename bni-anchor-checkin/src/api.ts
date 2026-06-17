@@ -980,6 +980,33 @@ export async function bulkImport(
   }
 }
 
+/**
+ * Bulk import observers. POST /api/bulk-import-observers.
+ */
+export async function bulkImportObservers(
+  records: ImportRecord[]
+): Promise<ImportResult> {
+  try {
+    const response = await fetchWithRetry(
+      `${API_BASE}/api/bulk-import-observers`,
+      {
+        method: "POST",
+        headers: jsonHeaders,
+        body: JSON.stringify(records),
+        mode: "cors",
+      },
+      15000,
+      3
+    );
+    return handleResponse(response);
+  } catch (e) {
+    if ((e as Error).name === "AbortError") {
+      throw new Error("連線逾時，請確認後端已啟動並重試");
+    }
+    throw e;
+  }
+}
+
 // ===== Member Management API =====
 
 /** Update member payload (profession, standing). */
