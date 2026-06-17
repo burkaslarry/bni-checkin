@@ -10,7 +10,7 @@ alwaysApply: true
 | Area | Path | Stack | Deploy target |
 |------|------|-------|---------------|
 | **Frontend** | `bni-anchor-checkin/` | React 19 + Vite + Vitest | **Vercel** (`vercel.json`, root dir = this folder) |
-| **Backend** | `bni-anchor-checkin-backend/` | Kotlin / Spring Boot + Docker | **Render** (root `render.yaml` → `rootDir: bni-anchor-checkin-backend`) |
+| **Backend** | `bni-anchor-checkin-backend/` | Kotlin / Spring Boot + Docker | **Render** — deploys from GitHub repo `burkaslarry/bni-anchor-checkin-backend` branch `main` (not monorepo auto-deploy) |
 | **Simulation scripts** | `scripts/` | bash + curl | Local or remote API smoke tests |
 | **Screenshots / assets** | `docs/assets/screenshots/` | PNG/SVG for docs & marketing | Commit updated captures before tagging |
 
@@ -80,7 +80,14 @@ Never force-push `master`. Never skip hooks unless user explicitly asks.
 
 ### 4. Deploy
 
-**Backend → Render**: push to `master` (auto-deploy) or `render deploys create <service-id> --wait`. Verify: `curl -sS https://bni-anchor-checkin-backend.onrender.com/api/members`.
+**Backend → Render** (repo `bni-anchor-checkin-backend`, branch `main`):
+```bash
+cd bni-anchor-checkin-backend && git push origin main
+```
+Render auto-deploys on push. Manual fallback: `render deploys create srv-d4lvmf3uibrs7389dfj0 --confirm --wait`.
+Verify: `curl -sS https://bni-anchor-checkin-backend.onrender.com/api/members` and `/api/observers`.
+
+**DB migrations**: Render Postgres only (`render psql dpg-d6iok5q4d50c738643c0-a`). Do NOT use Supabase.
 
 **Frontend → Vercel**:
 ```bash
