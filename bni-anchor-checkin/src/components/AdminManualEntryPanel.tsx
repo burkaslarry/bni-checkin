@@ -562,9 +562,7 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
           )}
 
           <div className="batch-controls manual-entry-batch-controls">
-            <button type="button" className="ghost-button" onClick={selectAllInTab}>✓ 全選此頁</button>
-            <button type="button" className="ghost-button" onClick={selectAll}>✓ 全選全部</button>
-            <button type="button" className="ghost-button" onClick={clearAllSelections} disabled={selectedPeople.size === 0}>✕ 清除</button>
+            <button type="button" className="ghost-button" onClick={clearAllSelections} disabled={selectedPeople.size === 0}>✕ 清除選項</button>
             <button type="button" className="ghost-button" onClick={() => void reloadLists()} disabled={listLoading}>🔄 重新載入</button>
           </div>
 

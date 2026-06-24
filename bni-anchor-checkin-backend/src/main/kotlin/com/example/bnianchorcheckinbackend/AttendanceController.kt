@@ -15,7 +15,6 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import java.io.ByteArrayOutputStream
 import java.io.PrintWriter
-import kotlin.math.abs
 
 /** Request body for POST /api/attendance/scan: QR payload JSON string. */
 data class QrScanRequest(val qrPayload: String)
@@ -146,21 +145,7 @@ class AttendanceController(
             exactDate.size == 1 -> return exactDate.first()
             exactDate.size > 1 -> return exactDate.maxByOrNull { it.id ?: 0L }
         }
-        if (candidates.size == 1) return candidates.first()
-        val target = try {
-            java.time.LocalDate.parse(norm)
-        } catch (_: Exception) {
-            return candidates.maxByOrNull { it.id ?: 0L }
-        }
-        return candidates.minByOrNull { g ->
-            val edStr = g.eventDate?.trim()?.takeIf { it.isNotEmpty() } ?: return@minByOrNull Long.MAX_VALUE
-            val ed = try {
-                java.time.LocalDate.parse(edStr)
-            } catch (_: Exception) {
-                return@minByOrNull Long.MAX_VALUE
-            }
-            abs(ed.toEpochDay() - target.toEpochDay())
-        } ?: candidates.first()
+        return null
     }
 
     /**

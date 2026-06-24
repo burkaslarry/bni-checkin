@@ -235,19 +235,14 @@ class EventDbService(
 
     /**
      * Guests who should appear on the live report for [eventDateStr] (`YYYY-MM-DD`):
-     * registered for that date (`event_date`) **or** first check-in local day (HKT) equals that date
-     * (fixes mismatched `event_date` vs actual meeting day).
+     * only guests registered for that event date. Do not infer event membership from
+     * check-in day, otherwise old event guest rows can leak into a new report.
      */
     fun listGuestsCheckedInForReport(eventDateStr: String): List<Guest> =
         guestsCheckedInForEventCalendarDay(eventDateStr)
 
     private fun guestsCheckedInForEventCalendarDay(eventDateStr: String): List<Guest> {
         val norm = eventDateStr.trim()
-        val eventLd = try {
-            LocalDate.parse(norm)
-        } catch (_: Exception) {
-            return emptyList()
-        }
         val withCi = try {
             guestRepository.findAllByCheckInTimeIsNotNull()
         } catch (_: Exception) {
@@ -255,10 +250,8 @@ class EventDbService(
         }
         return withCi
             .filter { g ->
-                val ci = g.checkInTime ?: return@filter false
-                val checkInDay = ci.atZoneSameInstant(hkt).toLocalDate()
                 val ed = g.eventDate?.trim().orEmpty()
-                ed.equals(norm, ignoreCase = true) || checkInDay == eventLd
+                ed.equals(norm, ignoreCase = true)
             }
             .distinctBy { it.id ?: 0L }
     }
