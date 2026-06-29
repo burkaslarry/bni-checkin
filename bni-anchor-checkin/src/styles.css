@@ -537,6 +537,37 @@ td {
   flex-wrap: wrap;
 }
 
+.qr-pdf-capture-root {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 718px;
+  pointer-events: none;
+  /* Do not use visibility:hidden — html2canvas renders a blank image */
+}
+
+.qr-pdf-capture {
+  width: 718px;
+  padding: 1.5rem;
+  background: #ffffff;
+  box-sizing: border-box;
+}
+
+.qr-flyer-preview-frame {
+  display: flex;
+  justify-content: center;
+  padding: 1rem;
+  background: #f9fafb;
+  border-radius: 8px;
+  overflow: auto;
+}
+
+.qr-flyer-preview {
+  width: 718px;
+  max-width: 100%;
+  flex-shrink: 0;
+}
+
 .qr-placeholder {
   display: flex;
   flex-direction: column;
@@ -1198,6 +1229,18 @@ td {
   text-align: center;
   padding: 0.75rem;
   margin-top: 1rem;
+}
+
+.app-version-footer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.75rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  opacity: 0.8;
 }
 
 /* Admin Link */

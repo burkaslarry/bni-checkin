@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { NotificationEntry } from "../components/ScanPanel";
 import { NotificationStack } from "../components/NotificationStack";
 import { CheckinFormPanel } from "../components/CheckinFormPanel";
+import { AppVersionFooter } from "../components/AppVersionFooter";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -114,6 +115,8 @@ export default function HomePage() {
           ? "✅ 連線正常，簽到將即時記錄"
           : "⚠️ 離線模式，簽到將在連線後同步"}
       </p>
+
+      <AppVersionFooter />
     </div>
   );
 }

@@ -1,8 +1,8 @@
 import { useState, useMemo, useCallback } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { createEvent, activateEvent, clearAllEventsAndAttendance, normalizeApiEventId, type EventData } from "../api";
-import html2canvas from "html2canvas";
-import { jsPDF } from "jspdf";
+import { generateQrFlyerPdfBlob } from "../lib/generateQrFlyerPdf";
+import { QrFlyerContent } from "./QrFlyerContent";
 
 type QRGeneratorPanelProps = {
   onNotify: (message: string, type: "success" | "error" | "info") => void;
@@ -12,49 +12,6 @@ type QRGeneratorPanelProps = {
 const ROOT_WEBSITE_URL =
   (typeof import.meta !== "undefined" && import.meta.env?.VITE_PUBLIC_URL) ||
   "https://bni-anchor-checkin.vercel.app";
-
-/*
- * PDF export uses html2canvas with allowTaint: false. The public `/bni-anchor.svg` from Illustrator embeds
- * foreignObject / PGF metadata; loaded as <img> it taints the canvas and canvas.toDataURL throws SecurityError.
- * This component inlines a geometry-only subset of the mark + "ANCHOR" wordmark for safe rasterisation.
- */
-function BniAnchorLogoForPdfCapture() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="150 330 310 210"
-      role="img"
-      aria-label="BNI Anchor Logo"
-      style={{ maxWidth: "300px", height: "auto", display: "inline-block" }}
-    >
-      <polygon
-        fill="#C32529"
-        fillRule="evenodd"
-        clipRule="evenodd"
-        points="306.1,392.7 351.5,449.9 380.6,449.9 380.6,342.1 348.2,342.1 348.2,395.5 306.1,342.1 273.5,342.1 273.5,449.9 306.1,449.9"
-      />
-      <path
-        fill="#C32529"
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d="M165.2,449.9l44.5,0.1l12.7,0c9.1,0,17.5-1.4,25.2-5.9c17.1-10,18.6-31.9,6.2-43.7c-6.6-5.8-11-6.8-14-7.7c4.2-2.1,8.2-4.9,11.2-8.5c3.1-3.6,5-9,4.8-15.2c-0.7-22.3-20.3-26.9-35.9-26.9h-15.5l-39.1,0.1V449.9z M198.6,366.9h12.6c6.7,0,11.5,1.9,11.4,8.8c-0.2,6-5.4,8.3-11.4,8.3h-12.6V366.9z M198.6,408.1l17.2,0c7.7,0,12.9,2.8,12.8,8.7c-0.2,5.6-4.7,8.2-10.9,8.2h-19.1L198.6,408.1z"
-      />
-      <polygon fill="#C32529" fillRule="evenodd" clipRule="evenodd" points="427.6,354.9 394.5,387.7 394.5,449.9 427.6,449.9" />
-      <polygon fill="#C32529" fillRule="evenodd" clipRule="evenodd" points="394.5,375 427.6,342.1 394.5,342.1" />
-      <path
-        fill="#C32529"
-        d="M444.2,440.1c-0.9-0.9-2.2-1.5-3.6-1.5c-1.4,0-2.7,0.6-3.6,1.5c-0.9,0.9-1.5,2.2-1.5,3.6c0,1.4,0.6,2.7,1.5,3.6c0.9,0.9,2.2,1.5,3.6,1.5c1.4,0,2.7-0.6,3.6-1.5c0.9-0.9,1.5-2.2,1.5-3.6C445.7,442.3,445.2,441.1,444.2,440.1 M440.6,437.6c1.7,0,3.2,0.7,4.3,1.8c1.1,1.1,1.8,2.6,1.8,4.3c0,1.7-0.7,3.2-1.8,4.3c-1.1,1.1-2.6,1.8-4.3,1.8c-1.7,0-3.2-0.7-4.3-1.8c-1.1-1.1-1.8-2.6-1.8-4.3c0-1.7,0.7-3.2,1.8-4.3C437.4,438.3,438.9,437.6,440.6,437.6z"
-      />
-      <path
-        fill="#C32529"
-        d="M439.2,441.3h1.3c0.9,0,1.9,0.1,1.9,1.1c0,1.1-1.3,1.1-2.3,1.1h-0.8V441.3z M438.2,447.2h0.9v-3h1.2l2.1,3h1.1l-2.2-3.1c1.2-0.2,1.9-0.8,1.9-1.8c0-1.6-1.6-1.8-3.1-1.8h-2V447.2z"
-      />
-      <text x="302" y="516" textAnchor="middle" fontFamily="Arial, sans-serif" fontSize="64" fontWeight="900" fill="#6D6E71">
-        ANCHOR
-      </text>
-    </svg>
-  );
-}
 
 // Helper function to add minutes to a time string (HH:mm format)
 const addMinutesToTime = (time: string, minutes: number): string => {
@@ -103,6 +60,7 @@ export const QRGeneratorPanel = ({ onNotify }: QRGeneratorPanelProps) => {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isSharingEmail, setIsSharingEmail] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [includeEventDateInPdf, setIncludeEventDateInPdf] = useState(true);
 
   // Auto-calculate times when registration start time changes
   const handleRegistrationStartChange = useCallback((newTime: string) => {
@@ -242,88 +200,17 @@ export const QRGeneratorPanel = ({ onNotify }: QRGeneratorPanelProps) => {
     img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgData)));
   };
 
-  /**
-   * Rasterise the hidden `#qr-pdf` DOM (QR + copy + inline logo) with html2canvas, then pack into a PDF blob.
-   * Logo must be inline SVG (see BniAnchorLogoForPdfCapture): external `/bni-anchor.svg` taints the canvas when allowTaint is false.
-   */
-  const generatePDFBlob = (): Promise<Blob> => {
-    return new Promise((resolve, reject) => {
-      if (!qrString || !qrData) {
-        reject(new Error("請先輸入活動資訊"));
-        return;
-      }
+  const generatePDFBlob = async (): Promise<Blob> => {
+    if (!qrString || !qrData) {
+      throw new Error("請先輸入活動資訊");
+    }
 
-      const element = document.getElementById("qr-pdf");
-      if (!element) {
-        reject(new Error("QR preview not found"));
-        return;
-      }
+    const element = document.getElementById("qr-pdf");
+    if (!element) {
+      throw new Error("QR preview not found");
+    }
 
-      // Step 1: Convert HTML to image using html2canvas (higher scale for readable text in PDF)
-      html2canvas(element, {
-        scale: 3,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-        allowTaint: false,
-        windowWidth: element.scrollWidth,
-        windowHeight: element.scrollHeight
-      })
-        .then((canvas) => {
-          // Step 2: Get image data from canvas
-          const imgData = canvas.toDataURL('image/png');
-          
-          // Step 3: Create PDF (A4 size: 210mm x 297mm)
-          const pdf = new jsPDF({
-            orientation: 'portrait',
-            unit: 'mm',
-            format: 'a4'
-          });
-          
-          // A4 dimensions in mm
-          const pageWidth = 210;
-          const pageHeight = 297;
-          const margin = 10;
-          
-          // Calculate available space
-          const availableWidth = pageWidth - (margin * 2);
-          const availableHeight = pageHeight - (margin * 2);
-          
-          // Calculate image aspect ratio - scale to FIT (contain) so all content is visible
-          const imgAspectRatio = canvas.width / canvas.height;
-          const pageAspectRatio = availableWidth / availableHeight;
-          
-          let imgWidth: number;
-          let imgHeight: number;
-          let xPosition: number;
-          let yPosition: number;
-          
-          // Scale to fit within page - ensure all text/content is visible
-          if (imgAspectRatio > pageAspectRatio) {
-            // Image is wider - fit to width
-            imgWidth = availableWidth;
-            imgHeight = imgWidth / imgAspectRatio;
-            xPosition = margin;
-            yPosition = margin + (availableHeight - imgHeight) / 2;
-          } else {
-            // Image is taller - fit to height
-            imgHeight = availableHeight;
-            imgWidth = imgHeight * imgAspectRatio;
-            xPosition = margin + (availableWidth - imgWidth) / 2;
-            yPosition = margin;
-          }
-          
-          // Add image to PDF - fills full height with margins
-          pdf.addImage(imgData, 'PNG', xPosition, yPosition, imgWidth, imgHeight);
-          
-          // Step 4: Convert PDF to Blob
-          const pdfBlob = pdf.output('blob');
-          resolve(pdfBlob);
-        })
-        .catch((error: Error) => {
-          reject(error);
-        });
-    });
+    return generateQrFlyerPdfBlob(element);
   };
 
   const handleDownloadPDF = async () => {
@@ -525,6 +412,18 @@ export const QRGeneratorPanel = ({ onNotify }: QRGeneratorPanelProps) => {
         />
       </div>
 
+      <div className="form-group checkbox-group">
+        <label className="checkbox-label" htmlFor="include-event-date-pdf">
+          <input
+            id="include-event-date-pdf"
+            type="checkbox"
+            checked={includeEventDateInPdf}
+            onChange={(e) => setIncludeEventDateInPdf(e.target.checked)}
+          />
+          <span className="checkbox-text">PDF 顯示活動日期 Include 📆 活動日期 on check-in PDF</span>
+        </label>
+      </div>
+
       <div className="time-fields-grid">
         <div className="form-group">
           <label htmlFor="registration-start-input">登記開始時間 Registration Start (24 小時制)</label>
@@ -577,81 +476,15 @@ export const QRGeneratorPanel = ({ onNotify }: QRGeneratorPanelProps) => {
 
       {qrData && (
         <>
-          {/* Hidden copy for PDF generation - must stay in DOM */}
-            <div style={{ padding: "1.5rem", background: "white", borderRadius: "12px" }} id="qr-pdf">
-            {/* BNI Anchor Logo */}
-            <div style={{ textAlign: "center", marginBottom: "2rem" }}>
-              <BniAnchorLogoForPdfCapture />
-            </div>
-
-            {/* Dual QR Codes */}
-            <div style={{ 
-              display: "grid", 
-              gridTemplateColumns: "1fr", 
-              gap: "2rem",
-              marginBottom: "2rem"
-            }}>
-              {/* Step 1: Website QR Code - 75% of container width */}
-              <div style={{ textAlign: "center", display: "flex", justifyContent: "center" }}>
-                <div style={{ width: "75%", aspectRatio: "1" }}>
-                  <QRCodeSVG
-                    id="qr-code-website"
-                    value={`${ROOT_WEBSITE_URL}`} /** generate code url  */
-                    size={256}
-                    level="H"
-                    bgColor="#ffffff"
-                    fgColor="#030712"
-                    marginSize={0}
-                    style={{ width: "100%", height: "100%" }}
-                  />
-                </div>
-              </div>
-
-              
-            </div>
-
-            {/* Instructions */}
-            <div style={{ 
-              background: "#eff6ff", 
-              padding: "1rem", 
-              borderRadius: "8px",
-              border: "1px solid #bfdbfe",
-              color: "#000"
-            }}>
-              <div style={{ fontWeight: "bold", marginBottom: "0.5rem", color: "#000" }}>
-                📱 簽到步驟 Check-in Instructions:
-              </div>
-              <ol style={{ margin: "0", paddingLeft: "1.5rem", color: "#000" }}>
-                <li>掃描 QR碼進入簽到網站 (Scan Step 1 to load website)</li>
-              </ol>
-            </div>
-
-            {/* Event details - must be inside qr-pdf for PDF export */}
-            <div className="qr-info-display" style={{ marginTop: "1.5rem", fontSize: "14px", color: "#000" }}>
-              <div className="qr-info-row">
-                <span className="qr-info-label">📅 活動名稱:</span>
-                <span className="qr-info-value">{qrData.eventName}</span>
-              </div>
-              <div className="qr-info-row">
-                <span className="qr-info-label">📆 活動日期:</span>
-                <span className="qr-info-value">{qrData.eventDate}</span>
-              </div>
-              <div className="qr-info-row">
-                <span className="qr-info-label">🕐 登記開始:</span>
-                <span className="qr-info-value">{qrData.registrationStartTime}</span>
-              </div>
-              <div className="qr-info-row">
-                <span className="qr-info-label">🚀 活動開始:</span>
-                <span className="qr-info-value">{qrData.startTime}</span>
-              </div>
-              <div className="qr-info-row">
-                <span className="qr-info-label">⏰ 準時截止:</span>
-                <span className="qr-info-value">{qrData.onTimeCutoff}</span>
-              </div>
-              <div className="qr-info-row">
-                <span className="qr-info-label">🏁 活動結束:</span>
-                <span className="qr-info-value">{qrData.endTime}</span>
-              </div>
+          {/* Fixed-width off-screen DOM for device-independent PDF capture */}
+          <div className="qr-pdf-capture-root" aria-hidden="true">
+            <div className="qr-pdf-capture" id="qr-pdf">
+              <QrFlyerContent
+                data={qrData}
+                includeEventDate={includeEventDateInPdf}
+                websiteUrl={ROOT_WEBSITE_URL}
+                qrCodeId="qr-code-website"
+              />
             </div>
           </div>
 
@@ -675,6 +508,9 @@ export const QRGeneratorPanel = ({ onNotify }: QRGeneratorPanelProps) => {
               disabled={isCreating}
             >
               {isCreating ? "⏳ 建立中..." : "🎯 建立活動"}
+            </button>
+            <button className="ghost-button" type="button" onClick={() => setShowPreviewModal(true)}>
+              👁️ 預覽簽到紙
             </button>
             <button className="button" type="button" onClick={handleDownloadPDF} style={{ backgroundColor: "#dc2626" }}>
               📄 下載 PDF
@@ -742,36 +578,14 @@ export const QRGeneratorPanel = ({ onNotify }: QRGeneratorPanelProps) => {
                 ✕
               </button>
             </div>
-            <div style={{ padding: "1rem", background: "#f9fafb", borderRadius: "8px" }}>
-              <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
-                <img src="/bni-anchor-logo.png" alt="BNI Anchor Logo" style={{ maxWidth: "280px", height: "auto" }} />
-              </div>
-              <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
-                <div style={{ width: "75%", margin: "0 auto", aspectRatio: "1" }}>
-                  <QRCodeSVG
-                    value={`${ROOT_WEBSITE_URL}/?event=${encodeURIComponent(qrData.eventDate)}`}
-                    size={200}
-                    level="H"
-                    bgColor="#ffffff"
-                    fgColor="#030712"
-                    marginSize={2}
-                    style={{ width: "100%", height: "100%" }}
-                  />
-                </div>
-              </div>
-              <div style={{ background: "#eff6ff", padding: "0.75rem", borderRadius: "8px", marginBottom: "1rem", color: "#000" }}>
-                <div style={{ fontWeight: "bold", marginBottom: "0.25rem", color: "#000" }}>📱 簽到步驟 Check-in Instructions:</div>
-                <ol style={{ margin: "0", paddingLeft: "1.25rem", color: "#000" }}>
-                  <li>掃描 QR碼進入簽到網站 (Scan Step 1 to load website)</li>
-                </ol>
-              </div>
-              <div style={{ fontSize: "14px", color: "#000" }}>
-                <div><span>📅 活動名稱:</span> <strong>{qrData.eventName}</strong></div>
-                <div><span>📆 活動日期:</span> <strong>{qrData.eventDate}</strong></div>
-                <div><span>🕐 登記開始:</span> <strong>{qrData.registrationStartTime}</strong></div>
-                <div><span>🚀 活動開始:</span> <strong>{qrData.startTime}</strong></div>
-                <div><span>⏰ 準時截止:</span> <strong>{qrData.onTimeCutoff}</strong></div>
-                <div><span>🏁 活動結束:</span> <strong>{qrData.endTime}</strong></div>
+            <div className="qr-flyer-preview-frame">
+              <div className="qr-pdf-capture qr-flyer-preview">
+                <QrFlyerContent
+                  data={qrData}
+                  includeEventDate={includeEventDateInPdf}
+                  websiteUrl={ROOT_WEBSITE_URL}
+                  qrCodeId="qr-code-preview"
+                />
               </div>
             </div>
           </div>

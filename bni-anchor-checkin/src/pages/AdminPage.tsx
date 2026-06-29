@@ -6,6 +6,7 @@ import { QRGeneratorPanel } from "../components/QRGeneratorPanel";
 import { AdminManualEntryPanel } from "../components/AdminManualEntryPanel";
 import { EventManagementPanel } from "../components/EventManagementPanel";
 import { StrategicPlanningPanel } from "../components/StrategicPlanningPanel";
+import { AppVersionFooter } from "../components/AppVersionFooter";
 import { getCurrentEvent, type EventData } from "../api";
 
 type AdminView = "home" | "generate" | "manual" | "event" | "strategic";
@@ -253,6 +254,7 @@ export default function AdminPage() {
             InnovateXP Limited
           </a>
         </p>
+        <AppVersionFooter />
       </footer>
     </div>
   );
