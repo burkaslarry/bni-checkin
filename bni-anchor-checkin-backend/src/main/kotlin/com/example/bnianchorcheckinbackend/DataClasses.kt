@@ -146,3 +146,14 @@ data class CheckInRecord(
     val tags: List<String> = emptyList(),
     val referrer: String? = null
 )
+
+data class AttendanceCheckInEntry(
+    val name: String,
+    val time: String
+)
+
+data class AttendanceCorrectionsRequest(
+    val eventDate: String,
+    val removeCheckIns: List<String> = emptyList(),
+    val addCheckIns: List<AttendanceCheckInEntry> = emptyList()
+)

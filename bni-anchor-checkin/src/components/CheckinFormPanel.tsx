@@ -280,6 +280,11 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
   const handleConfirmCheckIn = async () => {
     if (!selectedId || !selectedName || !eventSnapshot?.date) return;
 
+    if (checkinType === "guest" && guests.length === 0) {
+      onNotify("此活動沒有嘉賓名單，無法簽到", "error");
+      return;
+    }
+
     setIsSubmitting(true);
 
     // Determine on-time vs late (can be enhanced with event cutoff logic)

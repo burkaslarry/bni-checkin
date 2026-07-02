@@ -135,7 +135,143 @@ class EventDbService(
             attendanceRepository.saveAll(absentRows)
         }
 
+        resetGuestCheckInsForEventDate(request.date)
+
         return toEventData(saved)
+    }
+
+    /** Clear guest `check_in_time` for every row on [eventDateStr] (reload guest list for a new event day). */
+    @Transactional
+    fun resetGuestCheckInsForEventDate(eventDateStr: String): Int {
+        val guests = guestRepository.findGuestsByEventDateTrimmed(eventDateStr.trim())
+        var cleared = 0
+        for (guest in guests) {
+            if (guest.checkInTime != null) {
+                guest.checkInTime = null
+                guestRepository.save(guest)
+                cleared++
+            }
+        }
+        return cleared
+    }
+
+    /** Reset every member attendance row for [eventId] to absent (used when (re)seeding an event day). */
+    @Transactional
+    fun resetAllMembersAbsentForEvent(eventId: Int, eventDate: LocalDate, startTime: LocalTime): Int {
+        val defaultAbsentTs = OffsetDateTime.of(eventDate, startTime, hkt.rules.getOffset(Instant.now()))
+        val allMembers = databaseMemberService.getAllMembers()
+        val byMemberId = attendanceRepository.findByEventId(eventId).associateBy { it.memberId }.toMutableMap()
+        for (m in allMembers) {
+            val memberId = m["id"] as Int
+            val existing = byMemberId[memberId]
+            if (existing != null) {
+                existing.status = "absent"
+                existing.checkInTime = defaultAbsentTs
+            } else {
+                byMemberId[memberId] = Attendance(
+                    memberId = memberId,
+                    eventId = eventId,
+                    checkInTime = defaultAbsentTs,
+                    status = "absent"
+                )
+            }
+        }
+        attendanceRepository.saveAll(byMemberId.values.toList())
+        return byMemberId.size
+    }
+
+    private fun resolveEventForDate(eventDateStr: String): Event {
+        val eventDate = LocalDate.parse(eventDateStr.trim())
+        return eventRepository.findByEventDateAndDeletedAtIsNull(eventDate)
+            ?: throw IllegalArgumentException("No non-deleted event for date $eventDateStr")
+    }
+
+    /** Remove a member or guest check-in for [eventDateStr]; returns false when name not found in either registry. */
+    @Transactional
+    fun clearAttendeeCheckIn(eventDateStr: String, name: String): Boolean {
+        val event = resolveEventForDate(eventDateStr)
+        val eventId = event.id!!.toInt()
+        val defaultAbsentTs = OffsetDateTime.of(event.eventDate, event.startTime, hkt.rules.getOffset(Instant.now()))
+        val memberId = resolveMemberId(name.trim())
+        if (memberId != null) {
+            val existing = attendanceRepository.findByEventIdAndMemberId(eventId, memberId)
+            if (existing != null) {
+                existing.status = "absent"
+                existing.checkInTime = defaultAbsentTs
+                attendanceRepository.save(existing)
+                return true
+            }
+        }
+        val guest = guestRepository.findByNameIgnoreCaseAndEventDateTrimmed(name.trim(), eventDateStr.trim()).orElse(null)
+        if (guest != null) {
+            guest.checkInTime = null
+            guestRepository.save(guest)
+            return true
+        }
+        return false
+    }
+
+    /** Set member or guest check-in time for [eventDateStr]; guest must already exist on that date. */
+    @Transactional
+    fun setAttendeeCheckIn(eventDateStr: String, name: String, timeCol: String): Boolean {
+        val event = resolveEventForDate(eventDateStr)
+        val eventId = event.id!!.toInt()
+        val memberId = resolveMemberId(name.trim())
+        val checkInTime = parseCheckInTimeToOffset(timeCol.trim(), event.eventDate)
+            ?: throw IllegalArgumentException("Invalid check-in time for ${name.trim()}: $timeCol")
+        val checkInLocalTime = checkInTime.atZoneSameInstant(hkt).toLocalTime()
+        val status = if (checkInLocalTime.isBefore(event.onTimeCutoffTime)) "on-time" else "late"
+
+        if (memberId != null) {
+            val existing = attendanceRepository.findByEventIdAndMemberId(eventId, memberId)
+            if (existing != null) {
+                existing.status = status
+                existing.checkInTime = checkInTime
+                attendanceRepository.save(existing)
+            } else {
+                attendanceRepository.save(
+                    Attendance(
+                        memberId = memberId,
+                        eventId = eventId,
+                        checkInTime = checkInTime,
+                        status = status
+                    )
+                )
+            }
+            return true
+        }
+
+        val guest = guestRepository.findByNameIgnoreCaseAndEventDateTrimmed(name.trim(), eventDateStr.trim()).orElse(null)
+            ?: return false
+        guest.checkInTime = checkInTime
+        guestRepository.save(guest)
+        return true
+    }
+
+    @Transactional
+    fun applyAttendanceCorrections(request: AttendanceCorrectionsRequest): Map<String, Any> {
+        val warnings = mutableListOf<String>()
+        var removed = 0
+        var added = 0
+        for (name in request.removeCheckIns) {
+            if (name.isBlank()) continue
+            if (clearAttendeeCheckIn(request.eventDate, name)) removed++ else warnings.add("remove not found: $name")
+        }
+        for (entry in request.addCheckIns) {
+            if (entry.name.isBlank()) continue
+            try {
+                if (setAttendeeCheckIn(request.eventDate, entry.name, entry.time)) added++
+                else warnings.add("add not found: ${entry.name}")
+            } catch (e: Exception) {
+                warnings.add("add failed for ${entry.name}: ${e.message}")
+            }
+        }
+        return mapOf(
+            "eventDate" to request.eventDate,
+            "removed" to removed,
+            "added" to added,
+            "warnings" to warnings
+        )
     }
 
     private fun toEventData(event: Event): EventData {
@@ -395,9 +531,13 @@ class EventDbService(
         val checkInTime = parseCheckInTimeToOffset(request.checkedInAt, eventDate)
             ?: OffsetDateTime.now(hkt)
 
+        val normalized = normalizeStatus(request.status)
         val existing = attendanceRepository.findByEventIdAndMemberId(eventId, memberId)
+        if (existing != null && existing.status != "absent" && normalized != "absent") {
+            throw IllegalStateException("${request.attendeeName} 已經簽到 (Already checked in)")
+        }
         if (existing != null) {
-            existing.status = normalizeStatus(request.status)
+            existing.status = normalized
             existing.checkInTime = checkInTime
             attendanceRepository.save(existing)
         } else {
@@ -406,7 +546,7 @@ class EventDbService(
                     memberId = memberId,
                     eventId = eventId,
                     checkInTime = checkInTime,
-                    status = normalizeStatus(request.status)
+                    status = normalized
                 )
             )
         }

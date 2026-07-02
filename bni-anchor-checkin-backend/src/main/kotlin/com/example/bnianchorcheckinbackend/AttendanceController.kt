@@ -188,12 +188,17 @@ class AttendanceController(
      * Merge DB report with in-memory check-ins for [reportData.eventDate] (guests with DB `check_in_time` come from [EventDbService.getReportData]).
      */
     private fun mergeReportWithGuestsAndInMemory(reportData: ReportData): ReportData {
-        val timeFmt = java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")
-
         val baseReport = reportData.copy(
             attendees = reportData.attendees.map { normalizeReportRecord(it) },
             absentees = reportData.absentees.map { normalizeReportRecord(it) }
         )
+
+        // DB mode: report comes entirely from Postgres; do not merge stale in-memory scan rows.
+        if (eventDbService != null) {
+            return baseReport
+        }
+
+        val timeFmt = java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")
 
         val allInMemory = attendanceService.getAllRecords().filter { r ->
             isTimestampOnEventDate(r.timestamp, baseReport.eventDate)
@@ -342,57 +347,13 @@ class AttendanceController(
     @PostMapping("/api/attendance/scan")
     @Operation(summary = "Record attendance using a QR payload.")
     fun recordAttendance(@RequestBody request: QrScanRequest): ResponseEntity<Map<String, String>> {
+        if (eventDbService != null) {
+            return ResponseEntity.status(HttpStatus.GONE).body(
+                mapOf("message" to "QR 掃描簽到已停用，請使用簽到表單或管理員手動輸入 (Use check-in form or admin manual entry)")
+            )
+        }
         return try {
             val message = attendanceService.recordAttendance(request.qrPayload)
-
-            if (eventDbService != null || guestRepository != null) {
-                try {
-                    val tree = objectMapper.readTree(request.qrPayload)
-                    val type = tree.get("type")?.asText()?.lowercase()
-                    val timeRaw = qrPayloadTimeRaw(tree)
-                    if (type == "member" && eventDbService != null) {
-                        val name = tree.get("name")?.asText()?.trim().orEmpty()
-                        if (name.isNotEmpty() && timeRaw.isNotEmpty()) {
-                            val eventMeta = withDbRetry("scan-getCurrentEvent") { eventDbService.getCurrentEvent() }
-                            val eventDate = eventMeta?.date
-                                ?: java.time.LocalDate.now(hkt).toString()
-                            val onTimeCutoff = eventMeta?.onTimeCutoff ?: "07:05"
-                            val status = try {
-                                deriveMemberScanStatus(timeRaw, onTimeCutoff)
-                            } catch (_: Exception) {
-                                "on-time"
-                            }
-                            val logReq = AttendanceLogRequest(
-                                attendeeId = null,
-                                attendeeType = "member",
-                                attendeeName = name,
-                                attendeeProfession = null,
-                                eventDate = eventDate,
-                                checkedInAt = timeRaw,
-                                status = status
-                            )
-                            withDbRetry("scan-logAttendance") { eventDbService.logAttendance(logReq) }
-                            attendanceWebSocketHandler?.broadcast(mapOf("type" to "attendance_updated"))
-                        }
-                    } else if (type == "guest" && guestRepository != null) {
-                        val name = tree.get("name")?.asText()?.trim().orEmpty()
-                        if (name.isNotEmpty()) {
-                            val eventMeta = try {
-                                eventDbService?.let { withDbRetry("scan-getCurrentEvent-guest") { it.getCurrentEvent() } }
-                            } catch (_: Exception) {
-                                null
-                            }
-                            val eventDate = eventMeta?.date?.trim()?.takeIf { it.isNotEmpty() }
-                                ?: attendanceService.getCurrentEvent()?.date?.trim()?.takeIf { it.isNotEmpty() }
-                                ?: java.time.LocalDate.now(hkt).toString()
-                            persistGuestCheckInTimeDb(name, timeRaw, eventDate)
-                        }
-                    }
-                } catch (e: Exception) {
-                    log.warn("DB persist for QR scan failed: {}", e.message)
-                }
-            }
-
             ResponseEntity.ok(mapOf("message" to message))
         } catch (e: IllegalArgumentException) {
             ResponseEntity.status(HttpStatus.BAD_REQUEST).body(mapOf("message" to e.message!!))
@@ -483,34 +444,56 @@ class AttendanceController(
     @Operation(summary = "Record check-in (in-memory + DB for members)")
     fun checkIn(@RequestBody request: CheckInRequest): ResponseEntity<Map<String, String>> {
         return try {
-            val message = attendanceService.recordCheckIn(request)
+            if (eventDbService != null) {
+                val activeEvent = withDbRetry("checkIn-getCurrentEvent") { eventDbService.getCurrentEvent() }
+                    ?: return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(mapOf("status" to "error", "message" to "尚未設定當前活動"))
+                val eventDate = activeEvent.date
+                val type = request.type.lowercase()
 
-            // Also persist member check-ins to DB so they appear in /api/report
-            if (request.type.equals("member", ignoreCase = true) && eventDbService != null) {
-                try {
-                    val activeEventDate = eventDbService.getCurrentEvent()?.date
-                        ?: java.time.LocalDate.now(java.time.ZoneId.of("Asia/Hong_Kong")).toString()
+                if (type in listOf("guest", "vip", "speaker")) {
+                    val repo = guestRepository ?: return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                        .body(mapOf("status" to "error", "message" to "嘉賓簽到需要資料庫連線"))
+                    val guest = resolveGuestRowForCheckIn(repo, request.name.trim(), eventDate)
+                        ?: return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                            .body(mapOf("status" to "error", "message" to "嘉賓不在此活動名單，無法簽到"))
+                    if (guest.checkInTime != null) {
+                        return ResponseEntity.status(HttpStatus.CONFLICT)
+                            .body(mapOf("status" to "error", "message" to "${request.name} 已經簽到過了 (Already checked in)"))
+                    }
+                    persistGuestCheckInTimeDb(request.name, request.currentTime, eventDate)
+                    attendanceWebSocketHandler?.broadcast(mapOf("type" to "attendance_updated"))
+                    return ResponseEntity.ok(mapOf("status" to "success", "message" to "Check-in successful"))
+                }
+
+                if (type == "member") {
+                    val status = try {
+                        deriveMemberScanStatus(request.currentTime, activeEvent.onTimeCutoff)
+                    } catch (_: Exception) {
+                        "on-time"
+                    }
                     val logReq = AttendanceLogRequest(
                         attendeeId = null,
                         attendeeType = "member",
                         attendeeName = request.name,
                         attendeeProfession = request.domain,
-                        eventDate = activeEventDate,
+                        eventDate = eventDate,
                         checkedInAt = request.currentTime,
-                        status = "on-time"
+                        status = status
                     )
                     withDbRetry("checkIn-logAttendance") { eventDbService.logAttendance(logReq) }
-                } catch (e: Exception) {
-                    log.warn("DB persist for /api/checkin member '{}' failed: {}", request.name, e.message)
+                    attendanceWebSocketHandler?.broadcast(mapOf("type" to "attendance_updated"))
+                    return ResponseEntity.ok(mapOf("status" to "success", "message" to "Check-in successful"))
                 }
+
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(mapOf("status" to "error", "message" to "Invalid user type"))
             }
 
-            // Persist guest / VIP / speaker check-ins to DB (bni_anchor_guests.check_in_time)
-            if (request.type.lowercase() in listOf("guest", "vip", "speaker")) {
-                persistGuestCheckInTimeDb(request.name, request.currentTime, null)
-            }
-
+            val message = attendanceService.recordCheckIn(request)
             ResponseEntity.ok(mapOf("status" to "success", "message" to message))
+        } catch (e: IllegalStateException) {
+            ResponseEntity.status(HttpStatus.CONFLICT).body(mapOf("status" to "error", "message" to (e.message ?: "Already checked in")))
         } catch (e: IllegalArgumentException) {
             ResponseEntity.status(HttpStatus.BAD_REQUEST).body(mapOf("status" to "error", "message" to e.message!!))
         }
@@ -637,9 +620,16 @@ class AttendanceController(
             } else {
                 attendanceService.createEvent(request)
             }
+            attendanceService.clearRecordsForEventDate(request.date)
+            attendanceWebSocketHandler?.broadcast(
+                mapOf(
+                    "type" to "guest_registry_updated",
+                    "eventDate" to request.date
+                )
+            )
             ResponseEntity.ok(mapOf(
                 "status" to "success",
-                "message" to "Event created with all members set to absent",
+                "message" to "Event created: members default absent, guest check-ins cleared for event date",
                 "event" to eventData
             ))
         } catch (e: java.time.format.DateTimeParseException) {
@@ -897,49 +887,70 @@ class AttendanceController(
 
         val isGuestType = request.attendeeType.lowercase() in listOf("guest", "vip", "speaker")
 
-        // Members → DB (bni_anchor_attendances uses member_id FK)
-        if (!isGuestType) {
-            val dbError: Exception? = try {
-                if (eventDbService != null) withDbRetry("logAttendance") { eventDbService.logAttendance(request) }
-                null
-            } catch (e: Exception) {
-                log.warn("DB logAttendance failed ({}), falling back to in-memory", e.message)
-                e
+        if (isGuestType) {
+            if (eventDbService == null || guestRepository == null) {
+                return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(mapOf("status" to "error", "message" to "嘉賓簽到需要資料庫連線"))
             }
-            if (dbError == null) {
-                attendanceWebSocketHandler?.broadcast(mapOf("type" to "attendance_updated"))
-                return ResponseEntity.ok(mapOf("status" to "success", "message" to "Attendance logged successfully"))
+            return try {
+                val guest = resolveGuestRowForCheckIn(guestRepository, request.attendeeName.trim(), request.eventDate.trim())
+                    ?: return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(mapOf("status" to "error", "message" to "嘉賓不在此活動名單，無法簽到"))
+                if (guest.checkInTime != null) {
+                    return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(mapOf("status" to "already_checked", "message" to "${request.attendeeName} 已經簽到 (Already checked in)"))
+                }
+                persistGuestCheckInTimeDb(request.attendeeName, request.checkedInAt, request.eventDate)
+                ResponseEntity.ok(mapOf("status" to "success", "message" to "Attendance logged successfully"))
+            } catch (e: Exception) {
+                log.error("Guest logAttendance failed", e)
+                ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(mapOf("status" to "error", "message" to (e.message ?: "Failed to log guest attendance")))
             }
         }
 
-        // Guests / fallback → in-memory (so they appear in report via getAllRecords)
+        // Members → DB (bni_anchor_attendances uses member_id FK)
         return try {
-            val normalizedType = if (request.attendeeType.lowercase() in listOf("vip", "speaker")) "guest" else request.attendeeType
-            val role = when (request.attendeeType.lowercase()) {
-                "vip" -> "VIP"
-                "speaker" -> "SPEAKER"
-                "guest" -> "GUEST"
-                else -> "MEMBER"
-            }
-            val fallbackRequest = CheckInRequest(
-                name = request.attendeeName,
-                type = normalizedType,
-                currentTime = request.checkedInAt,
-                domain = request.attendeeProfession ?: "",
-                role = role
-            )
-            attendanceService.recordCheckIn(fallbackRequest)
-            persistGuestCheckInTimeDb(request.attendeeName, request.checkedInAt, request.eventDate)
-            ResponseEntity.ok(mapOf("status" to "success", "message" to "Attendance logged"))
-        } catch (e2: Exception) {
-            if (e2.message?.contains("已經簽到") == true) {
-                ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(mapOf("status" to "already_checked", "message" to (e2.message ?: "Already checked in")))
+            if (eventDbService != null) {
+                withDbRetry("logAttendance") { eventDbService.logAttendance(request) }
+                attendanceWebSocketHandler?.broadcast(mapOf("type" to "attendance_updated"))
+                ResponseEntity.ok(mapOf("status" to "success", "message" to "Attendance logged successfully"))
             } else {
-                log.error("In-memory logAttendance also failed", e2)
-                ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(mapOf("status" to "error", "message" to (e2.message ?: "Failed to log attendance")))
+                val fallbackRequest = CheckInRequest(
+                    name = request.attendeeName,
+                    type = "member",
+                    currentTime = request.checkedInAt,
+                    domain = request.attendeeProfession ?: "",
+                    role = "MEMBER"
+                )
+                attendanceService.recordCheckIn(fallbackRequest)
+                ResponseEntity.ok(mapOf("status" to "success", "message" to "Attendance logged"))
             }
+        } catch (e: IllegalStateException) {
+            ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(mapOf("status" to "already_checked", "message" to (e.message ?: "Already checked in")))
+        } catch (e: Exception) {
+            log.error("Member logAttendance failed", e)
+            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(mapOf("status" to "error", "message" to (e.message ?: "Failed to log attendance")))
+        }
+    }
+
+    @PostMapping("/api/events/attendance-corrections")
+    @Operation(summary = "Apply attendance corrections for an event date (remove/add check-ins)")
+    fun applyAttendanceCorrections(@RequestBody request: AttendanceCorrectionsRequest): ResponseEntity<Map<String, Any>> {
+        val service = eventDbService ?: return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED)
+            .body(mapOf("status" to "error", "message" to "DB mode required"))
+        return try {
+            val result = withDbRetry("applyAttendanceCorrections") { service.applyAttendanceCorrections(request) }
+            attendanceWebSocketHandler?.broadcast(mapOf("type" to "attendance_updated", "eventDate" to request.eventDate))
+            ResponseEntity.ok(result + mapOf("status" to "success"))
+        } catch (e: IllegalArgumentException) {
+            ResponseEntity.status(HttpStatus.BAD_REQUEST).body(mapOf("status" to "error", "message" to (e.message ?: "Invalid request")))
+        } catch (e: Exception) {
+            log.error("applyAttendanceCorrections failed", e)
+            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(mapOf("status" to "error", "message" to (e.message ?: "Failed to apply corrections")))
         }
     }
     

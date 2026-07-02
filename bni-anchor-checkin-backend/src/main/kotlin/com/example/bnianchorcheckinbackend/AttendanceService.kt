@@ -187,6 +187,22 @@ class AttendanceService(
         ))
     }
 
+    /** Drop in-memory scan/manual records for one calendar event day (DB mode uses Postgres as source of truth). */
+    fun clearRecordsForEventDate(eventDate: String) {
+        val hkt = java.time.ZoneId.of("Asia/Hong_Kong")
+        val removed = allRecords.removeIf { r ->
+            try {
+                val zdt = java.time.ZonedDateTime.parse(r.timestamp).withZoneSameInstant(hkt)
+                zdt.toLocalDate().toString() == eventDate.trim()
+            } catch (_: Exception) {
+                r.timestamp.startsWith(eventDate.trim())
+            }
+        }
+        if (removed) {
+            webSocketHandler.broadcast(mapOf("type" to "records_cleared", "eventDate" to eventDate))
+        }
+    }
+
     fun deleteRecord(index: Int) {
         if (index < 0 || index >= allRecords.size) {
             throw IndexOutOfBoundsException("Invalid record index")
