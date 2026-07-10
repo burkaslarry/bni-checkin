@@ -23,23 +23,24 @@ def request(method: str, path: str, payload: dict | None = None):
 
 def put_member(name: str, **fields):
     payload = {k: v for k, v in fields.items() if v is not None}
-    encoded = urllib.parse.quote(name)
-    return request("PUT", f"/api/members/{encoded}", payload)
+    encoded_name = urllib.parse.quote(name)
+    return request("PUT", f"/api/members/{encoded_name}", payload)
 
 
 def update_by_name(current_name: str, **fields):
-    payload = {"currentName": current_name, **{k: v for k, v in fields.items() if v is not None}}
-    return request("POST", "/api/members/update-by-name", payload)
+    payload = {k: v for k, v in fields.items() if v is not None}
+    query = urllib.parse.urlencode({"currentName": current_name})
+    return request("PUT", f"/api/members?{query}", payload)
 
 
 def delete_by_name(name: str):
-    return request("POST", "/api/members/delete-by-name", {"name": name})
+    query = urllib.parse.urlencode({"name": name})
+    return request("DELETE", f"/api/members?{query}")
 
 
 def main() -> int:
     print(f"Updating production members at {BASE_URL}")
 
-    # 2) Field fixes from PDF
     fixes = [
         ("Larry Lo", {"profession": "客戶管理系統"}),
         ("Phoebe Lin", {"profession": "催乳及紮肚服務"}),
@@ -47,20 +48,17 @@ def main() -> int:
         ("Yoko Sin", {"profession": "催債服務"}),
     ]
     for name, fields in fixes:
-        result = put_member(name, **fields)
+        result = update_by_name(name, **fields)
         print(f"updated {name}: {result.get('status')} -> {result.get('member', {}).get('profession', fields)}")
 
-    # Rename slash legacy record
     result = update_by_name("Max Chan/Eddie Chou", name="Max Chan/William Lai")
     print(f"renamed Max Chan/Eddie Chou: {result.get('status')} -> {result.get('member', {}).get('name')}")
 
-    # Chan one -> remove duplicate; One Chan already on poster with category B
     delete_by_name("Chan one")
     print("deleted Chan one (One Chan already exists)")
-    one_chan = put_member("One Chan", profession="商業活動策劃", professionCode="B")
+    one_chan = update_by_name("One Chan", profession="商業活動策劃", professionCode="B")
     print(f"ensured One Chan category B: {one_chan.get('status')}")
 
-    # Delete members not on poster
     for name in ("Eison Chiang", "Eric Su", "Summer Ha"):
         result = delete_by_name(name)
         print(f"deleted {name}: {result.get('status')}")

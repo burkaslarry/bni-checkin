@@ -1,0 +1,289 @@
+Quotation
+
+No.: [IXP-QS2026-06-0004]
+Date (dd.mm.yyyy): [24.06.2026]
+Validity: [28 calendar days]
+Prepared for: [Ms. Cheung / Ns Phone IN]
+Contact: [Ms. Cheung - 6732 9781]
+Prepared by: InnovateXP Limited
+
+
+PROJECT OVERVIEW
+
+InnovateXP Limited proposes to provide an EventXP Attendance System and Lucky Draw System for the Client's upcoming event, expected to support approximately 600-700 participants.
+
+EventXP is a mobile-first event check-in and activity intelligence platform designed for Hong Kong event organisers, member communities, business networking groups, conferences, seminars and corporate events. The system helps organisers replace manual paper check-in and spreadsheet handling with QR code / digital attendance tracking, real-time attendance monitoring, guest list management and lucky draw operation support.
+
+For this event, the proposed solution focuses on technical system delivery and event operation support. Website design, campaign creative direction and full visual branding are expected to be handled separately by the Client's branding / design vendor where applicable.
+
+The proposed technical solution focuses on three operational goals:
+
+1. Faster and more organised guest check-in for 600-700 participants.
+2. A reliable lucky draw workflow using checked-in participant data.
+3. Optional onsite manpower support to assist the event team during live operation.
+
+
+SCOPE OF SERVICES
+
+1. Event Attendance System Setup
+
+- EventXP event workspace setup for one event.
+- Guest / participant list import based on the final Excel / CSV file provided by the Client.
+- Digital attendance database setup for approximately 600-700 participants.
+- QR code / search-based check-in flow subject to the final guest data format.
+- Mobile-friendly check-in interface for event staff.
+- Real-time attendance status tracking for event organiser review.
+- Basic duplicate check-in prevention.
+- Export of attendance record after the event.
+
+2. Lucky Draw System Setup
+
+- Lucky draw pool generated from eligible checked-in participants.
+- Lucky draw interface for event use.
+- Random winner selection flow.
+- Winner display wording and basic system display setup using Client-provided assets where available.
+- Export / record of selected winners after the event.
+- Basic rehearsal / testing before event day.
+
+3. Technical Configuration and Display Wording
+
+- Event name, date, organiser name and basic system display wording setup.
+- Apply Client-provided logo / colour references to the system display where technically feasible.
+- Simple check-in instruction wording for staff use.
+- Simple event-day admin guide.
+- Full website design, event visual identity, key visual design, creative direction, marketing copywriting and brand guideline creation are excluded.
+
+4. UAT and Pre-Event Support
+
+- One round of data import testing using sample guest list.
+- One round of UAT with Client's representative before the event.
+- Final guest list import before event day, subject to the cut-off time agreed by both parties.
+- Remote technical preparation before event day.
+- WhatsApp / email coordination during preparation period.
+
+5. Optional Onsite Support
+
+- Onsite manpower support can be arranged upon request.
+- Onsite team can assist with check-in device operation, guest search support, lucky draw operation and coordination with the Client's event team.
+- Final onsite manpower arrangement depends on venue layout, number of entrances, check-in counters and event rundown.
+
+
+PRICING AND SERVICE PACKAGES
+
+Amounts in HKD.
+
+Reference pricing basis:
+
+- EventXP Pilot: HKD 4,800 for one pilot event with basic report and setup.
+- EventXP Starter: HKD 6,800 starting package for smaller event operation.
+- EventXP Growth: HKD 8,800 package for higher-frequency event teams.
+- EventXP Enterprise: HKD 9,800 starting package for larger or more collaborative event operation.
+
+As this event is expected to support approximately 600-700 participants and includes both attendance system and lucky draw usage, a dedicated event deployment package is recommended.
+
+
+a. Recommended One-Off Event Deployment Package
+
+Item A-1: Event Requirement, Data Mapping and Setup Planning
+
+Scope Included:
+- Confirm event rundown, guest list format, check-in method and lucky draw rules.
+- Confirm data fields required for attendance and lucky draw.
+- Prepare event workspace and event-day operation flow.
+
+Fee: HKD 3,800
+
+
+Item A-2: EventXP Attendance System Configuration
+
+Scope Included:
+- Configure EventXP attendance system for one event.
+- Import participant list for approximately 600-700 guests.
+- Set up digital check-in workflow, attendance dashboard and post-event export.
+- Conduct basic check-in testing before event day.
+
+Fee: HKD 6,800
+
+
+Item A-3: Lucky Draw Module Configuration
+
+Scope Included:
+- Configure lucky draw pool based on checked-in / eligible participants.
+- Set up lucky draw display and random winner selection workflow.
+- Conduct lucky draw rehearsal before event day.
+- Provide post-event winner record.
+
+Fee: HKD 4,800
+
+
+Item A-4: UAT, Go-Live Preparation and Remote Event Support
+
+Scope Included:
+- One round of UAT support.
+- Final pre-event system check.
+- Remote support during event preparation and agreed event window.
+- Basic handover notes for event staff.
+
+Fee: HKD 3,400
+
+
+Commercial Subtotal: HKD 18,800
+
+Recommended One-Off Event Deployment Fee: HKD 18,800
+
+
+b. Optional Onsite Support
+
+Option B-1: Half-Day Onsite Support
+
+Scope Included:
+- Up to 4 hours onsite support.
+- 2 onsite support staff.
+- Support for check-in operation, guest search, lucky draw operation and event team coordination.
+
+Fee: HKD 6,800
+
+
+Option B-2: Full-Day Onsite Support
+
+Scope Included:
+- Up to 8 hours onsite support.
+- 2 onsite support staff.
+- Support for check-in operation, guest search, lucky draw operation and event team coordination.
+
+Fee: HKD 12,800
+
+
+Option B-3: Additional Onsite Support Staff
+
+Scope Included:
+- Additional manpower if the venue has multiple entrances, multiple check-in counters or a high arrival peak.
+
+Fee:
+- HKD 2,800 per additional staff for half-day support.
+- HKD 4,800 per additional staff for full-day support.
+
+
+c. Optional Post-Event / Ongoing EventXP Maintenance
+
+If the Client would like to continue using EventXP for future events, the following monthly maintenance plans are available:
+
+- Starter: HKD 880 per month.
+- Growth: HKD 1,280 per month.
+- Enterprise: HKD 1,480 per month.
+
+Monthly maintenance can cover agreed system support, minor configuration assistance, cloud monitoring and future event preparation support. Final maintenance scope will be confirmed based on event frequency and required features.
+
+
+d. Third-Party Pass-Through Costs
+
+The above fees exclude third-party costs, if applicable, including but not limited to:
+
+- SMS / WhatsApp / email sending fees.
+- QR code printing, badge printing or physical event materials.
+- Rental of tablets, laptops, scanners, routers, SIM cards or network equipment.
+- Venue internet, power supply or AV setup.
+- Any external cloud, storage or messaging service fees required by the final implementation.
+
+Third-party costs will be billed at cost or paid directly by the Client unless otherwise agreed.
+
+
+RECOMMENDED QUOTATION SUMMARY
+
+Recommended Package:
+
+- EventXP Attendance System + Lucky Draw System for one event, approximately 600-700 participants.
+- One-off event deployment fee: HKD 18,800.
+- Optional half-day onsite support with 2 staff: HKD 6,800.
+
+Total if onsite half-day support is included: HKD 25,600.
+
+Optional upgrade:
+
+- Full-day onsite support with 2 staff: HKD 12,800.
+- Total if full-day onsite support is included: HKD 31,600.
+
+
+PAYMENT TERMS
+
+To secure project scheduling and preparation resources, payment is proposed as follows:
+
+Milestone 1: Project Confirmation and System Setup
+
+- Due upon signing / confirmation of quotation.
+- Amount: 50% of confirmed total fee.
+
+Milestone 2: Event System Ready for UAT
+
+- Due when the EventXP attendance system and lucky draw flow are ready for testing.
+- Amount: 30% of confirmed total fee.
+
+Milestone 3: Final Event Go-Live and Handover
+
+- Due before event day or upon final production readiness.
+- Amount: 20% of confirmed total fee.
+
+For projects with short preparation timeline, InnovateXP Limited may request full payment before event day.
+
+
+CLIENT DEPENDENCIES
+
+The Client shall provide the following items in a timely manner:
+
+- Final event name, date, time, venue and event rundown.
+- Final guest / participant list in Excel or CSV format.
+- Guest data fields required for check-in and lucky draw.
+- Lucky draw eligibility rules and prize flow.
+- Any final logo, colour reference, event name and display wording to be used inside the technical system.
+- Number of check-in counters, venue entrance plan and expected peak arrival time.
+- Stable onsite internet, power supply and suitable devices unless hardware rental is separately agreed.
+
+Any delay in providing the above materials may affect project timeline, UAT readiness and event-day setup.
+
+
+TERMS AND CONDITIONS
+
+1. UAT Review Window
+
+The Client shall review and test the system before event day. If no blocking issue is reported after the agreed UAT session, the system will be considered ready for event use.
+
+2. Guest List Cut-Off
+
+The final guest list should be provided by the agreed cut-off time before the event. Late changes may be handled on a best-effort basis and may require additional setup time or fees.
+
+3. Event-Day Internet and Hardware
+
+The Client is responsible for ensuring stable venue internet, power supply and suitable devices unless otherwise agreed in writing. InnovateXP Limited is not responsible for delays caused by venue network failure, power outage or third-party hardware issues.
+
+4. Data Privacy
+
+The Client is responsible for ensuring that all participant data collection, storage, usage and transfer comply with the Personal Data (Privacy) Ordinance (PDPO) of Hong Kong. InnovateXP Limited acts as a technology service provider and data processor for the agreed event scope.
+
+5. Support Scope
+
+Support covers agreed event setup, system configuration, UAT, event operation support and post-event export. Website design, creative design, visual branding, marketing materials and production artwork are excluded unless separately agreed. Major feature changes, additional integrations, custom report formats or new workflows outside the agreed scope will be quoted separately.
+
+6. Cancellation
+
+If the project is cancelled after confirmation, completed work will be charged on a pro-rata basis according to preparation progress, system setup work and committed manpower.
+
+7. Validity
+
+This quotation is valid for 28 calendar days from the quotation date unless otherwise stated.
+
+
+SIGNATURE OF QUOTATION ACCEPTANCE
+
+InnovateXP Limited
+
+Authorized Signature:
+
+Date:
+
+
+Client:
+
+Authorized Signature:
+
+Date:
+

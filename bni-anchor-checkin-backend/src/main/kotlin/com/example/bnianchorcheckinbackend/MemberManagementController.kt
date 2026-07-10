@@ -115,7 +115,24 @@ class MemberManagementController(
         @RequestBody request: UpdateMemberRequest
     ): ResponseEntity<Map<String, Any>> = applyMemberUpdate(name, request)
 
-    @PostMapping("/api/members/update-by-name")
+    @PutMapping(value = ["/api/members"], params = ["currentName"])
+    @Operation(summary = "Update member by current name query param (supports names with /)")
+    fun updateMemberByCurrentName(
+        @RequestParam currentName: String,
+        @RequestBody request: UpdateMemberRequest
+    ): ResponseEntity<Map<String, Any>> {
+        val trimmed = currentName.trim()
+        if (trimmed.isBlank()) {
+            return ResponseEntity.badRequest().body(mapOf(
+                "status" to "error",
+                "message" to "currentName is required"
+            ))
+        }
+        return applyMemberUpdate(trimmed, request)
+    }
+
+    /** @deprecated Prefer PUT /api/members?currentName=... */
+    @PostMapping("/api/member-management/update-by-name")
     @Operation(summary = "Update member by current name in body (supports names with /)")
     fun updateMemberByName(@RequestBody request: UpdateMemberByNameRequest): ResponseEntity<Map<String, Any>> {
         val currentName = request.currentName.trim()
@@ -203,7 +220,18 @@ class MemberManagementController(
     fun deleteMember(@PathVariable name: String): ResponseEntity<Map<String, String>> =
         applyMemberDelete(name)
 
-    @PostMapping("/api/members/delete-by-name")
+    @DeleteMapping(value = ["/api/members"], params = ["name"])
+    @Operation(summary = "Delete member by name query param (supports names with /)")
+    fun deleteMemberByQuery(@RequestParam name: String): ResponseEntity<Map<String, String>> {
+        val trimmed = name.trim()
+        if (trimmed.isBlank()) {
+            return ResponseEntity.badRequest().body(mapOf("status" to "error", "message" to "name is required"))
+        }
+        return applyMemberDelete(trimmed)
+    }
+
+    /** @deprecated Prefer DELETE /api/members?name=... */
+    @PostMapping("/api/member-management/delete-by-name")
     @Operation(summary = "Delete member by name in body (supports names with /)")
     fun deleteMemberByName(@RequestBody request: MemberNameRequest): ResponseEntity<Map<String, String>> {
         val name = request.name.trim()
