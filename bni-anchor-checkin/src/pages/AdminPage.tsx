@@ -247,15 +247,17 @@ export default function AdminPage() {
 
       {renderView()}
 
-      <footer className="site-footer">
-        <p>
-          Powered by{" "}
-          <a href="https://innovatexp.co" target="_blank" rel="noopener noreferrer">
-            InnovateXP Limited
-          </a>
-        </p>
-        <AppVersionFooter />
-      </footer>
+      {activeView !== "manual" && (
+        <footer className="site-footer">
+          <p>
+            Powered by{" "}
+            <a href="https://innovatexp.co" target="_blank" rel="noopener noreferrer">
+              InnovateXP Limited
+            </a>
+          </p>
+          <AppVersionFooter />
+        </footer>
+      )}
     </div>
   );
 }

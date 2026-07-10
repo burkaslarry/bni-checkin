@@ -116,7 +116,15 @@ export default function HomePage() {
           : "⚠️ 離線模式，簽到將在連線後同步"}
       </p>
 
-      <AppVersionFooter />
+      <footer className="site-footer">
+        <p>
+          Powered by{" "}
+          <a href="https://innovatexp.co" target="_blank" rel="noopener noreferrer">
+            InnovateXP Limited
+          </a>
+        </p>
+        <AppVersionFooter />
+      </footer>
     </div>
   );
 }

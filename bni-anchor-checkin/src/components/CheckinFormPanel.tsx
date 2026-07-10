@@ -65,6 +65,21 @@ type CheckinFormPanelProps = {
   onNotify: (message: string, type: "success" | "error" | "info") => void;
 };
 
+/** YYYY-MM-DD in Hong Kong time (matches backend event dates). */
+export function getHktDateString(date: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Hong_Kong",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+export function isSameCalendarDayAsEvent(eventDate: string, now: Date = new Date()): boolean {
+  const normalizedEvent = eventDate.trim().slice(0, 10);
+  return getHktDateString(now) === normalizedEvent;
+}
+
 export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
   const [checkinType, setCheckinType] = useState<CheckinType>("member");
   const [members, setMembers] = useState<Member[]>([]);
@@ -285,10 +300,19 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
       return;
     }
 
+    const now = new Date();
+    if (!isSameCalendarDayAsEvent(eventSnapshot.date, now)) {
+      const todayHkt = getHktDateString(now);
+      onNotify(
+        `今日 (${todayHkt}) 並非活動日期 (${eventSnapshot.date.slice(0, 10)})，無法簽到`,
+        "error"
+      );
+      return;
+    }
+
     setIsSubmitting(true);
 
     // Determine on-time vs late (can be enhanced with event cutoff logic)
-    const now = new Date();
     const status = "on-time";
 
     try {
@@ -385,6 +409,9 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
       : checkinType === "guest"
         ? guests.length
         : observers.length;
+  const canCheckInToday = isSameCalendarDayAsEvent(eventSnapshot.date);
+  const eventDateLabel = eventSnapshot.date.slice(0, 10);
+  const todayHktLabel = getHktDateString();
 
   return (
     <section className="section checkin-form-panel">
@@ -404,6 +431,25 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
           </strong>
         </p>
       </div>
+
+      {!canCheckInToday && (
+        <div
+          style={{
+            background: "#fef2f2",
+            border: "2px solid #ef4444",
+            borderRadius: "12px",
+            padding: "1rem 1.25rem",
+            marginBottom: "1.25rem",
+          }}
+        >
+          <p style={{ margin: 0, color: "#b91c1c", fontWeight: 600 }}>
+            今日 ({todayHktLabel}) 並非活動日期 ({eventDateLabel})，無法簽到
+          </p>
+          <p style={{ margin: "0.35rem 0 0 0", color: "#991b1b", fontSize: "0.9rem" }}>
+            Check-in is only allowed on the event day (HKT).
+          </p>
+        </div>
+      )}
 
       {/* Step 1: Member / Guest / Observer */}
       <div
@@ -732,17 +778,23 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
             type="button"
             className="button submit-button"
             onClick={handleConfirmCheckIn}
-            disabled={isSubmitting}
+            disabled={isSubmitting || !canCheckInToday}
             style={{
               width: "100%",
               padding: "1rem",
               fontSize: "1.1rem",
               background: typeAccent,
               border: "none",
-              opacity: isSubmitting ? 0.7 : 1,
+              opacity: isSubmitting || !canCheckInToday ? 0.7 : 1,
             }}
           >
-            {isSubmitting ? "⏳ 處理中..." : checkinType === "observer" ? "✅ 確認出席" : "✅ 確認簽到"}
+            {!canCheckInToday
+              ? "❌ 非活動日無法簽到"
+              : isSubmitting
+                ? "⏳ 處理中..."
+                : checkinType === "observer"
+                  ? "✅ 確認出席"
+                  : "✅ 確認簽到"}
           </button>
         </div>
       )}

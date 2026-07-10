@@ -31,6 +31,7 @@ class DatabaseMemberService(
                 "name" to member.name,
                 "domain" to (member.profession ?: ""),
                 "standing" to member.standing.name,
+                "professionCode" to member.professionCode.toString(),
                 "professionGroupName" to (groupByName[member.professionCode] ?: "")
             )
         }
@@ -83,6 +84,9 @@ class DatabaseMemberService(
         )
     }
 
+    fun isValidProfessionCode(code: String): Boolean =
+        professionGroupRepository.existsById(code.uppercase().take(1))
+
     @Transactional
     fun updateMemberStanding(name: String, standing: MemberStanding): Member? {
         val member = memberRepository.findByNameIgnoreCase(name).orElse(null) ?: return null
@@ -91,13 +95,32 @@ class DatabaseMemberService(
     }
 
     @Transactional
-    fun updateMember(name: String, profession: String?, standing: MemberStanding?): Member? {
+    fun updateMember(
+        name: String,
+        newName: String? = null,
+        profession: String? = null,
+        standing: MemberStanding? = null,
+        professionCode: String? = null
+    ): Member? {
         val member = memberRepository.findByNameIgnoreCase(name).orElse(null) ?: return null
+        if (newName != null && !newName.equals(member.name, ignoreCase = true)) {
+            if (memberRepository.existsByNameIgnoreCase(newName)) {
+                throw IllegalArgumentException("Member already exists")
+            }
+            member.name = newName
+        }
         if (profession != null) {
             member.profession = profession
         }
         if (standing != null) {
             member.standing = standing
+        }
+        if (professionCode != null) {
+            val code = professionCode.uppercase().take(1)
+            if (!isValidProfessionCode(code)) {
+                throw IllegalArgumentException("Invalid profession code")
+            }
+            member.professionCode = code
         }
         return memberRepository.save(member)
     }

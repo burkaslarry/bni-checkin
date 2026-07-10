@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { memo, useState, useEffect, useCallback, useMemo } from "react";
 import {
   checkIn,
   createGuest,
@@ -21,7 +21,6 @@ type AdminManualEntryPanelProps = {
 
 type AttendeeKind = "member" | "guest" | "observer";
 type GuestRole = "GUEST" | "VIP" | "SPEAKER";
-type BatchTab = AttendeeKind;
 
 type BatchPerson = {
   name: string;
@@ -29,6 +28,11 @@ type BatchPerson = {
   type: AttendeeKind;
   referrer?: string;
   id?: number;
+};
+
+type BatchRowPerson = BatchPerson & {
+  key: string;
+  attended?: boolean;
 };
 
 const formatDateTimeLocal = (date: Date): string => {
@@ -42,6 +46,50 @@ const formatDateTimeLocal = (date: Date): string => {
 
 const personKey = (type: AttendeeKind, name: string) => `${type}:${name}`;
 
+const CATEGORY_LABELS: Record<AttendeeKind, { emoji: string; label: string }> = {
+  member: { emoji: "👤", label: "會員" },
+  guest: { emoji: "🎫", label: "嘉賓" },
+  observer: { emoji: "👁️", label: "觀察員" },
+};
+
+const BatchPersonRow = memo(function BatchPersonRow({
+  person,
+  selected,
+  onToggle,
+}: {
+  person: BatchRowPerson;
+  selected: boolean;
+  onToggle: (key: string) => void;
+}) {
+  return (
+    <label
+      className={`batch-member-item batch-member-item--${person.type} ${selected ? "selected" : ""}`}
+    >
+      <input
+        type="checkbox"
+        checked={selected}
+        onChange={() => onToggle(person.key)}
+        aria-label={`${person.name} ${selected ? "已選" : "未選"}`}
+      />
+      <div className="member-info">
+        <span className="member-name">
+          <span className="batch-row-type-badge" aria-hidden="true">
+            {CATEGORY_LABELS[person.type].emoji}
+          </span>
+          {person.name}
+        </span>
+        <span className="member-domain">{person.domain}</span>
+        {person.type === "guest" && person.referrer && (
+          <span className="hint batch-item-meta">邀請人: {person.referrer}</span>
+        )}
+        {person.type === "observer" && person.attended && (
+          <span className="hint batch-item-meta">已出席</span>
+        )}
+      </div>
+    </label>
+  );
+});
+
 export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) => {
   const [mode, setMode] = useState<"single" | "batch">("batch");
   const [members, setMembers] = useState<MemberInfo[]>([]);
@@ -49,7 +97,9 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
   const [observers, setObservers] = useState<ObserverInfo[]>([]);
   const [currentEvent, setCurrentEvent] = useState<EventData | null>(null);
   const [batchList, setBatchList] = useState<BatchPerson[]>([]);
-  const [batchTab, setBatchTab] = useState<BatchTab>("member");
+  const [visibleTypes, setVisibleTypes] = useState<Set<AttendeeKind>>(
+    () => new Set<AttendeeKind>(["member", "guest", "observer"])
+  );
   const [singleType, setSingleType] = useState<AttendeeKind>("guest");
   const [name, setName] = useState("");
   const [domain, setDomain] = useState("");
@@ -117,7 +167,7 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
     if (mode === "batch") {
       void reloadLists();
     }
-  }, [batchTab, mode, reloadLists]);
+  }, [mode, reloadLists]);
 
   useEffect(() => {
     setGuestRole("GUEST");
@@ -127,11 +177,52 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
 
   const eventDate = currentEvent?.date ?? "";
 
-  const tabList = batchTab === "member" ? members : batchTab === "guest" ? guests : observers;
-  const tabCount = tabList.length;
-  const tabSelectedCount = batchList
-    .filter((p) => p.type === batchTab)
-    .filter((p) => selectedPeople.has(personKey(p.type, p.name))).length;
+  const visiblePeople = useMemo((): BatchRowPerson[] => {
+    const rows: BatchRowPerson[] = [];
+    if (visibleTypes.has("member")) {
+      for (const member of members) {
+        rows.push({
+          name: member.name,
+          domain: member.domain,
+          type: "member",
+          key: personKey("member", member.name),
+        });
+      }
+    }
+    if (visibleTypes.has("guest")) {
+      for (const guest of guests) {
+        rows.push({
+          name: guest.name,
+          domain: guest.profession,
+          type: "guest",
+          referrer: guest.referrer,
+          key: personKey("guest", guest.name),
+        });
+      }
+    }
+    if (visibleTypes.has("observer")) {
+      for (const observer of observers) {
+        rows.push({
+          name: observer.name,
+          domain: observer.profession,
+          type: "observer",
+          id: observer.id,
+          attended: observer.attended,
+          key: personKey("observer", observer.name),
+        });
+      }
+    }
+    return rows;
+  }, [visibleTypes, members, guests, observers]);
+
+  const pageSelectedCount = useMemo(
+    () => visiblePeople.filter((p) => selectedPeople.has(p.key)).length,
+    [visiblePeople, selectedPeople]
+  );
+
+  const showCheckInTime = visibleTypes.has("member") || visibleTypes.has("guest");
+  const onlyObserversVisible =
+    visibleTypes.has("observer") && !visibleTypes.has("member") && !visibleTypes.has("guest");
 
   const handleSubmit = async () => {
     const submitName = name.trim();
@@ -248,22 +339,26 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
     }
   };
 
-  const togglePersonSelection = (key: string) => {
+  const togglePersonSelection = useCallback((key: string) => {
     setSelectedPeople((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
       return next;
     });
-  };
+  }, []);
 
-  const selectAllInTab = () => {
-    const keys = batchList.filter((p) => p.type === batchTab).map((p) => personKey(p.type, p.name));
-    setSelectedPeople((prev) => new Set([...prev, ...keys]));
-  };
-
-  const selectAll = () => {
-    setSelectedPeople(new Set(batchList.map((p) => personKey(p.type, p.name))));
+  const toggleVisibleType = (type: AttendeeKind) => {
+    setVisibleTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(type)) {
+        if (next.size === 1) return prev;
+        next.delete(type);
+      } else {
+        next.add(type);
+      }
+      return next;
+    });
   };
 
   const clearAllSelections = () => {
@@ -339,59 +434,22 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
       );
     }
 
-    if (batchTab === "member") {
-      if (members.length === 0) {
-        return <div className="empty-state"><p className="hint">暫無會員資料</p></div>;
-      }
-      return members.map((member) => {
-        const key = personKey("member", member.name);
-        return (
-          <label key={key} className={`batch-member-item batch-member-item--member ${selectedPeople.has(key) ? "selected" : ""}`}>
-            <input type="checkbox" checked={selectedPeople.has(key)} onChange={() => togglePersonSelection(key)} />
-            <div className="member-info">
-              <span className="member-name">{member.name}</span>
-              <span className="member-domain">{member.domain}</span>
-            </div>
-          </label>
-        );
-      });
-    }
-
-    if (batchTab === "guest") {
-      if (guests.length === 0) {
-        return <div className="empty-state"><p className="hint">此活動暫無嘉賓</p></div>;
-      }
-      return guests.map((guest) => {
-        const key = personKey("guest", guest.name);
-        return (
-          <label key={key} className={`batch-member-item batch-member-item--guest ${selectedPeople.has(key) ? "selected" : ""}`}>
-            <input type="checkbox" checked={selectedPeople.has(key)} onChange={() => togglePersonSelection(key)} />
-            <div className="member-info">
-              <span className="member-name">{guest.name}</span>
-              <span className="member-domain">{guest.profession}</span>
-              {guest.referrer && <span className="hint batch-item-meta">邀請人: {guest.referrer}</span>}
-            </div>
-          </label>
-        );
-      });
-    }
-
-    if (observers.length === 0) {
-      return <div className="empty-state"><p className="hint">此活動暫無觀察員</p></div>;
-    }
-    return observers.map((observer) => {
-      const key = personKey("observer", observer.name);
+    if (visiblePeople.length === 0) {
       return (
-        <label key={key} className={`batch-member-item batch-member-item--observer ${selectedPeople.has(key) ? "selected" : ""}`}>
-          <input type="checkbox" checked={selectedPeople.has(key)} onChange={() => togglePersonSelection(key)} />
-          <div className="member-info">
-            <span className="member-name">{observer.name}</span>
-            <span className="member-domain">{observer.profession}</span>
-            {observer.attended && <span className="hint batch-item-meta">已出席</span>}
-          </div>
-        </label>
+        <div className="empty-state">
+          <p className="hint">所選類別暫無名單，請勾選其他類型或重新載入</p>
+        </div>
       );
-    });
+    }
+
+    return visiblePeople.map((person) => (
+      <BatchPersonRow
+        key={person.key}
+        person={person}
+        selected={selectedPeople.has(person.key)}
+        onToggle={togglePersonSelection}
+      />
+    ));
   };
 
   if (!loadingEvent && noCurrentEvent) {
@@ -413,7 +471,7 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
   const observerCount = observers.length;
 
   return (
-    <section className="section manual-entry-panel">
+    <section className={`section manual-entry-panel ${mode === "batch" ? "manual-entry-panel--batch" : ""}`}>
       <div className="section-header">
         <h2>✍️ 管理員手動輸入</h2>
         <p className="hint">
@@ -519,75 +577,75 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
           </button>
         </>
       ) : (
-        <>
-          <div className="checkin-type-selector manual-entry-type-selector batch-type-tabs" role="tablist" aria-label="批量名單類型">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={batchTab === "member"}
-              className={`batch-type-tab ${batchTab === "member" ? "is-active is-active-member" : ""}`}
-              onClick={() => setBatchTab("member")}
+        <div className="manual-entry-batch-layout">
+          <div className="manual-entry-batch-scroll">
+            <div
+              className="batch-type-filter-row"
+              role="group"
+              aria-label="顯示名單類型"
             >
-              👤 會員 <span className="batch-type-count">{memberCount}</span>
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={batchTab === "guest"}
-              className={`batch-type-tab ${batchTab === "guest" ? "is-active is-active-guest" : ""}`}
-              onClick={() => setBatchTab("guest")}
-            >
-              🎫 嘉賓 <span className="batch-type-count">{guestCount}</span>
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={batchTab === "observer"}
-              className={`batch-type-tab ${batchTab === "observer" ? "is-active is-active-observer" : ""}`}
-              onClick={() => setBatchTab("observer")}
-            >
-              👁️ 觀察員 <span className="batch-type-count">{observerCount}</span>
-            </button>
-          </div>
-
-          {batchTab !== "observer" && (
-            <div className="form-group">
-              <label htmlFor="batch-time">簽到時間 Check-in Time</label>
-              <input id="batch-time" type="datetime-local" className="input-field" value={customTime} onChange={(e) => setCustomTime(e.target.value)} />
+              {(["member", "guest", "observer"] as const).map((type) => {
+                const meta = CATEGORY_LABELS[type];
+                const count = type === "member" ? memberCount : type === "guest" ? guestCount : observerCount;
+                return (
+                  <label
+                    key={type}
+                    className={`batch-type-filter-chip batch-type-filter-chip--${type} ${visibleTypes.has(type) ? "is-on" : ""}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={visibleTypes.has(type)}
+                      onChange={() => toggleVisibleType(type)}
+                    />
+                    <span className="batch-type-filter-label">
+                      {meta.emoji} {meta.label}
+                    </span>
+                    <span className="batch-type-count">{count}</span>
+                  </label>
+                );
+              })}
             </div>
-          )}
 
-          {batchTab === "observer" && (
-            <p className="hint manual-entry-observer-note">觀察員批量操作只標記出席，不記錄簽到時間。</p>
-          )}
+            {showCheckInTime && (
+              <div className="form-group">
+                <label htmlFor="batch-time">簽到時間 Check-in Time</label>
+                <input id="batch-time" type="datetime-local" className="input-field" value={customTime} onChange={(e) => setCustomTime(e.target.value)} />
+              </div>
+            )}
 
-          <div className="batch-controls manual-entry-batch-controls">
-            <button type="button" className="ghost-button" onClick={clearAllSelections} disabled={selectedPeople.size === 0}>✕ 清除選項</button>
-            <button type="button" className="ghost-button" onClick={() => void reloadLists()} disabled={listLoading}>🔄 重新載入</button>
+            {onlyObserversVisible && (
+              <p className="hint manual-entry-observer-note">觀察員批量操作只標記出席，不記錄簽到時間。</p>
+            )}
+
+            <div className="batch-controls manual-entry-batch-controls">
+              <button type="button" className="ghost-button" onClick={clearAllSelections} disabled={selectedPeople.size === 0}>✕ 清除選項</button>
+              <button type="button" className="ghost-button" onClick={() => void reloadLists()} disabled={listLoading}>🔄 重新載入</button>
+            </div>
+
+            <div className="selection-count manual-entry-selection-count">
+              已選 <strong>{selectedPeople.size}</strong> 位
+              {" · "}
+              此頁 {pageSelectedCount}/{visiblePeople.length}
+              {" · "}
+              會員 {memberCount} / 嘉賓 {guestCount} / 觀察員 {observerCount}
+            </div>
+
+            <div className="manual-entry-batch-list-wrap">
+              <div className="batch-member-list manual-entry-batch-list">{renderBatchList()}</div>
+            </div>
           </div>
 
-          <div className="selection-count manual-entry-selection-count">
-            已選 <strong>{selectedPeople.size}</strong> 位
-            {tabSelectedCount > 0 && batchTab !== "member" ? "" : null}
-            {" · "}
-            此頁 {tabSelectedCount}/{tabCount}
-            {" · "}
-            會員 {memberCount} / 嘉賓 {guestCount} / 觀察員 {observerCount}
+          <div className="manual-entry-batch-sticky">
+            <button
+              className="button submit-button manual-entry-batch-submit"
+              type="button"
+              onClick={handleBatchCheckIn}
+              disabled={selectedPeople.size === 0 || batchSubmitting}
+            >
+              {batchSubmitting ? "批量處理中..." : `✅ 批量簽到 / 標記出席 (${selectedPeople.size} 位)`}
+            </button>
           </div>
-
-          <div className="manual-entry-batch-list-wrap">
-            <div className="batch-member-list manual-entry-batch-list">{renderBatchList()}</div>
-          </div>
-
-          <button
-            className="button submit-button"
-            type="button"
-            onClick={handleBatchCheckIn}
-            disabled={selectedPeople.size === 0 || batchSubmitting}
-          >
-            {batchSubmitting ? "批量處理中..." : `✅ 批量簽到 / 標記出席 (${selectedPeople.size} 位)`}
-          </button>
-        </>
+        </div>
       )}
     </section>
   );

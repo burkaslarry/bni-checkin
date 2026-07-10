@@ -9,8 +9,22 @@ import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
 data class UpdateMemberRequest(
+    val name: String? = null,
     val profession: String? = null,
-    val standing: String? = null
+    val standing: String? = null,
+    val professionCode: String? = null
+)
+
+data class MemberNameRequest(
+    val name: String
+)
+
+data class UpdateMemberByNameRequest(
+    val currentName: String,
+    val name: String? = null,
+    val profession: String? = null,
+    val standing: String? = null,
+    val professionCode: String? = null
 )
 
 data class UpdateGuestRequest(
@@ -99,6 +113,32 @@ class MemberManagementController(
     fun updateMember(
         @PathVariable name: String,
         @RequestBody request: UpdateMemberRequest
+    ): ResponseEntity<Map<String, Any>> = applyMemberUpdate(name, request)
+
+    @PostMapping("/api/members/update-by-name")
+    @Operation(summary = "Update member by current name in body (supports names with /)")
+    fun updateMemberByName(@RequestBody request: UpdateMemberByNameRequest): ResponseEntity<Map<String, Any>> {
+        val currentName = request.currentName.trim()
+        if (currentName.isBlank()) {
+            return ResponseEntity.badRequest().body(mapOf(
+                "status" to "error",
+                "message" to "currentName is required"
+            ))
+        }
+        return applyMemberUpdate(
+            currentName,
+            UpdateMemberRequest(
+                name = request.name,
+                profession = request.profession,
+                standing = request.standing,
+                professionCode = request.professionCode
+            )
+        )
+    }
+
+    private fun applyMemberUpdate(
+        currentName: String,
+        request: UpdateMemberRequest
     ): ResponseEntity<Map<String, Any>> {
         val standing = try {
             request.standing?.let { MemberStanding.valueOf(it.uppercase()) }
@@ -109,8 +149,29 @@ class MemberManagementController(
             ))
         }
 
+        val professionCode = request.professionCode?.trim()?.takeIf { it.isNotEmpty() }?.uppercase()?.take(1)
+        if (professionCode != null && !databaseMemberService.isValidProfessionCode(professionCode)) {
+            return ResponseEntity.badRequest().body(mapOf(
+                "status" to "error",
+                "message" to "Invalid profession code"
+            ))
+        }
+
+        val newName = request.name?.trim()?.takeIf { it.isNotEmpty() }
+        if (newName != null && newName.isBlank()) {
+            return ResponseEntity.badRequest().body(mapOf(
+                "status" to "error",
+                "message" to "Name cannot be blank"
+            ))
+        }
+
         val updatedMember = try {
-            databaseMemberService.updateMember(name, request.profession, standing)
+            databaseMemberService.updateMember(currentName, newName, request.profession, standing, professionCode)
+        } catch (e: IllegalArgumentException) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(mapOf(
+                "status" to "error",
+                "message" to (e.message ?: "Invalid member update")
+            ))
         } catch (e: Exception) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(mapOf(
                 "status" to "error",
@@ -125,7 +186,8 @@ class MemberManagementController(
                 "member" to mapOf(
                     "name" to updatedMember.name,
                     "profession" to (updatedMember.profession ?: ""),
-                    "standing" to updatedMember.standing.name
+                    "standing" to updatedMember.standing.name,
+                    "professionCode" to updatedMember.professionCode
                 )
             ))
         } else {
@@ -138,7 +200,20 @@ class MemberManagementController(
 
     @DeleteMapping("/api/members/{name}")
     @Operation(summary = "Delete a member")
-    fun deleteMember(@PathVariable name: String): ResponseEntity<Map<String, String>> {
+    fun deleteMember(@PathVariable name: String): ResponseEntity<Map<String, String>> =
+        applyMemberDelete(name)
+
+    @PostMapping("/api/members/delete-by-name")
+    @Operation(summary = "Delete member by name in body (supports names with /)")
+    fun deleteMemberByName(@RequestBody request: MemberNameRequest): ResponseEntity<Map<String, String>> {
+        val name = request.name.trim()
+        if (name.isBlank()) {
+            return ResponseEntity.badRequest().body(mapOf("status" to "error", "message" to "name is required"))
+        }
+        return applyMemberDelete(name)
+    }
+
+    private fun applyMemberDelete(name: String): ResponseEntity<Map<String, String>> {
         val deleted = try {
             databaseMemberService.deleteMember(name)
         } catch (e: Exception) {

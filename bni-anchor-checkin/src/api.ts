@@ -42,12 +42,13 @@ export type CheckInRequest = {
 /** Member standing / status. */
 export type MemberStanding = "GREEN" | "YELLOW" | "RED" | "BLACK";
 
-/** Member list item (id, name, domain, standing, professionGroupName). */
+/** Member list item (id, name, domain, standing, profession group). */
 export type MemberInfo = {
   id?: number;
   name: string;
   domain: string;
   standing?: MemberStanding;
+  professionCode?: string;
   professionGroupName?: string; // from bni_anchor_profession_groups join
 };
 
@@ -1009,10 +1010,12 @@ export async function bulkImportObservers(
 
 // ===== Member Management API =====
 
-/** Update member payload (profession, standing). */
+/** Update member payload (name, profession, standing, professionCode). */
 export type UpdateMemberRequest = {
+  name?: string;
   profession?: string;
   standing?: string;
+  professionCode?: string;
 };
 
 export type CreateMemberRequest = {
