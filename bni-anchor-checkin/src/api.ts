@@ -1063,8 +1063,9 @@ export async function updateMember(
   return handleResponse(response);
 }
 
-/** Update guest payload (profession, referrer, eventDate). */
+/** Update guest payload (name, profession, referrer, eventDate). */
 export type UpdateGuestRequest = {
+  name?: string;
   profession?: string;
   referrer?: string;
   eventDate?: string;
@@ -1085,10 +1086,15 @@ export type CreateGuestRequest = {
  * @throws {Error} On HTTP error
  */
 export async function updateGuest(
-  name: string,
-  request: UpdateGuestRequest
+  currentName: string,
+  request: UpdateGuestRequest,
+  currentEventDate?: string
 ): Promise<{ status: string; message: string }> {
-  const response = await fetch(`${API_BASE}/api/guests/${encodeURIComponent(name)}`, {
+  const params = new URLSearchParams({ currentName });
+  if (currentEventDate?.trim()) {
+    params.set("currentEventDate", currentEventDate.trim());
+  }
+  const response = await fetch(`${API_BASE}/api/guests?${params.toString()}`, {
     method: "PUT",
     headers: jsonHeaders,
     body: JSON.stringify(request),

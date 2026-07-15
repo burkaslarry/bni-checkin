@@ -158,8 +158,32 @@ class DatabaseMemberService(
     }
 
     @Transactional
-    fun updateGuest(name: String, profession: String?, referrer: String?, eventDate: String?): Guest? {
-        val guest = guestRepository.findByNameIgnoreCase(name).orElse(null) ?: return null
+    fun updateGuest(
+        currentName: String,
+        currentEventDate: String? = null,
+        newName: String? = null,
+        profession: String? = null,
+        referrer: String? = null,
+        eventDate: String? = null
+    ): Guest? {
+        val guest = if (!currentEventDate.isNullOrBlank()) {
+            guestRepository.findByNameIgnoreCaseAndEventDateTrimmed(currentName, currentEventDate).orElse(null)
+        } else {
+            guestRepository.findByNameIgnoreCase(currentName).orElse(null)
+        } ?: return null
+
+        val resolvedEventDate = eventDate?.trim()?.takeIf { it.isNotEmpty() } ?: guest.eventDate
+        if (newName != null && !newName.equals(guest.name, ignoreCase = true)) {
+            if (!resolvedEventDate.isNullOrBlank()) {
+                val duplicate = guestRepository
+                    .findByNameIgnoreCaseAndEventDateTrimmed(newName, resolvedEventDate)
+                    .orElse(null)
+                if (duplicate != null && duplicate.id != guest.id) {
+                    throw IllegalArgumentException("Guest already exists for this event date")
+                }
+            }
+            guest.name = newName
+        }
         profession?.let { guest.profession = it }
         referrer?.let { guest.referrer = it }
         eventDate?.let { guest.eventDate = it }

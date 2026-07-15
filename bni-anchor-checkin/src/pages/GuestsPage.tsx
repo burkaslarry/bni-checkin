@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo, type KeyboardEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { getGuests, GuestInfo, deleteGuest, updateGuest } from "../api";
+import { guestMatchesKeywords } from "../lib/guestSearch";
 
 type GuestsPageProps = {};
 
@@ -11,9 +12,12 @@ export default function GuestsPage({}: GuestsPageProps) {
   const [loading, setLoading] = useState(true);
   const [selectedEventDate, setSelectedEventDate] = useState<string>("all");
   const [editingGuest, setEditingGuest] = useState<GuestInfo | null>(null);
+  const [editName, setEditName] = useState("");
   const [editProfession, setEditProfession] = useState("");
   const [editReferrer, setEditReferrer] = useState("");
   const [editEventDate, setEditEventDate] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [notification, setNotification] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
   const [loadFailedRedirect, setLoadFailedRedirect] = useState(false);
   const [redirectCountdown, setRedirectCountdown] = useState(3);
@@ -69,6 +73,7 @@ export default function GuestsPage({}: GuestsPageProps) {
 
   const handleEdit = (guest: GuestInfo) => {
     setEditingGuest(guest);
+    setEditName(guest.name);
     setEditProfession(guest.profession);
     setEditReferrer(guest.referrer || "");
     setEditEventDate(guest.eventDate || "");
@@ -77,18 +82,56 @@ export default function GuestsPage({}: GuestsPageProps) {
   const handleSaveEdit = async () => {
     if (!editingGuest) return;
 
-    try {
-      await updateGuest(editingGuest.name, {
-        profession: editProfession,
-        referrer: editReferrer || undefined,
-        eventDate: editEventDate || undefined
-      });
+    const trimmedName = editName.trim();
+    if (!trimmedName) {
+      showNotification("請填寫姓名", "error");
+      return;
+    }
 
-      showNotification(`已更新 ${editingGuest.name} 的資料`, "success");
+    try {
+      await updateGuest(
+        editingGuest.name,
+        {
+          name: trimmedName,
+          profession: editProfession,
+          referrer: editReferrer || undefined,
+          eventDate: editEventDate || undefined,
+        },
+        editingGuest.eventDate
+      );
+
+      const renamed = trimmedName !== editingGuest.name;
+      showNotification(
+        renamed
+          ? `已將 ${editingGuest.name} 更名為 ${trimmedName}`
+          : `已更新 ${trimmedName} 的資料`,
+        "success"
+      );
       setEditingGuest(null);
       fetchGuests();
     } catch (error) {
-      showNotification("更新失敗", "error");
+      const message = error instanceof Error ? error.message : "更新失敗";
+      showNotification(message, "error");
+    }
+  };
+
+  const handleEventFilterChange = (value: string) => {
+    setSelectedEventDate(value);
+    if (value !== "all") {
+      setSearchInput("");
+      setAppliedSearch("");
+    }
+  };
+
+  const handleSearch = () => {
+    if (selectedEventDate !== "all") return;
+    setAppliedSearch(searchInput.trim());
+  };
+
+  const handleSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter" && selectedEventDate === "all") {
+      event.preventDefault();
+      handleSearch();
     }
   };
 
@@ -108,11 +151,23 @@ export default function GuestsPage({}: GuestsPageProps) {
 
   // Get unique event dates from guests
   const eventDates = Array.from(new Set(guests.map(g => g.eventDate).filter(Boolean))).sort().reverse();
-  
-  // Filter guests by selected event date
-  const filteredGuests = selectedEventDate === "all" 
-    ? guests 
-    : guests.filter(g => g.eventDate === selectedEventDate);
+
+  const eventFilteredGuests = useMemo(
+    () =>
+      selectedEventDate === "all"
+        ? guests
+        : guests.filter((g) => g.eventDate === selectedEventDate),
+    [guests, selectedEventDate]
+  );
+
+  const filteredGuests = useMemo(() => {
+    if (selectedEventDate !== "all" || !appliedSearch) {
+      return eventFilteredGuests;
+    }
+    return eventFilteredGuests.filter((guest) => guestMatchesKeywords(guest, appliedSearch));
+  }, [eventFilteredGuests, selectedEventDate, appliedSearch]);
+
+  const searchEnabled = selectedEventDate === "all";
 
   return (
     <div className="app-shell">
@@ -247,7 +302,7 @@ export default function GuestsPage({}: GuestsPageProps) {
                 id="event-date-filter"
                 className="input-field"
                 value={selectedEventDate}
-                onChange={(e) => setSelectedEventDate(e.target.value)}
+                onChange={(e) => handleEventFilterChange(e.target.value)}
                 style={{ width: "100%", fontSize: "1rem" }}
               >
                 <option value="all">📋 全部活動 All Events ({guests.length} 位嘉賓)</option>
@@ -269,10 +324,44 @@ export default function GuestsPage({}: GuestsPageProps) {
             </div>
           </div>
           <p className="hint" style={{ margin: "0.5rem 0 0 0", fontSize: "0.875rem" }}>
-            {selectedEventDate === "all" 
-              ? `顯示所有 ${guests.length} 位嘉賓` 
+            {selectedEventDate === "all"
+              ? appliedSearch
+                ? `搜尋「${appliedSearch}」：${filteredGuests.length} / ${guests.length} 位嘉賓`
+                : `顯示所有 ${guests.length} 位嘉賓`
               : `已篩選：${filteredGuests.length} 位嘉賓參加此活動`}
           </p>
+
+          <div className="guests-search-bar">
+            <label htmlFor="guest-keyword-search" className="guests-search-label">
+              關鍵字搜尋 Keyword Search
+            </label>
+            <div className="guests-search-row">
+              <input
+                id="guest-keyword-search"
+                type="search"
+                className="input-field guests-search-input"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
+                placeholder="姓名、專業領域、邀請人、活動日期…"
+                disabled={!searchEnabled}
+                aria-disabled={!searchEnabled}
+              />
+              <button
+                type="button"
+                className="button guests-search-button"
+                onClick={handleSearch}
+                disabled={!searchEnabled}
+              >
+                搜尋
+              </button>
+            </div>
+            <p className="hint guests-search-hint">
+              {searchEnabled
+                ? "可輸入多個關鍵字（空格分隔），需同時符合姓名／專業領域／邀請人／活動日期"
+                : "請先選擇「全部活動」才可使用搜尋"}
+            </p>
+          </div>
         </div>
 
         {loading && !loadFailedRedirect ? (
@@ -293,7 +382,7 @@ export default function GuestsPage({}: GuestsPageProps) {
               </thead>
               <tbody>
                 {filteredGuests.map((guest) => (
-                  <tr key={guest.name} style={{ borderBottom: "1px solid var(--border-color)" }}>
+                  <tr key={`${guest.name}-${guest.eventDate ?? ""}`} style={{ borderBottom: "1px solid var(--border-color)" }}>
                     <td style={{ padding: "1rem", fontWeight: 500 }}>{guest.name}</td>
                     <td style={{ padding: "1rem" }}>{guest.profession}</td>
                     <td style={{ padding: "1rem" }}>{guest.referrer || "-"}</td>
@@ -373,7 +462,19 @@ export default function GuestsPage({}: GuestsPageProps) {
             width: "90%",
             boxShadow: "0 20px 60px rgba(0,0,0,0.3)"
           }} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ marginTop: 0 }}>編輯嘉賓 - {editingGuest.name}</h3>
+            <h3 style={{ marginTop: 0 }}>編輯嘉賓</h3>
+
+            <div className="form-group" style={{ marginBottom: "1.5rem" }}>
+              <label htmlFor="edit-guest-name">姓名 Name *</label>
+              <input
+                id="edit-guest-name"
+                className="input-field"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="請輸入姓名"
+                style={{ width: "100%" }}
+              />
+            </div>
 
             <div className="form-group" style={{ marginBottom: "1.5rem" }}>
               <label htmlFor="edit-profession">專業領域 Profession</label>

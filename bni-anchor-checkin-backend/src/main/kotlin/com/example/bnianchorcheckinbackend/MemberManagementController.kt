@@ -28,6 +28,7 @@ data class UpdateMemberByNameRequest(
 )
 
 data class UpdateGuestRequest(
+    val name: String? = null,
     val profession: String? = null,
     val referrer: String? = null,
     val eventDate: String? = null
@@ -261,9 +262,52 @@ class MemberManagementController(
     fun updateGuest(
         @PathVariable name: String,
         @RequestBody request: UpdateGuestRequest
+    ): ResponseEntity<Map<String, Any>> = applyGuestUpdate(name, null, request)
+
+    @PutMapping(value = ["/api/guests"], params = ["currentName"])
+    @Operation(summary = "Update guest by current name and optional event date (supports rename)")
+    fun updateGuestByCurrentName(
+        @RequestParam currentName: String,
+        @RequestParam(required = false) currentEventDate: String?,
+        @RequestBody request: UpdateGuestRequest
     ): ResponseEntity<Map<String, Any>> {
+        val trimmed = currentName.trim()
+        if (trimmed.isBlank()) {
+            return ResponseEntity.badRequest().body(mapOf(
+                "status" to "error",
+                "message" to "currentName is required"
+            ))
+        }
+        return applyGuestUpdate(trimmed, currentEventDate?.trim()?.takeIf { it.isNotEmpty() }, request)
+    }
+
+    private fun applyGuestUpdate(
+        currentName: String,
+        currentEventDate: String?,
+        request: UpdateGuestRequest
+    ): ResponseEntity<Map<String, Any>> {
+        val newName = request.name?.trim()?.takeIf { it.isNotEmpty() }
+        if (newName != null && newName.isBlank()) {
+            return ResponseEntity.badRequest().body(mapOf(
+                "status" to "error",
+                "message" to "Name cannot be blank"
+            ))
+        }
+
         val updatedGuest = try {
-            databaseMemberService.updateGuest(name, request.profession, request.referrer, request.eventDate)
+            databaseMemberService.updateGuest(
+                currentName = currentName,
+                currentEventDate = currentEventDate,
+                newName = newName,
+                profession = request.profession,
+                referrer = request.referrer,
+                eventDate = request.eventDate
+            )
+        } catch (e: IllegalArgumentException) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(mapOf(
+                "status" to "error",
+                "message" to (e.message ?: "Invalid guest update")
+            ))
         } catch (e: Exception) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(mapOf(
                 "status" to "error",
