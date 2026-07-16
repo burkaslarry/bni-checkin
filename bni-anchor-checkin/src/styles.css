@@ -2105,6 +2105,24 @@ td {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.substitute-badge {
+  font-size: 0.78rem;
+  color: #0369a1;
+  background: #e0f2fe;
+  border: 1px solid #7dd3fc;
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+  white-space: nowrap;
+}
+
+.substitute-cell {
+  color: var(--muted);
+  font-size: 0.9rem;
+  max-width: 10rem;
+  word-break: break-word;
 }
 
 /* ===== Count Badges Enhancement ===== */

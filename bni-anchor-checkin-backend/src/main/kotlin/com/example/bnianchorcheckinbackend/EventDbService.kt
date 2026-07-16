@@ -198,6 +198,7 @@ class EventDbService(
             if (existing != null) {
                 existing.status = "absent"
                 existing.checkInTime = defaultAbsentTs
+                existing.substituteFor = null
                 attendanceRepository.save(existing)
                 return true
             }

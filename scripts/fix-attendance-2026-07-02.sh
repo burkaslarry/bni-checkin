@@ -12,7 +12,7 @@ Elva Cheung,,member,缺席,
 Gigi Liu,,member,缺席,
 Li Ka Wai,,member,缺席,
 Zoe Wu,,member,缺席,
-Hayes Lam/Jason Wong,,member,準時,08:45:00
+Jason Wong/Hayes Lam,,member,準時,08:45:00
 EOF
 
 echo "Clearing stale in-memory check-ins..."

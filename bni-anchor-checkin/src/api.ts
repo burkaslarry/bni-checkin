@@ -12,7 +12,7 @@ export type EventAttendance = {
   status: string;
 };
 
-/** One check-in record (name, domain, type, timestamps, role, tags, referrer). */
+/** One check-in record (name, domain, type, timestamps, role, tags, referrer, substituteFor). */
 export type CheckInRecord = {
   name: string;
   domain: string;
@@ -22,6 +22,7 @@ export type CheckInRecord = {
   role?: AttendeeRole;
   tags?: string[];
   referrer?: string;
+  substituteFor?: string;
 };
 
 /** Role types for attendees. */
@@ -388,6 +389,24 @@ export async function clearRecords(): Promise<{ status: string; message: string 
 export async function deleteRecord(index: number): Promise<{ status: string; message: string }> {
   const response = await fetch(`${API_BASE}/api/records/${index}`, {
     method: "DELETE",
+    mode: "cors"
+  });
+  return handleResponse(response);
+}
+
+/** Mark attendee absent and clear check-in. POST /api/events/attendance-corrections */
+export async function markAttendanceAbsent(
+  eventDate: string,
+  name: string
+): Promise<{ status: string; removed?: number; warnings?: string[] }> {
+  const response = await fetch(`${API_BASE}/api/events/attendance-corrections`, {
+    method: "POST",
+    headers: jsonHeaders,
+    body: JSON.stringify({
+      eventDate: eventDate.trim(),
+      removeCheckIns: [name.trim()],
+      addCheckIns: []
+    }),
     mode: "cors"
   });
   return handleResponse(response);

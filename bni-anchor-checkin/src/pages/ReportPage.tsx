@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import {
-  getReportData, getReportWebSocketUrl, exportRecords, getRecords, clearRecords, deleteRecord, getCurrentEvent,
+  getReportData, getReportWebSocketUrl, exportRecords, getRecords, clearRecords, deleteRecord, markAttendanceAbsent, getCurrentEvent,
   ReportData, ReportAttendance, AttendeeRole, CheckInRecord
 } from "../api";
 import { buildAttendanceCsvBasename, buildAttendanceCsvFilename } from "../lib/attendanceExportFilename";
@@ -200,11 +200,21 @@ export default function ReportPage() {
     }
   };
 
-  const handleDeleteRecord = async (index: number) => {
+  const handleDeleteRecord = async (record: CheckInRecord) => {
+    const eventDate = reportData?.eventDate;
     try {
-      await deleteRecord(index);
-      setRecords((prev) => prev.filter((_, i) => i !== index));
-    } catch { /* silent */ }
+      if (eventDate) {
+        await markAttendanceAbsent(eventDate, record.name);
+        await Promise.all([fetchReportData(), fetchRecords()]);
+      } else {
+        const originalIndex = records.indexOf(record);
+        if (originalIndex < 0) return;
+        await deleteRecord(originalIndex);
+        setRecords((prev) => prev.filter((_, i) => i !== originalIndex));
+      }
+    } catch (err) {
+      console.error("Delete record failed:", err);
+    }
   };
 
   const handleClearAll = async () => {
@@ -248,6 +258,11 @@ export default function ReportPage() {
         </div>
         <div className="attendee-meta">
           {record.checkInTime && <span className="attendee-time">{record.checkInTime}</span>}
+          {record.substituteFor && (
+            <span className="substitute-badge" title="替代人">
+              替代: {record.substituteFor}
+            </span>
+          )}
           {isLate && <span className="late-badge">遲到</span>}
         </div>
       </div>
@@ -548,24 +563,23 @@ export default function ReportPage() {
                   <th>姓名</th>
                   <th>專業領域</th>
                   <th>類型</th>
+                  <th>替代人</th>
                   <th>簽到時間</th>
                   <th>操作</th>
                 </tr>
               </thead>
               <tbody>
                 {recordsLoading && !records.length && (
-                  <tr><td colSpan={6} className="hint loading-cell">⏳ 載入中...</td></tr>
+                  <tr><td colSpan={7} className="hint loading-cell">⏳ 載入中...</td></tr>
                 )}
                 {!recordsLoading && filteredRecords.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="hint empty-cell">
+                    <td colSpan={7} className="hint empty-cell">
                       {searchQuery || recordFilter !== "all" ? "沒有符合條件的記錄" : "尚無簽到記錄"}
                     </td>
                   </tr>
                 )}
-                {filteredRecords.map((record, index) => {
-                  const originalIndex = records.indexOf(record);
-                  return (
+                {filteredRecords.map((record, index) => (
                     <tr key={`${record.name}-${record.timestamp}-${index}`}>
                       <td className="row-number">{filteredRecords.length - index}</td>
                       <td className="name-cell">{record.name}</td>
@@ -575,22 +589,24 @@ export default function ReportPage() {
                           {record.type.toLowerCase() === "member" ? "👤 會員" : "🎫 來賓"}
                         </span>
                       </td>
+                      <td className="substitute-cell">{record.substituteFor || "—"}</td>
                       <td className="time-cell">{formatRecordTime(record.timestamp)}</td>
                       <td>
-                        {record.type.toLowerCase() !== "member" && (
-                          <button
-                            type="button"
-                            className="delete-btn"
-                            onClick={() => handleDeleteRecord(originalIndex)}
-                            title={`刪除 ${record.name}`}
-                          >
-                            🗑️
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          className="delete-btn"
+                          onClick={() => void handleDeleteRecord(record)}
+                          title={
+                            record.type.toLowerCase() === "member"
+                              ? `標記缺席 ${record.name}`
+                              : `刪除 ${record.name}`
+                          }
+                        >
+                          🗑️
+                        </button>
                       </td>
                     </tr>
-                  );
-                })}
+                  ))}
               </tbody>
             </table>
           </div>

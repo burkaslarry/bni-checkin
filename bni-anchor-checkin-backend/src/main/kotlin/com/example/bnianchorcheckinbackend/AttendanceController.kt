@@ -538,7 +538,8 @@ class AttendanceController(
                         type = "member",
                         timestamp = isoTimestamp,
                         receivedAt = isoTimestamp,
-                        role = "MEMBER"
+                        role = "MEMBER",
+                        substituteFor = att.substituteFor?.trim()?.takeIf { it.isNotEmpty() }
                     )
                 }
             } else emptyList()
@@ -972,6 +973,9 @@ class AttendanceController(
             .body(mapOf("status" to "error", "message" to "DB mode required"))
         return try {
             val result = withDbRetry("applyAttendanceCorrections") { service.applyAttendanceCorrections(request) }
+            request.removeCheckIns.forEach { name ->
+                if (name.isNotBlank()) attendanceService.removeRecordByName(name)
+            }
             attendanceWebSocketHandler?.broadcast(mapOf("type" to "attendance_updated", "eventDate" to request.eventDate))
             ResponseEntity.ok(result + mapOf("status" to "success"))
         } catch (e: IllegalArgumentException) {

@@ -151,7 +151,8 @@ data class CheckInRecord(
     val receivedAt: String,
     val role: String = "MEMBER", // MEMBER, GUEST, VIP, SPEAKER
     val tags: List<String> = emptyList(),
-    val referrer: String? = null
+    val referrer: String? = null,
+    val substituteFor: String? = null
 )
 
 data class AttendanceCheckInEntry(

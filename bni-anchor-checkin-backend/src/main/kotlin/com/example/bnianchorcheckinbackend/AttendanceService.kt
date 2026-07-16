@@ -214,6 +214,17 @@ class AttendanceService(
         ))
     }
 
+    /** Remove in-memory check-in rows matching [name] (case-insensitive). */
+    fun removeRecordByName(name: String): Boolean {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return false
+        val removed = allRecords.removeIf { it.name.equals(trimmed, ignoreCase = true) }
+        if (removed) {
+            webSocketHandler.broadcast(mapOf("type" to "record_deleted", "name" to trimmed))
+        }
+        return removed
+    }
+
     fun getMembers(): List<String> {
         return csvService.getAllMembers()
     }

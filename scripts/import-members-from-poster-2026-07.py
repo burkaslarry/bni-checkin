@@ -24,7 +24,7 @@ MEMBERS = [
     {"name": "Yoko Sin", "profession": "催債服務", "professionCode": "D", "position": "Member"},
     {"name": "Charlotte Kamta", "profession": "鮮花批發零售", "professionCode": "D", "position": "Member"},
     {"name": "Jayden Wong", "profession": "活動場地佈置", "professionCode": "E", "position": "Member"},
-    {"name": "Jason Wong", "profession": "品牌公關", "professionCode": "E", "position": "Member"},
+    {"name": "Jason Wong/Hayes Lam", "profession": "品牌公關", "professionCode": "E", "position": "Member"},
     {"name": "Raymond Chan", "profession": "禮品訂製", "professionCode": "E", "position": "Member"},
     {"name": "Steve Ho", "profession": "節慶食品製造商", "professionCode": "G", "position": "Member"},
     {"name": "Stan Wang", "profession": "台式居酒屋", "professionCode": "G", "position": "分會增長協調"},
