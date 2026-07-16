@@ -90,7 +90,14 @@ data class AttendanceRecord(
     val checkInTime: String? = null,
     val role: String = "MEMBER", // MEMBER, GUEST, VIP, SPEAKER
     val tags: List<String> = emptyList(), // Interest tags for AI analysis
-    val sessionId: String? = null // Session/topic attended (for AI)
+    val sessionId: String? = null, // Session/topic attended (for AI)
+    val substituteFor: String? = null // Substitute attendee name (members only)
+)
+
+data class AttendanceSubstituteRequest(
+    val eventDate: String,
+    val memberName: String,
+    val substituteName: String? = null
 )
 
 data class ReportData(

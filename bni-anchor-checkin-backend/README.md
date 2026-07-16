@@ -50,12 +50,41 @@ docker run -p 8080:8080 bni-checkin-backend
 ### Members
 
 ```bash
-# Get all members
+# Get all members (with id, profession, standing, category)
 GET /api/members
 
 # Response
-{"members": ["Ada Hau", "Aidan Tong", ...]}
+{
+  "members": [
+    {
+      "id": 3,
+      "name": "Max Chan/William Lai",
+      "domain": "區塊鏈系統開發",
+      "standing": "GREEN",
+      "professionCode": "A",
+      "professionGroupName": "資訊及創新科技"
+    }
+  ]
+}
+
+# Update member — prefer memberId; currentName supports names with /
+PUT /api/members?memberId=3
+PUT /api/members?currentName=Max%20Chan%2FWilliam%20Lai
+Content-Type: application/json
+
+{
+  "name": "Max Chan/William Lai",
+  "profession": "區塊鏈系統開發",
+  "standing": "GREEN",
+  "professionCode": "A"
+}
+
+# Delete member
+DELETE /api/members?memberId=3
+DELETE /api/members?name=Max%20Chan%2FWilliam%20Lai
 ```
+
+Names containing `/` must use query parameters. Path-based `PUT /api/members/{name}` fails when the slash is URL-encoded.
 
 ### Check-in
 
@@ -106,10 +135,14 @@ Larry Lo | 客戶服務系統 | Member | ANCHOR-007 |
 
 ## 🌐 Deployment
 
+Production API: <https://bni-anchor-checkin-backend.onrender.com>
+
+Render deploys from the separate GitHub repo `burkaslarry/bni-anchor-checkin-backend` on branch `main`. When developing in the monorepo, sync `bni-anchor-checkin-backend/` to that repo before pushing. Latest backend production tag: `prod/5.1.2`.
+
 ### Render.com
 
 1. Create new Web Service
-2. Connect GitHub repository
+2. Connect GitHub repository (`bni-anchor-checkin-backend`)
 3. Select **Docker** runtime
 4. Deploy
 

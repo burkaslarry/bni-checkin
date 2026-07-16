@@ -225,6 +225,7 @@ export const ExportPanel = ({ onNotify }: ExportPanelProps) => {
             <span>類別</span>
             <span>出席狀態</span>
             <span>簽到時間</span>
+            <span>替代人</span>
           </div>
           <div className="format-example on-time-row">
             <span>Jessica Cheung</span>
@@ -232,6 +233,7 @@ export const ExportPanel = ({ onNotify }: ExportPanelProps) => {
             <span>member</span>
             <span>準時</span>
             <span>06:55:30</span>
+            <span></span>
           </div>
           <div className="format-example late-row">
             <span>John Wong</span>
@@ -239,12 +241,14 @@ export const ExportPanel = ({ onNotify }: ExportPanelProps) => {
             <span>member</span>
             <span>遲到</span>
             <span>07:15:22</span>
+            <span>Larry Lo</span>
           </div>
           <div className="format-example absent-row">
             <span>Mary Chan</span>
             <span>律師</span>
             <span>member</span>
             <span>缺席</span>
+            <span></span>
             <span></span>
           </div>
         </div>

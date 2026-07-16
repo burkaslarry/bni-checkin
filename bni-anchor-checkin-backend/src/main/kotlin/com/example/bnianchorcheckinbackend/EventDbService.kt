@@ -316,7 +316,8 @@ class EventDbService(
                     memberName = memberName,
                     status = att.status,
                     checkInTime = timeStr.ifEmpty { null },
-                    role = "MEMBER"
+                    role = "MEMBER",
+                    substituteFor = att.substituteFor?.trim()?.takeIf { it.isNotEmpty() }
                 )
             }
             .sortedByDescending { it.checkInTime ?: "" }
@@ -552,6 +553,19 @@ class EventDbService(
         }
     }
 
+    /** Set or clear substitute attendee name on a member's attendance row for an event date. */
+    @Transactional
+    fun updateMemberSubstitute(eventDateStr: String, memberName: String, substituteName: String?): Boolean {
+        val eventDate = try { LocalDate.parse(eventDateStr.trim()) } catch (_: Exception) { return false }
+        val event = eventRepository.findByEventDateAndDeletedAtIsNull(eventDate) ?: return false
+        val eventId = event.id!!.toInt()
+        val memberId = resolveMemberId(memberName.trim()) ?: return false
+        val existing = attendanceRepository.findByEventIdAndMemberId(eventId, memberId) ?: return false
+        existing.substituteFor = substituteName?.trim()?.takeIf { it.isNotEmpty() }
+        attendanceRepository.save(existing)
+        return true
+    }
+
     @Transactional
     fun clearAllEventsAndAttendance() {
         attendanceRepository.deleteAll()
@@ -617,22 +631,27 @@ class EventDbService(
         attendanceRepository.saveAll(byMemberId.values.toList())
     }
 
-    /** Split one exported attendance CSV row: 姓名,專業領域,類別,出席狀態,簽到時間 */
+    /** Split one exported attendance CSV row (5 or 6 columns). */
     private fun splitExportAttendanceRow(line: String): List<String>? {
         val indices = mutableListOf<Int>()
         var i = 0
-        while (i < line.length && indices.size < 4) {
+        while (i < line.length && indices.size < 5) {
             if (line[i] == ',') indices.add(i)
             i++
         }
         if (indices.size < 4) return null
-        return listOf(
-            line.substring(0, indices[0]).trim(),
-            line.substring(indices[0] + 1, indices[1]).trim(),
-            line.substring(indices[1] + 1, indices[2]).trim(),
-            line.substring(indices[2] + 1, indices[3]).trim(),
-            line.substring(indices[3] + 1).trim()
-        )
+        val parts = mutableListOf<String>()
+        for (j in indices.indices) {
+            val start = if (j == 0) 0 else indices[j - 1] + 1
+            parts.add(line.substring(start, indices[j]).trim())
+        }
+        parts.add(line.substring(indices.last() + 1).trim())
+        return parts
+    }
+
+    private fun isValidAttendanceCsvHeader(header: List<String>): Boolean {
+        if (header.isEmpty() || header[0] != "姓名") return false
+        return header.size == 5 || (header.size == 6 && header[5] == "替代人")
     }
 
     private fun normalizeImportStatus(raw: String): String {
@@ -661,13 +680,14 @@ class EventDbService(
         if (lines.isEmpty()) throw IllegalArgumentException("CSV is empty")
         val header = splitExportAttendanceRow(lines.first())
             ?: throw IllegalArgumentException("Invalid CSV header row")
-        if (header[0] != "姓名" || header.size != 5) {
-            throw IllegalArgumentException("Expected header 姓名,專業領域,類別,出席狀態,簽到時間")
+        if (!isValidAttendanceCsvHeader(header)) {
+            throw IllegalArgumentException("Expected header 姓名,專業領域,類別,出席狀態,簽到時間[,替代人]")
         }
+        val hasSubstituteColumn = header.size == 6
 
         val byMemberId = attendanceRepository.findByEventId(eventId).associateBy { it.memberId }.toMutableMap()
 
-        fun upsertMember(name: String, statusRaw: String, timeCol: String) {
+        fun upsertMember(name: String, statusRaw: String, timeCol: String, substituteCol: String? = null) {
             val memberId = resolveMemberId(name) ?: run {
                 warnings.add("member not in DB (skipped): $name")
                 return
@@ -685,12 +705,16 @@ class EventDbService(
             if (existing != null) {
                 existing.status = normalized
                 existing.checkInTime = ts
+                if (substituteCol != null) {
+                    existing.substituteFor = substituteCol.trim().takeIf { it.isNotEmpty() }
+                }
             } else {
                 byMemberId[memberId] = Attendance(
                     memberId = memberId,
                     eventId = eventId,
                     checkInTime = ts,
-                    status = normalized
+                    status = normalized,
+                    substituteFor = substituteCol?.trim()?.takeIf { it.isNotEmpty() }
                 )
             }
             memberUpserts++
@@ -705,11 +729,12 @@ class EventDbService(
             val name = parts[0]
             val category = parts[2]
             val statusRaw = parts[3]
-            val timeCol = parts[4]
+            val timeCol = parts.getOrNull(4) ?: ""
+            val substituteCol = if (hasSubstituteColumn) parts.getOrNull(5)?.trim()?.takeIf { it.isNotEmpty() } else null
             if (name.isBlank()) continue
             val cat = category.lowercase()
             when {
-                cat == "member" -> upsertMember(name, statusRaw, timeCol)
+                cat == "member" -> upsertMember(name, statusRaw, timeCol, substituteCol)
                 cat == "guest" || cat == "vip" || cat == "speaker" -> {
                     val guest = guestRepository.findByNameIgnoreCaseAndEventDate(name, eventDateStr).orElse(null)
                     if (guest == null) {

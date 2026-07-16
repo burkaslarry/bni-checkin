@@ -2561,7 +2561,78 @@ td {
 
 /* ===== Checkin Form Panel - Mobile Friendly ===== */
 .checkin-form-panel {
+  position: relative;
   margin-bottom: 2rem;
+}
+
+.checkin-success-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(4px);
+}
+
+.checkin-success-modal {
+  width: min(100%, 420px);
+  padding: 1.75rem 1.5rem;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+  border: 2px solid #22c55e;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  text-align: center;
+}
+
+.checkin-success-icon {
+  font-size: 3rem;
+  margin-bottom: 0.5rem;
+}
+
+.checkin-success-title {
+  margin: 0 0 0.5rem;
+  color: #15803d;
+  font-size: 1.25rem;
+}
+
+.checkin-success-name {
+  margin: 0 0 0.35rem;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #166534;
+}
+
+.checkin-success-time {
+  margin: 0 0 1rem;
+  color: #15803d;
+  font-size: 0.95rem;
+}
+
+.checkin-success-substitute {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0 0 1.25rem;
+  text-align: left;
+  font-size: 0.9rem;
+  color: #166534;
+}
+
+.checkin-success-substitute input {
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #86efac;
+  border-radius: 8px;
+  font-size: 1rem;
+  background: #fff;
+  color: #0f172a;
+}
+
+.checkin-success-close {
+  width: 100%;
 }
 
 .checkin-form-search-wrap:focus-within {

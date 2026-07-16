@@ -14,6 +14,8 @@ A Progressive Web App (PWA) for BNI Anchor Chapter meeting attendance check-in.
 
 - **🔳 QR Code Generator**: Create events, download PNG/PDF flyers (PDF uses a canvas-safe inline logo)
 - **📋 Records Management**: View, search, filter, and delete records
+- **👥 Member Management** (`/admin/members`): Category-grouped member list; edit name, profession, category, and standing
+- **🎫 Guest Management** (`/admin/guests`): Edit guest names; keyword search across all events
 - **📥 CSV Export**: Download attendance as CSV file
 - **🔍 Member Search**: Search attendance history
 

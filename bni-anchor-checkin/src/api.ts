@@ -610,6 +610,7 @@ export type ReportAttendance = {
   role?: AttendeeRole;
   tags?: string[];
   sessionId?: string;
+  substituteFor?: string;
 };
 
 /** Report dashboard statistics. */
@@ -780,6 +781,27 @@ export async function logAttendance(
       eventDate,
       checkedInAt,
       status
+    }),
+    mode: "cors"
+  });
+  return handleResponse(response);
+}
+
+/**
+ * Set or clear substitute attendee on a member attendance row. POST /api/attendance/substitute-for.
+ */
+export async function updateAttendanceSubstitute(
+  eventDate: string,
+  memberName: string,
+  substituteName?: string
+): Promise<{ status: string; message: string }> {
+  const response = await fetch(`${API_BASE}/api/attendance/substitute-for`, {
+    method: "POST",
+    headers: jsonHeaders,
+    body: JSON.stringify({
+      eventDate: eventDate.trim(),
+      memberName: memberName.trim(),
+      substituteName: substituteName?.trim() || null
     }),
     mode: "cors"
   });

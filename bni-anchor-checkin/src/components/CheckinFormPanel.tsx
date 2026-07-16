@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { getEventForDate, getMembers, getGuests, getObservers, getCurrentEvent, logAttendance, getReportWebSocketUrl } from "../api";
+import { getEventForDate, getMembers, getGuests, getObservers, getCurrentEvent, logAttendance, getReportWebSocketUrl, updateAttendanceSubstitute } from "../api";
 
 type CheckinType = "member" | "guest" | "observer";
 
@@ -91,6 +91,8 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
   const [isLoading, setIsLoading] = useState(true); // Show loading until first fetch completes
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [checkInSuccess, setCheckInSuccess] = useState(false);
+  const [successCheckInTime, setSuccessCheckInTime] = useState<Date | null>(null);
+  const [substituteName, setSubstituteName] = useState("");
   const [alreadyCheckedIn, setAlreadyCheckedIn] = useState(false);
   const [noEventForDate, setNoEventForDate] = useState(false);
   const [eventSnapshot, setEventSnapshot] = useState<EventSnapshot | null>(null);
@@ -289,6 +291,8 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
     setSelectedId(id);
     setSelectedName(name);
     setCheckInSuccess(false);
+    setSuccessCheckInTime(null);
+    setSubstituteName("");
     setAlreadyCheckedIn(false);
   };
 
@@ -331,6 +335,8 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
         checkinType === "observer" ? "" : now.toISOString(),
         checkinType === "observer" ? "present" : status
       );
+      setSuccessCheckInTime(now);
+      setSubstituteName("");
       setCheckInSuccess(true);
     } catch (error) {
       if (error instanceof Error && error.message.includes("已經簽到")) {
@@ -341,6 +347,34 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
     }
 
     setIsSubmitting(false);
+  };
+
+  const formatCheckInTimeHkt = (date: Date) =>
+    date.toLocaleTimeString("zh-HK", {
+      timeZone: "Asia/Hong_Kong",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
+
+  const dismissCheckInSuccess = async () => {
+    if (checkinType === "member" && eventSnapshot?.date && selectedName && substituteName.trim()) {
+      try {
+        await updateAttendanceSubstitute(eventSnapshot.date, selectedName, substituteName);
+      } catch (error) {
+        onNotify(
+          `替代人未能儲存: ${error instanceof Error ? error.message : "Unknown error"}`,
+          "error"
+        );
+      }
+    }
+    setCheckInSuccess(false);
+    setSuccessCheckInTime(null);
+    setSubstituteName("");
+    setSelectedId(null);
+    setSelectedName("");
+    setSearchQuery("");
   };
 
   const standingColor: Record<string, string> = {
@@ -833,62 +867,39 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
         </div>
       )}
 
-      {/* Success State */}
+      {/* Success popup */}
       {checkInSuccess && (
-        <div
-          style={{
-            background:
-              checkinType === "observer"
-                ? "linear-gradient(135deg, #f5f3ff, #ede9fe)"
-                : "linear-gradient(135deg, #f0fdf4, #dcfce7)",
-            border: `2px solid ${checkinType === "observer" ? "#8b5cf6" : "#22c55e"}`,
-            borderRadius: "16px",
-            padding: "2rem",
-            textAlign: "center",
-            animation: "fadeIn 0.4s ease",
-          }}
-        >
-          <div style={{ fontSize: "3.5rem", marginBottom: "0.75rem" }}>🎉</div>
-          <h2 style={{ margin: "0 0 0.5rem 0", color: checkinType === "observer" ? "#6d28d9" : "#15803d" }}>
-            {checkinType === "observer" ? "出席已記錄！Attendance Recorded!" : "簽到成功！Check-in Successful!"}
-          </h2>
-          <p
-            style={{
-              fontSize: "1.3rem",
-              fontWeight: 700,
-              color: checkinType === "observer" ? "#5b21b6" : "#166534",
-              margin: "0 0 0.5rem 0",
-            }}
-          >
-            {selectedName}
-          </p>
-          {checkinType !== "observer" && (
-            <p style={{ color: "#15803d", margin: "0 0 1.5rem 0", fontSize: "0.9rem" }}>
-              {typeLabel} ·{" "}
-              {new Date().toLocaleTimeString("zh-TW", {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </p>
-          )}
-          {checkinType === "observer" && (
-            <p style={{ color: "#6d28d9", margin: "0 0 1.5rem 0", fontSize: "0.9rem" }}>
-              觀察員 · 不記錄簽到時間
-            </p>
-          )}
-          <button
-            type="button"
-            className="ghost-button"
-            onClick={() => {
-              setCheckInSuccess(false);
-              setSelectedId(null);
-              setSelectedName("");
-              setSearchQuery("");
-            }}
-            style={{ borderColor: "#22c55e", color: "#15803d" }}
-          >
-            返回 Back to List
-          </button>
+        <div className="checkin-success-overlay" role="dialog" aria-modal="true" aria-labelledby="checkin-success-title">
+          <div className="checkin-success-modal">
+            <div className="checkin-success-icon">🎉</div>
+            <h2 id="checkin-success-title" className="checkin-success-title">
+              {checkinType === "observer" ? "出席已記錄！Attendance Recorded!" : "簽到成功！Check-in Successful!"}
+            </h2>
+            <p className="checkin-success-name">{selectedName}</p>
+            {checkinType !== "observer" && successCheckInTime && (
+              <p className="checkin-success-time">
+                {typeLabel} · 簽到時間 {formatCheckInTimeHkt(successCheckInTime)}
+              </p>
+            )}
+            {checkinType === "observer" && (
+              <p className="checkin-success-time">觀察員 · 不記錄簽到時間</p>
+            )}
+            {checkinType === "member" && (
+              <label className="checkin-success-substitute">
+                <span>替代人 Substitute (optional)</span>
+                <input
+                  type="text"
+                  value={substituteName}
+                  onChange={(e) => setSubstituteName(e.target.value)}
+                  placeholder="如由其他會員代出席，可填姓名"
+                  autoComplete="name"
+                />
+              </label>
+            )}
+            <button type="button" className="primary-button checkin-success-close" onClick={() => void dismissCheckInSuccess()}>
+              關閉 Close
+            </button>
+          </div>
         </div>
       )}
 

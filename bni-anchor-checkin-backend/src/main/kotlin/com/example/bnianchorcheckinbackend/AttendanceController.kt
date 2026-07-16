@@ -936,6 +936,35 @@ class AttendanceController(
         }
     }
 
+    @PostMapping("/api/attendance/substitute-for")
+    @Operation(summary = "Set or clear substitute attendee name on a member attendance row")
+    fun updateAttendanceSubstitute(@RequestBody request: AttendanceSubstituteRequest): ResponseEntity<Map<String, String>> {
+        val memberName = request.memberName.trim()
+        val eventDate = request.eventDate.trim()
+        if (memberName.isBlank() || eventDate.isBlank()) {
+            return ResponseEntity.badRequest().body(mapOf("status" to "error", "message" to "memberName and eventDate are required"))
+        }
+        if (eventDbService == null) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(mapOf("status" to "error", "message" to "需要資料庫連線"))
+        }
+        return try {
+            val updated = withDbRetry("updateMemberSubstitute") {
+                eventDbService.updateMemberSubstitute(eventDate, memberName, request.substituteName)
+            }
+            if (!updated) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(mapOf("status" to "error", "message" to "找不到該會員的出席記錄"))
+            }
+            attendanceWebSocketHandler?.broadcast(mapOf("type" to "attendance_updated"))
+            ResponseEntity.ok(mapOf("status" to "success", "message" to "Substitute saved"))
+        } catch (e: Exception) {
+            log.error("updateAttendanceSubstitute failed", e)
+            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(mapOf("status" to "error", "message" to (e.message ?: "Failed to save substitute")))
+        }
+    }
+
     @PostMapping("/api/events/attendance-corrections")
     @Operation(summary = "Apply attendance corrections for an event date (remove/add check-ins)")
     fun applyAttendanceCorrections(@RequestBody request: AttendanceCorrectionsRequest): ResponseEntity<Map<String, Any>> {
@@ -979,7 +1008,7 @@ class AttendanceController(
         // Add UTF-8 BOM for Excel compatibility
         out.write(byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()))
         val writer = PrintWriter(out)
-        writer.println("姓名,專業領域,類別,出席狀態,簽到時間")
+        writer.println("姓名,專業領域,類別,出席狀態,簽到時間,替代人")
 
         // Same attendee list as GET /api/report (DB members + persisted guests + in-memory for event date)
         val rawReport = try {
@@ -1018,13 +1047,14 @@ class AttendanceController(
                     "late_with_code" -> "遲到(有代碼)"
                     else -> attendee.status
                 }
-                writer.println("${attendee.memberName},${domain},member,${statusText},${formatCsvCheckInTime(attendee.checkInTime)}")
+                val substitute = (attendee.substituteFor ?: "").replace(",", "，")
+                writer.println("${attendee.memberName},${domain},member,${statusText},${formatCsvCheckInTime(attendee.checkInTime)},${substitute}")
             }
 
             // Export all absent members (HARD RULE: include remaining absent members)
             for (absentee in reportData.absentees) {
                 val domain = (memberDomainMap[absentee.memberName] ?: "").replace(",", "，")
-                writer.println("${absentee.memberName},${domain},member,缺席,")
+                writer.println("${absentee.memberName},${domain},member,缺席,,")
             }
 
             // Export guests with profession (prefer DB bni_anchor_guests, fallback to CSV/in-memory)

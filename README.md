@@ -79,6 +79,25 @@ graph TD
 | `F005` | CSV Import / Export / CSV 匯入匯出 | `S501` parse, `S502` map columns, `S503` upsert, `S504` export | `EventManagementPanel.tsx`, `AttendanceController.kt`, `scripts/import_attendance_csv_to_remote_api.sh` |
 | `F006` | AI Matching / AI 配對 | `S601` prepare context, `S602` AI request, `S603` render result | `StrategicPlanningPanel.tsx`, `DeepSeekService.kt` |
 | `F007` | Environment & Deployment / 環境及部署 | `S701` env load, `S702` datasource profile, `S703` startup, `S704` health/logs | `.env.example`, `run.sh`, `scripts/run_local_with_remote_db.sh`, Spring profile files |
+| `F008` | Member Management / 會員管理 | `S801` list by category, `S802` edit name/profession/standing, `S803` upsert by id or name | `MembersPage.tsx`, `memberCategories.ts`, `MemberManagementController.kt`, `DatabaseMemberService.kt` |
+
+## Production | 正式環境
+
+| Service | URL |
+|---|---|
+| Frontend (Vercel) | <https://bni-anchor-checkin.vercel.app> |
+| Admin | <https://bni-anchor-checkin.vercel.app/admin> |
+| Live report | <https://bni-anchor-checkin.vercel.app/report> |
+| Backend API (Render) | <https://bni-anchor-checkin-backend.onrender.com> |
+
+Latest production tags:
+
+- **Monorepo** (`bni-checkin`, branch `master`): `prod/4.19` — member edit fix (`memberId` / `currentName` query APIs), guest search/name editing
+- **Backend deploy repo** (`bni-anchor-checkin-backend`, branch `main`): `prod/5.1.2` — same member API fix deployed to Render
+
+Render watches the **separate backend repository** `burkaslarry/bni-anchor-checkin-backend` on `main`, not this monorepo. After changing backend code here, sync `bni-anchor-checkin-backend/` to that repo and push before tagging or deploying. See [Deployment Guide](./docs/guides/DEPLOYMENT.md).
+
+正式環境由 Vercel（前端）及 Render（後端）託管。後端實際 deploy 來自獨立 repo `bni-anchor-checkin-backend`；修改 monorepo 內後端程式後，需同步至該 repo 再 push / deploy。
 
 ## Code Block Standard | 代碼註解規範
 
@@ -271,6 +290,14 @@ npm run dev
 - Guest registration and guest check-in time are stored in `bni_anchor_guests`, including `check_in_time`.
 - `/report` merges member attendance, checked-in guests, and registered-but-not-checked-in guests for the active event date.
 - WebSocket updates refresh operator-facing screens after attendance, event, and registry changes.
+- **Admin → 會員管理** (`/admin/members`) lists members grouped by poster profession categories (A–K). Operators can edit name, profession, category, and standing.
+- Member names may include `/` (e.g. `Max Chan/William Lai`). Use query-param APIs — **not** path variables:
+  - `PUT /api/members?memberId={id}` (preferred)
+  - `PUT /api/members?currentName={name}`
+  - `DELETE /api/members?memberId={id}` or `?name={name}`
+- Member attendance supports optional **substitute_for** (替代人): recorded after check-in in the success popup, stored on `bni_anchor_attendances`, and exported in CSV column `替代人`.
+- **Admin → 嘉賓管理** supports guest rename and keyword search when **全部活動 / All Events** is selected.
+- Member sync scripts: `scripts/import-members-from-poster-2026-07.py`, `scripts/sync-local-members-from-poster.sh`, `scripts/update-production-members-2026-07-10.py`.
 
 ## Documentation | 相關文件
 

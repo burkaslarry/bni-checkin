@@ -26,5 +26,9 @@ data class Attendance(
     var status: String = "absent",
 
     @Column(name = "late_code_used")
-    var lateCodeUsed: Boolean = false
+    var lateCodeUsed: Boolean = false,
+
+    /** Name of the member who physically attended as substitute (optional). */
+    @Column(name = "substitute_for")
+    var substituteFor: String? = null
 )

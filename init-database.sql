@@ -145,6 +145,7 @@ CREATE TABLE bni_anchor_attendances (
     check_in_time TIMESTAMP WITH TIME ZONE NOT NULL,
     status TEXT NOT NULL CHECK (status IN ('on-time', 'late', 'absent', 'late_with_code')),
     late_code_used BOOLEAN DEFAULT FALSE,
+    substitute_for TEXT,
     UNIQUE (member_id, event_id)
 );
 
