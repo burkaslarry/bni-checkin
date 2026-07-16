@@ -1043,6 +1043,12 @@ export async function createMember(
   return handleResponse(response);
 }
 
+function isMemberFetchNetworkError(error: unknown): boolean {
+  if (!(error instanceof TypeError)) return false;
+  const msg = error.message;
+  return msg === "Failed to fetch" || msg.includes("NetworkError");
+}
+
 /**
  * Update member by id (preferred) or current name. PUT /api/members?memberId= or ?currentName=
  */
@@ -1051,19 +1057,26 @@ export async function updateMember(
   request: UpdateMemberRequest,
   memberId?: number
 ): Promise<{ status: string; message: string }> {
-  const params = new URLSearchParams();
+  const body = JSON.stringify(request);
+  const putMember = (params: URLSearchParams) =>
+    fetch(`${API_BASE}/api/members?${params.toString()}`, {
+      method: "PUT",
+      headers: jsonHeaders,
+      body,
+      mode: "cors"
+    });
+
   if (memberId != null) {
-    params.set("memberId", String(memberId));
-  } else {
-    params.set("currentName", currentName);
+    try {
+      return await handleResponse(await putMember(new URLSearchParams({ memberId: String(memberId) })));
+    } catch (error) {
+      if (!isMemberFetchNetworkError(error)) throw error;
+    }
   }
-  const response = await fetch(`${API_BASE}/api/members?${params.toString()}`, {
-    method: "PUT",
-    headers: jsonHeaders,
-    body: JSON.stringify(request),
-    mode: "cors"
-  });
-  return handleResponse(response);
+
+  return handleResponse(
+    await putMember(new URLSearchParams({ currentName }))
+  );
 }
 
 /** Update guest payload (name, profession, referrer, eventDate). */
@@ -1129,17 +1142,21 @@ export async function deleteMember(
   name: string,
   memberId?: number
 ): Promise<{ status: string; message: string }> {
-  const params = new URLSearchParams();
+  const deleteMemberRequest = (params: URLSearchParams) =>
+    fetch(`${API_BASE}/api/members?${params.toString()}`, {
+      method: "DELETE",
+      mode: "cors"
+    });
+
   if (memberId != null) {
-    params.set("memberId", String(memberId));
-  } else {
-    params.set("name", name);
+    try {
+      return await handleResponse(await deleteMemberRequest(new URLSearchParams({ memberId: String(memberId) })));
+    } catch (error) {
+      if (!isMemberFetchNetworkError(error)) throw error;
+    }
   }
-  const response = await fetch(`${API_BASE}/api/members?${params.toString()}`, {
-    method: "DELETE",
-    mode: "cors"
-  });
-  return handleResponse(response);
+
+  return handleResponse(await deleteMemberRequest(new URLSearchParams({ name })));
 }
 
 /**
