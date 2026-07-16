@@ -59,12 +59,16 @@ export default function MembersPage({}: MembersPageProps) {
     }
 
     try {
-      await updateMember(editingMember.name, {
-        name: trimmedName,
-        profession: editDomain,
-        standing: editStanding,
-        professionCode: editProfessionCode,
-      });
+      await updateMember(
+        editingMember.name,
+        {
+          name: trimmedName,
+          profession: editDomain,
+          standing: editStanding,
+          professionCode: editProfessionCode,
+        },
+        editingMember.id
+      );
 
       const category = MEMBER_CATEGORIES.find((c) => c.code === editProfessionCode);
       const renamed = trimmedName !== editingMember.name;
@@ -105,14 +109,14 @@ export default function MembersPage({}: MembersPageProps) {
     }
   };
 
-  const handleDeleteMember = async (memberName: string) => {
-    if (!window.confirm(`確定要刪除會員 ${memberName} 嗎？此操作無法復原！`)) {
+  const handleDeleteMember = async (member: MemberInfo) => {
+    if (!window.confirm(`確定要刪除會員 ${member.name} 嗎？此操作無法復原！`)) {
       return;
     }
 
     try {
-      await deleteMember(memberName);
-      showNotification(`已刪除 ${memberName}`, "success");
+      await deleteMember(member.name, member.id);
+      showNotification(`已刪除 ${member.name}`, "success");
       fetchMembers();
     } catch (error) {
       const message = error instanceof Error ? error.message : "刪除失敗";
@@ -162,7 +166,7 @@ export default function MembersPage({}: MembersPageProps) {
   );
 
   const renderMemberRow = (member: MemberInfo) => (
-    <tr key={member.name} className="members-table-row">
+    <tr key={member.id ?? member.name} className="members-table-row">
       <td className="members-table-name">{member.name}</td>
       <td className="members-table-domain">{member.domain}</td>
       <td className="members-table-standing">
@@ -189,7 +193,7 @@ export default function MembersPage({}: MembersPageProps) {
           <button
             type="button"
             className="ghost-button members-action-btn members-action-btn--danger"
-            onClick={() => handleDeleteMember(member.name)}
+            onClick={() => handleDeleteMember(member)}
           >
             🗑️ 刪除
           </button>

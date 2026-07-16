@@ -95,6 +95,18 @@ class DatabaseMemberService(
     }
 
     @Transactional
+    fun updateMemberById(
+        memberId: Long,
+        newName: String? = null,
+        profession: String? = null,
+        standing: MemberStanding? = null,
+        professionCode: String? = null
+    ): Member? {
+        val member = memberRepository.findById(memberId).orElse(null) ?: return null
+        return applyMemberChanges(member, newName, profession, standing, professionCode)
+    }
+
+    @Transactional
     fun updateMember(
         name: String,
         newName: String? = null,
@@ -103,6 +115,16 @@ class DatabaseMemberService(
         professionCode: String? = null
     ): Member? {
         val member = memberRepository.findByNameIgnoreCase(name).orElse(null) ?: return null
+        return applyMemberChanges(member, newName, profession, standing, professionCode)
+    }
+
+    private fun applyMemberChanges(
+        member: Member,
+        newName: String?,
+        profession: String?,
+        standing: MemberStanding?,
+        professionCode: String?
+    ): Member {
         if (newName != null && !newName.equals(member.name, ignoreCase = true)) {
             if (memberRepository.existsByNameIgnoreCase(newName)) {
                 throw IllegalArgumentException("Member already exists")
@@ -147,6 +169,14 @@ class DatabaseMemberService(
                 standing = standing
             )
         )
+    }
+
+    @Transactional
+    fun deleteMemberById(memberId: Long): Boolean {
+        val member = memberRepository.findById(memberId).orElse(null) ?: return false
+        attendanceRepository.deleteByMemberId(member.id!!.toInt())
+        memberRepository.delete(member)
+        return true
     }
 
     @Transactional

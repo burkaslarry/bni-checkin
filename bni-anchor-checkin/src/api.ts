@@ -1044,17 +1044,20 @@ export async function createMember(
 }
 
 /**
- * Update member by name. PUT /api/members/:name. Side effect: network; backend DB update.
- * @param {string} name - Member name (path)
- * @param {UpdateMemberRequest} request
- * @returns {Promise<{ status: string; message: string }>}
- * @throws {Error} On HTTP error
+ * Update member by id (preferred) or current name. PUT /api/members?memberId= or ?currentName=
  */
 export async function updateMember(
-  name: string,
-  request: UpdateMemberRequest
+  currentName: string,
+  request: UpdateMemberRequest,
+  memberId?: number
 ): Promise<{ status: string; message: string }> {
-  const response = await fetch(`${API_BASE}/api/members/${encodeURIComponent(name)}`, {
+  const params = new URLSearchParams();
+  if (memberId != null) {
+    params.set("memberId", String(memberId));
+  } else {
+    params.set("currentName", currentName);
+  }
+  const response = await fetch(`${API_BASE}/api/members?${params.toString()}`, {
     method: "PUT",
     headers: jsonHeaders,
     body: JSON.stringify(request),
@@ -1120,15 +1123,19 @@ export async function createGuest(
 }
 
 /**
- * Delete member by name. DELETE /api/members/:name. Side effect: network; backend DB delete.
- * @param {string} name - Member name (path)
- * @returns {Promise<{ status: string; message: string }>}
- * @throws {Error} On HTTP error
+ * Delete member by id (preferred) or name. DELETE /api/members?memberId= or ?name=
  */
 export async function deleteMember(
-  name: string
+  name: string,
+  memberId?: number
 ): Promise<{ status: string; message: string }> {
-  const response = await fetch(`${API_BASE}/api/members/${encodeURIComponent(name)}`, {
+  const params = new URLSearchParams();
+  if (memberId != null) {
+    params.set("memberId", String(memberId));
+  } else {
+    params.set("name", name);
+  }
+  const response = await fetch(`${API_BASE}/api/members?${params.toString()}`, {
     method: "DELETE",
     mode: "cors"
   });
