@@ -73,6 +73,7 @@ graph TD
 | Feature Code 功能編號 | Feature 功能 | Primary Steps 主要步驟 | Main Areas 主要位置 |
 |---|---|---|---|
 | `F001` | Event Creation / 活動建立 | `S101` validate, `S102` save, `S103` activate, `S104` QR/PDF | `QRGeneratorPanel.tsx`, `EventDbService.kt`, `AttendanceController.kt` |
+| `F009` | Event Management / 活動管理 | `S901` list/activate, `S902` edit name/times, `S903` regenerate PDF, `S904` import/export CSV | `EventManagementPanel.tsx`, `EventEditModal.tsx`, `EventDbService.kt`, `PUT /api/events/{id}` |
 | `F002` | Attendance Check-in / 簽到 | `S201` select/scan, `S202` verify, `S203` persist, `S204` broadcast | `CheckinFormPanel.tsx`, `MemberCheckinPanel.tsx`, `GuestCheckinPanel.tsx`, `AttendanceController.kt` |
 | `F003` | Guest Registration / 嘉賓登記 | `S301` import/register, `S302` match event date, `S303` store guest row | `PublicGuestWalkinPage.tsx`, `GuestsPage.tsx`, `GuestRepository.kt` |
 | `F004` | Live Report / 即時出席報告 | `S401` load event, `S402` merge records, `S403` classify status, `S404` render filters | `ReportPage.tsx`, `EventAttendanceDetailModal.tsx`, `EventDbService.kt` |
@@ -92,10 +93,20 @@ graph TD
 
 Latest production tags:
 
-- **Monorepo** (`bni-checkin`, branch `master`): `prod/4.19` — member edit fix (`memberId` / `currentName` query APIs), guest search/name editing
-- **Backend deploy repo** (`bni-anchor-checkin-backend`, branch `main`): `prod/5.1.2` — same member API fix deployed to Render
+- **Monorepo** (`bni-checkin`, branch `master`): `prod/4.24` — event edit (name, start/end time) with PDF regen, SRAA-aligned Vercel deploy gate, report substitute column, member mark-absent
+- **Backend deploy repo** (`bni-anchor-checkin-backend`, branch `main`): `prod/5.1.6` — `PUT /api/events/{id}` for event metadata updates
 
-Render watches the **separate backend repository** `burkaslarry/bni-anchor-checkin-backend` on `main`, not this monorepo. After changing backend code here, sync `bni-anchor-checkin-backend/` to that repo and push before tagging or deploying. See [Deployment Guide](./docs/guides/DEPLOYMENT.md).
+Render watches the **separate backend repository** `burkaslarry/bni-anchor-checkin-backend` on `main`, not this monorepo. After changing backend code here, sync `bni-anchor-checkin-backend/` to that repo and push before tagging or deploying.
+
+**Vercel production deploy (SRAA-aligned):** run audit, tests, and build before release:
+
+```bash
+./scripts/deploy-vercel-production.sh
+# or: make deploy-vercel-prod
+# or: cd bni-anchor-checkin && npm run deploy:vercel:prod
+```
+
+See [Deployment Guide](./docs/guides/DEPLOYMENT.md) for full steps and audit log location (`docs/security/`).
 
 正式環境由 Vercel（前端）及 Render（後端）託管。後端實際 deploy 來自獨立 repo `bni-anchor-checkin-backend`；修改 monorepo 內後端程式後，需同步至該 repo 再 push / deploy。
 
@@ -255,6 +266,7 @@ make frontend-dev
 make backend-dev
 make test
 make build
+make deploy-vercel-prod   # SRAA gate + Vercel production deploy
 ```
 
 Direct commands:
@@ -286,6 +298,8 @@ npm run dev
 ## Core Runtime Notes | 核心運作備註
 
 - Creating an event from **Admin → 產生 QR 碼** should activate that event so check-in, report, and export target the same meeting.
+- **Admin → 活動管理** lists all events. Operators can activate, import/export attendance CSV, view attendance grid, and **edit** event name, start time, and end time (`✏️ 編輯`). On save, the updated QR flyer PDF downloads automatically.
+- Event update API (DB mode): `PUT /api/events/{eventId}` with JSON `{ "name"?, "startTime"?, "endTime"? }` (at least one field). Times use `HH:mm` or `HH:mm:ss`.
 - Member attendance is stored in `bni_anchor_attendances`.
 - Guest registration and guest check-in time are stored in `bni_anchor_guests`, including `check_in_time`.
 - `/report` merges member attendance, checked-in guests, and registered-but-not-checked-in guests for the active event date.
@@ -295,9 +309,10 @@ npm run dev
   - `PUT /api/members?memberId={id}` (preferred)
   - `PUT /api/members?currentName={name}`
   - `DELETE /api/members?memberId={id}` or `?name={name}`
-- Member attendance supports optional **substitute_for** (替代人): recorded after check-in in the success popup, stored on `bni_anchor_attendances`, and exported in CSV column `替代人`.
+- Member attendance supports optional **substitute_for** (替代人): recorded after check-in in the success popup, stored on `bni_anchor_attendances`, shown on `/report`, and exported in CSV column `替代人`. Members can be marked absent from the report records table.
 - **Admin → 嘉賓管理** supports guest rename and keyword search when **全部活動 / All Events** is selected.
 - Member sync scripts: `scripts/import-members-from-poster-2026-07.py`, `scripts/sync-local-members-from-poster.sh`, `scripts/update-production-members-2026-07-10.py`.
+- Operational scripts: `scripts/cleanup-test-events.sh` (soft-delete events whose name contains `TEST`), `scripts/deploy-vercel-production.sh` (SRAA pre-deploy gate).
 
 ## Documentation | 相關文件
 
