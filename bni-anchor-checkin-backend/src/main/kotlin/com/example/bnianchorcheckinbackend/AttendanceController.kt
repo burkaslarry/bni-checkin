@@ -783,6 +783,34 @@ class AttendanceController(
         }
     }
 
+    @PutMapping("/api/events/{eventId}")
+    @Operation(summary = "Update event name and/or start time")
+    fun updateEvent(
+        @PathVariable eventId: Int,
+        @RequestBody request: EventUpdateRequest
+    ): ResponseEntity<Map<String, Any>> {
+        val service = eventDbService ?: return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED)
+            .body(mapOf("status" to "error", "message" to "DB mode required"))
+        return try {
+            val updated = withDbRetry("updateEvent") { service.updateEvent(eventId, request) }
+            if (updated != null) {
+                attendanceWebSocketHandler?.broadcast(
+                    mapOf("type" to "event_updated", "event" to updated)
+                )
+                ResponseEntity.ok(mapOf("status" to "success", "event" to updated))
+            } else {
+                ResponseEntity.status(HttpStatus.NOT_FOUND).body(mapOf("status" to "error", "message" to "Event not found"))
+            }
+        } catch (e: IllegalArgumentException) {
+            ResponseEntity.badRequest().body(mapOf("status" to "error", "message" to (e.message ?: "Invalid request")))
+        } catch (e: Exception) {
+            log.warn("updateEvent failed: {}", e.message)
+            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+                mapOf("status" to "error", "message" to (e.message ?: "Update failed"))
+            )
+        }
+    }
+
     @GetMapping("/api/events/{eventId}")
     @Operation(summary = "Get event by id")
     fun getEventById(@PathVariable eventId: Int): ResponseEntity<EventData> {

@@ -507,6 +507,22 @@ class EventDbService(
         return toEventData(event)
     }
 
+    /** Update event name and/or start time. Returns null if event not found or deleted. */
+    @Transactional
+    fun updateEvent(eventId: Int, request: EventUpdateRequest): EventData? {
+        val event = eventRepository.findById(eventId.toLong()).orElse(null)?.takeIf { it.deletedAt == null }
+            ?: return null
+        val newName = request.name?.trim()?.takeIf { it.isNotEmpty() }
+        val newStartTime = request.startTime?.trim()?.takeIf { it.isNotEmpty() }?.let { parseTime(it) }
+        if (newName == null && newStartTime == null) {
+            throw IllegalArgumentException("At least one of name or startTime must be provided")
+        }
+        if (newName != null) event.name = newName
+        if (newStartTime != null) event.startTime = newStartTime
+        eventRepository.save(event)
+        return toEventData(event)
+    }
+
     @Transactional
     fun softDeleteEvent(eventId: Int, force: Boolean): Boolean {
         val event = eventRepository.findById(eventId.toLong()).orElse(null)?.takeIf { it.deletedAt == null } ?: return false

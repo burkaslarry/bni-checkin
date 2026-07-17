@@ -89,10 +89,36 @@ Verify: `curl -sS https://bni-anchor-checkin-backend.onrender.com/api/members` a
 
 **DB migrations**: Render Postgres only (`render psql dpg-d6iok5q4d50c738643c0-a`). Do NOT use Supabase.
 
-**Frontend → Vercel**:
+**Frontend → Vercel** (SRAA gate — **required before every production deploy**):
+
+Security Risk Assessment (SRA): auto-fix and scan dependencies; fail on high/critical findings.  
+Security Audit (SA): unit tests + production build must pass before deploy.
+
 ```bash
-cd bni-anchor-checkin && npx vercel --prod
+# Preferred: repo script (logs audit to docs/security/)
+chmod +x scripts/deploy-vercel-production.sh
+./scripts/deploy-vercel-production.sh
+
+# Or from bni-anchor-checkin/
+npm run deploy:vercel:prod
+
+# Audit + build only (no Vercel):
+SKIP_VERCEL=1 ./scripts/deploy-vercel-production.sh
 ```
+
+Manual equivalent (must all pass):
+```bash
+cd bni-anchor-checkin
+npm audit fix
+npm audit --audit-level=high
+npm audit --omit=dev --audit-level=high
+npm run test -- --run
+npm run build
+npx vercel --prod --yes
+```
+
+Do **not** run bare `npx vercel --prod` without the steps above.
+
 Confirm `VITE_API_BASE` in Vercel production. Deploy **backend first**, then frontend.
 
 ### 5. Post-deploy report

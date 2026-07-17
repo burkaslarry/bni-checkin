@@ -11,6 +11,7 @@ import {
 } from "../api";
 import { EventSummaryCard } from "./EventSummaryCard";
 import { EventAttendanceDetailModal } from "./EventAttendanceDetailModal";
+import { EventEditModal } from "./EventEditModal";
 import { buildAttendanceCsvFilename } from "../lib/attendanceExportFilename";
 
 /*
@@ -37,6 +38,7 @@ export const EventManagementPanel = ({ onNotify, onNavigateToGenerate }: EventMa
   const [activatingId, setActivatingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [gridEvent, setGridEvent] = useState<EventData | null>(null);
+  const [editEvent, setEditEvent] = useState<EventData | null>(null);
 
   const fetchCurrentEvent = useCallback(async () => {
     setLoading(true);
@@ -222,6 +224,16 @@ export const EventManagementPanel = ({ onNotify, onNavigateToGenerate }: EventMa
         />
       )}
 
+      {editEvent && (
+        <EventEditModal
+          event={editEvent}
+          open
+          onClose={() => setEditEvent(null)}
+          onSaved={() => void fetchCurrentEvent()}
+          onNotify={onNotify}
+        />
+      )}
+
       {loading ? (
         <div className="loading-state">
           <span>載入中...</span>
@@ -241,6 +253,14 @@ export const EventManagementPanel = ({ onNotify, onNavigateToGenerate }: EventMa
                 onDelete={() => void handleDeleteClick(ev.id)}
                 deleting={deletingId === ev.id}
               >
+                <button
+                  type="button"
+                  className="button"
+                  style={{ backgroundColor: "#8b5cf6" }}
+                  onClick={() => setEditEvent(ev)}
+                >
+                  ✏️ 編輯
+                </button>
                 <button
                   type="button"
                   className="button"

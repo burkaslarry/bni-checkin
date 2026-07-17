@@ -10,7 +10,10 @@
     "preview": "vite preview",
     "test": "vitest",
     "test:ui": "vitest --ui",
-    "test:coverage": "vitest --coverage"
+    "test:coverage": "vitest --coverage",
+    "security:audit": "npm audit fix && npm audit --audit-level=high && npm audit --omit=dev --audit-level=high",
+    "verify:release": "npm run security:audit && npm run test -- --run && npm run build",
+    "deploy:vercel:prod": "npm run verify:release && npx vercel --prod --yes"
   },
   "keywords": [],
   "author": "",
@@ -35,11 +38,11 @@
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.0.0",
-    "@vitest/ui": "^4.0.17",
+    "@vitest/ui": "^4.1.10",
     "jsdom": "^23.2.0",
     "typescript": "^5.9.3",
     "vite": "^7.2.2",
     "vite-plugin-pwa": "^1.1.0",
-    "vitest": "^4.0.17"
+    "vitest": "^4.1.10"
   }
 }

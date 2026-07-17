@@ -65,6 +65,12 @@ data class EventRequest(
     val onTimeCutoff: String = "07:01"
 )
 
+/** Partial update for an existing event (name and/or start time). */
+data class EventUpdateRequest(
+    val name: String? = null,
+    val startTime: String? = null
+)
+
 data class EventData(
     val id: Int,
     val name: String,

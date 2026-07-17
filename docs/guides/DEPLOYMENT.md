@@ -60,12 +60,33 @@ curl https://your-backend.onrender.com/api/members
 
 ## Vercel Frontend Deployment
 
-### Deploy via Vercel CLI
+### SRAA-aligned production deploy (required)
+
+Before **every** Vercel production release, run dependency remediation and verification (aligned with Hong Kong OGCIO **Security Risk Assessment and Audit** practice):
+
+| Step | Purpose | Command |
+|------|---------|---------|
+| SRA — remediate | Auto-fix known npm vulnerabilities | `npm audit fix` |
+| SRA — assess | Fail on high/critical (all + production deps) | `npm audit --audit-level=high` |
+| SA — verify | Tests and production build | `npm run test -- --run` && `npm run build` |
+| Deploy | Only after all pass | `npx vercel --prod --yes` |
+
+**One command** (from repo root):
 
 ```bash
-cd bni-anchor-checkin
-npx vercel --prod
+chmod +x scripts/deploy-vercel-production.sh
+./scripts/deploy-vercel-production.sh
 ```
+
+Or from `bni-anchor-checkin/`:
+
+```bash
+npm run deploy:vercel:prod
+```
+
+Audit output is saved under `docs/security/` for audit trail.
+
+Do **not** deploy with bare `npx vercel --prod` without the gate above.
 
 ### Set Environment Variables
 

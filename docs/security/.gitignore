@@ -1,0 +1,2 @@
+# Ignore timestamped audit logs (optional local artifacts); README stays tracked.
+npm-audit-*.txt

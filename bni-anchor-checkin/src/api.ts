@@ -615,6 +615,24 @@ export async function deleteEvent(
   return handleResponse(response);
 }
 
+/** Update event name and/or start time. PUT /api/events/{id}. Returns updated event. */
+export async function updateEvent(
+  eventId: number,
+  patch: { name?: string; startTime?: string }
+): Promise<EventData> {
+  const response = await fetch(`${API_BASE}/api/events/${eventId}`, {
+    method: "PUT",
+    headers: jsonHeaders,
+    body: JSON.stringify(patch),
+    mode: "cors"
+  });
+  const data = await handleResponse<{ status: string; event: EventData }>(response);
+  if (!data.event) {
+    throw new Error("Update succeeded but no event returned");
+  }
+  return data.event;
+}
+
 /** Report page: attendance status. */
 export type AttendanceStatus = "on-time" | "late" | "absent";
 

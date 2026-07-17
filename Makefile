@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: help install dev frontend-dev backend-dev test test-frontend test-backend build build-frontend build-backend clean simulate-features
+.PHONY: help install dev frontend-dev backend-dev test test-frontend test-backend build build-frontend build-backend clean simulate-features deploy-vercel-prod
 
 help:
 	@echo "Common commands:"
@@ -11,6 +11,7 @@ help:
 	@echo "  make backend-dev    Start Spring Boot backend"
 	@echo "  make test           Run frontend and backend tests"
 	@echo "  make build          Build frontend and backend"
+	@echo "  make deploy-vercel-prod  SRAA gate + Vercel production deploy"
 	@echo "  make clean          Remove generated build artifacts"
 
 install:
@@ -46,3 +47,7 @@ clean:
 
 simulate-features:
 	bash scripts/simulate_feature_regression.sh
+
+deploy-vercel-prod:
+	chmod +x scripts/deploy-vercel-production.sh
+	./scripts/deploy-vercel-production.sh
