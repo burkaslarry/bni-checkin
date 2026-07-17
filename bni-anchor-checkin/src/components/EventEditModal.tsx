@@ -15,6 +15,7 @@ type EventEditModalProps = {
 export function EventEditModal({ event, open, onClose, onSaved, onNotify }: EventEditModalProps) {
   const [name, setName] = useState(event.name);
   const [startTime, setStartTime] = useState(event.startTime);
+  const [endTime, setEndTime] = useState(event.endTime);
   const [saving, setSaving] = useState(false);
   const [includeEventDateInPdf, setIncludeEventDateInPdf] = useState(true);
   const [pdfCaptureEvent, setPdfCaptureEvent] = useState<EventData | null>(null);
@@ -23,6 +24,7 @@ export function EventEditModal({ event, open, onClose, onSaved, onNotify }: Even
     if (open) {
       setName(event.name);
       setStartTime(event.startTime);
+      setEndTime(event.endTime);
       setPdfCaptureEvent(null);
     }
   }, [open, event]);
@@ -31,9 +33,10 @@ export function EventEditModal({ event, open, onClose, onSaved, onNotify }: Even
     () => pdfCaptureEvent ?? {
       ...event,
       name: name.trim() || event.name,
-      startTime: startTime || event.startTime
+      startTime: startTime || event.startTime,
+      endTime: endTime || event.endTime
     },
-    [event, name, startTime, pdfCaptureEvent]
+    [event, name, startTime, endTime, pdfCaptureEvent]
   );
 
   const qrData = useMemo(() => eventToQrFlyerData(previewEvent), [previewEvent]);
@@ -48,10 +51,15 @@ export function EventEditModal({ event, open, onClose, onSaved, onNotify }: Even
       onNotify("請設定活動開始時間", "error");
       return;
     }
-    const payload: { name?: string; startTime?: string } = {};
+    if (!endTime) {
+      onNotify("請設定活動結束時間", "error");
+      return;
+    }
+    const payload: { name?: string; startTime?: string; endTime?: string } = {};
     if (trimmedName !== event.name) payload.name = trimmedName;
     if (startTime !== event.startTime) payload.startTime = startTime;
-    if (!payload.name && !payload.startTime) {
+    if (endTime !== event.endTime) payload.endTime = endTime;
+    if (!payload.name && !payload.startTime && !payload.endTime) {
       onNotify("沒有變更", "info");
       return;
     }
@@ -131,6 +139,18 @@ export function EventEditModal({ event, open, onClose, onSaved, onNotify }: Even
               type="time"
               value={startTime}
               onChange={(e) => setStartTime(e.target.value)}
+              style={{ color: "var(--text)", background: "var(--panel)" }}
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="edit-event-end" style={{ color: "var(--text)" }}>🏁 活動結束 End Time</label>
+            <input
+              id="edit-event-end"
+              className="input-field"
+              type="time"
+              value={endTime}
+              onChange={(e) => setEndTime(e.target.value)}
               style={{ color: "var(--text)", background: "var(--panel)" }}
             />
           </div>

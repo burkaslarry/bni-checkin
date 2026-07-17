@@ -507,18 +507,20 @@ class EventDbService(
         return toEventData(event)
     }
 
-    /** Update event name and/or start time. Returns null if event not found or deleted. */
+    /** Update event name, start time, and/or end time. Returns null if event not found or deleted. */
     @Transactional
     fun updateEvent(eventId: Int, request: EventUpdateRequest): EventData? {
         val event = eventRepository.findById(eventId.toLong()).orElse(null)?.takeIf { it.deletedAt == null }
             ?: return null
         val newName = request.name?.trim()?.takeIf { it.isNotEmpty() }
         val newStartTime = request.startTime?.trim()?.takeIf { it.isNotEmpty() }?.let { parseTime(it) }
-        if (newName == null && newStartTime == null) {
-            throw IllegalArgumentException("At least one of name or startTime must be provided")
+        val newEndTime = request.endTime?.trim()?.takeIf { it.isNotEmpty() }?.let { parseTime(it) }
+        if (newName == null && newStartTime == null && newEndTime == null) {
+            throw IllegalArgumentException("At least one of name, startTime, or endTime must be provided")
         }
         if (newName != null) event.name = newName
         if (newStartTime != null) event.startTime = newStartTime
+        if (newEndTime != null) event.endTime = newEndTime
         eventRepository.save(event)
         return toEventData(event)
     }

@@ -77,4 +77,28 @@ class EventDbServiceUpdateEventTest {
         assertEquals("New Name", captor.value.name)
         assertEquals(LocalTime.of(8, 15), captor.value.startTime)
     }
+
+    @Test
+    fun `updateEvent changes end time`() {
+        val event = Event(
+            id = 35L,
+            name = "BNI Anchor Regular Meeting 2026-06-25",
+            createDate = LocalDate.of(2026, 6, 24),
+            eventDate = LocalDate.of(2026, 6, 25),
+            registrationStartTime = LocalTime.of(6, 30),
+            startTime = LocalTime.of(7, 1),
+            endTime = LocalTime.of(9, 0),
+            onTimeCutoffTime = LocalTime.of(7, 5),
+            status = "ACTIVE",
+            isActive = false
+        )
+        `when`(eventRepository.findById(35L)).thenReturn(Optional.of(event))
+
+        val result = eventDbService.updateEvent(35, EventUpdateRequest(endTime = "09:30"))
+
+        assertEquals("09:30", result?.endTime)
+        val captor = ArgumentCaptor.forClass(Event::class.java)
+        verify(eventRepository).save(captor.capture())
+        assertEquals(LocalTime.of(9, 30), captor.value.endTime)
+    }
 }

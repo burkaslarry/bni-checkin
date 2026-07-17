@@ -784,7 +784,7 @@ class AttendanceController(
     }
 
     @PutMapping("/api/events/{eventId}")
-    @Operation(summary = "Update event name and/or start time")
+    @Operation(summary = "Update event name, start time, and/or end time")
     fun updateEvent(
         @PathVariable eventId: Int,
         @RequestBody request: EventUpdateRequest

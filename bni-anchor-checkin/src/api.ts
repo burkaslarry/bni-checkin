@@ -615,10 +615,10 @@ export async function deleteEvent(
   return handleResponse(response);
 }
 
-/** Update event name and/or start time. PUT /api/events/{id}. Returns updated event. */
+/** Update event name, start time, and/or end time. PUT /api/events/{id}. Returns updated event. */
 export async function updateEvent(
   eventId: number,
-  patch: { name?: string; startTime?: string }
+  patch: { name?: string; startTime?: string; endTime?: string }
 ): Promise<EventData> {
   const response = await fetch(`${API_BASE}/api/events/${eventId}`, {
     method: "PUT",
