@@ -78,7 +78,7 @@ export function EventEditModal({ event, open, onClose, onSaved, onNotify }: Even
   return (
     <>
       <div
-        className="modal-backdrop"
+        className="modal-overlay event-edit-modal-overlay"
         style={{
           position: "fixed",
           inset: 0,
@@ -92,42 +92,46 @@ export function EventEditModal({ event, open, onClose, onSaved, onNotify }: Even
         onClick={onClose}
       >
         <div
-          className="event-edit-modal"
+          className="modal-content event-edit-modal"
           style={{
-            background: "var(--surface, #fff)",
+            background: "var(--bg)",
+            color: "var(--text)",
             borderRadius: "12px",
             padding: "1.5rem",
             maxWidth: "480px",
             width: "100%",
-            boxShadow: "0 8px 32px rgba(0,0,0,0.2)"
+            boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+            border: "1px solid var(--border)"
           }}
           onClick={(e) => e.stopPropagation()}
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-            <h3 style={{ margin: 0 }}>✏️ 編輯活動</h3>
+            <h3 style={{ margin: 0, color: "#fff" }}>✏️ 編輯活動</h3>
             <button type="button" className="ghost-button" onClick={onClose} aria-label="Close">
               ✕
             </button>
           </div>
 
           <div className="form-group">
-            <label htmlFor="edit-event-name">活動名稱</label>
+            <label htmlFor="edit-event-name" style={{ color: "var(--text)" }}>活動名稱</label>
             <input
               id="edit-event-name"
               className="input-field"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              style={{ color: "var(--text)", background: "var(--panel)" }}
             />
           </div>
 
           <div className="form-group">
-            <label htmlFor="edit-event-start">活動開始時間 Start Time</label>
+            <label htmlFor="edit-event-start" style={{ color: "var(--text)" }}>活動開始時間 Start Time</label>
             <input
               id="edit-event-start"
               className="input-field"
               type="time"
               value={startTime}
               onChange={(e) => setStartTime(e.target.value)}
+              style={{ color: "var(--text)", background: "var(--panel)" }}
             />
           </div>
 
