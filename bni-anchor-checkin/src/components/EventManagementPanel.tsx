@@ -7,7 +7,8 @@ import {
   listEvents,
   activateEvent,
   deleteEvent,
-  normalizeApiEventId
+  normalizeApiEventId,
+  sendAttendanceEmail
 } from "../api";
 import { EventSummaryCard } from "./EventSummaryCard";
 import { EventAttendanceDetailModal } from "./EventAttendanceDetailModal";
@@ -32,6 +33,7 @@ export const EventManagementPanel = ({ onNotify, onNavigateToGenerate }: EventMa
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [exportingEventId, setExportingEventId] = useState<number | null>(null);
+  const [emailingEventId, setEmailingEventId] = useState<number | null>(null);
   const [importingEventId, setImportingEventId] = useState<number | null>(null);
   const importFileRef = useRef<HTMLInputElement>(null);
   const [pendingImport, setPendingImport] = useState<{ eventId: number; date: string } | null>(null);
@@ -199,6 +201,29 @@ export const EventManagementPanel = ({ onNotify, onNavigateToGenerate }: EventMa
     }
   };
 
+  const handleSendAttendanceEmail = async (ev: EventData) => {
+    if (
+      !window.confirm(
+        `測試寄送出席 CSV 電郵？\n\n活動：${ev.name}\n日期：${ev.date}\n\n會寄到後端設定的 ATTENDANCE_EMAIL_TO（預設 lo.wailun5@gmail.com）。`
+      )
+    ) {
+      return;
+    }
+    setEmailingEventId(ev.id);
+    try {
+      const result = await sendAttendanceEmail(ev.id, true);
+      const extra =
+        result.recipient || result.rowCount != null
+          ? `（${result.recipient ?? ""}${result.rowCount != null ? ` · ${result.rowCount} 列` : ""}）`
+          : "";
+      onNotify(`${result.message || "已寄出出席 CSV"}${extra}`, result.status === "success" ? "success" : "info");
+    } catch (e) {
+      onNotify("寄送失敗: " + (e instanceof Error ? e.message : "未知錯誤"), "error");
+    } finally {
+      setEmailingEventId(null);
+    }
+  };
+
   return (
     <section className="section event-management-panel">
       <div className="section-header">
@@ -277,6 +302,16 @@ export const EventManagementPanel = ({ onNotify, onNavigateToGenerate }: EventMa
                   onClick={() => void handleExportEvent(ev)}
                 >
                   {exportingEventId === ev.id ? "⏳ 匯出中..." : "📥 匯出 CSV"}
+                </button>
+                <button
+                  type="button"
+                  className="button"
+                  style={{ backgroundColor: "#64748b" }}
+                  disabled={emailingEventId === ev.id || exportingEventId === ev.id}
+                  onClick={() => void handleSendAttendanceEmail(ev)}
+                  title="測試寄送出席 CSV 到 ATTENDANCE_EMAIL_TO（Resend）"
+                >
+                  {emailingEventId === ev.id ? "⏳ 寄送中..." : "✉️ 測試寄送 CSV"}
                 </button>
                 <button
                   type="button"

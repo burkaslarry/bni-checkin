@@ -43,5 +43,9 @@ data class Event(
     var isActive: Boolean = false,
 
     @Column(name = "deleted_at")
-    var deletedAt: OffsetDateTime? = null
+    var deletedAt: OffsetDateTime? = null,
+
+    /** Set when attendance CSV was emailed after the event end time (Resend). */
+    @Column(name = "attendance_email_sent_at")
+    var attendanceEmailSentAt: OffsetDateTime? = null
 )

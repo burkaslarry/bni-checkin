@@ -427,6 +427,41 @@ export async function exportRecords(eventId?: number | string | null): Promise<B
   return response.blob();
 }
 
+/** Response from POST /api/events/:id/send-attendance-email */
+export type SendAttendanceEmailResult = {
+  status: string;
+  message?: string;
+  eventId?: number;
+  eventName?: string;
+  eventDate?: string;
+  filename?: string;
+  rowCount?: number;
+  recipient?: string;
+};
+
+/**
+ * Email attendance CSV for an event via Resend (admin test / manual).
+ * POST /api/events/{eventId}/send-attendance-email?force=true
+ */
+export async function sendAttendanceEmail(
+  eventId: number | string,
+  force: boolean = true
+): Promise<SendAttendanceEmailResult> {
+  const id = normalizeApiEventId(eventId);
+  if (id === undefined) {
+    throw new Error("Invalid event id");
+  }
+  const response = await fetch(
+    `${API_BASE}/api/events/${encodeURIComponent(String(id))}/send-attendance-email?force=${force ? "true" : "false"}`,
+    {
+      method: "POST",
+      mode: "cors",
+      headers: jsonHeaders
+    }
+  );
+  return handleResponse(response);
+}
+
 /** Response from POST /api/events/import-attendance-csv (multipart). */
 export type ImportAttendanceCsvResult = {
   status: string;
