@@ -33,7 +33,9 @@ class EventAttendanceEmailService(
     private val resendEmailService: ResendEmailService,
     @Value("\${attendance.email.from:EventXP <info@innovatexp.co>}") private val fromAddress: String,
     @Value("\${attendance.email.to:lo.wailun5@gmail.com}") private val toAddress: String,
-    @Value("\${attendance.email.grace-minutes:5}") private val graceMinutes: Long
+    @Value("\${attendance.email.grace-minutes:5}") private val graceMinutes: Long,
+    /** Only auto-email events that ended within this lookback window (avoids flooding old history). */
+    @Value("\${attendance.email.lookback-hours:12}") private val lookbackHours: Long
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
     private val hkt: ZoneId = ZoneId.of("Asia/Hong_Kong")
@@ -41,17 +43,21 @@ class EventAttendanceEmailService(
     fun isReady(): Boolean = resendEmailService.isConfigured()
 
     /**
-     * Find ACTIVE events whose end time (+ grace) has passed and that have not been emailed yet.
+     * Find ACTIVE events whose end time (+ grace) has passed, that have not been emailed yet,
+     * and that ended within [lookbackHours] (so historical events are never bulk-emailed).
      */
     fun findEventsDueForAttendanceEmail(now: ZonedDateTime = ZonedDateTime.now(hkt)): List<com.example.bnianchorcheckinbackend.entities.Event> {
+        val lookbackStart = now.minusHours(lookbackHours)
         val candidates = eventRepository.findAllByStatusAndDeletedAtIsNullOrderByEventDateAscStartTimeAsc("ACTIVE")
         return candidates.filter { event ->
             if (event.attendanceEmailSentAt != null) return@filter false
             val id = event.id ?: return@filter false
             val endBase = event.endTime ?: event.startTime.plusHours(2)
             val endDate = if (!endBase.isAfter(event.startTime)) event.eventDate.plusDays(1) else event.eventDate
-            val endAt = ZonedDateTime.of(endDate, endBase, hkt).plusMinutes(graceMinutes)
-            !now.isBefore(endAt) && id > 0
+            val endAt = ZonedDateTime.of(endDate, endBase, hkt)
+            val dueAt = endAt.plusMinutes(graceMinutes)
+            // Ended recently enough, and past grace window
+            !endAt.isBefore(lookbackStart) && !now.isBefore(dueAt) && id > 0
         }
     }
 
