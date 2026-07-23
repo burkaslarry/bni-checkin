@@ -9,6 +9,24 @@ export function formatEventTime(time: string): string {
   return `${hour12}:${String(m).padStart(2, "0")} ${period}`;
 }
 
+/** Format ISO attendanceEmailSentAt for display (HKT-friendly local string). */
+export function formatAttendanceEmailSentAt(iso: string): string {
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleString("zh-HK", {
+      timeZone: "Asia/Hong_Kong",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  } catch {
+    return iso;
+  }
+}
+
 type EventSummaryCardProps = {
   event: EventData;
   isCurrent?: boolean;
@@ -61,6 +79,17 @@ export function EventSummaryCard({
         <div className="info-item">
           <span className="info-label">🏁 活動結束</span>
           <span className="info-value">{formatEventTime(event.endTime)}</span>
+        </div>
+        <div className="info-item">
+          <span className="info-label">✉️ 出席 CSV 電郵</span>
+          <span
+            className="info-value"
+            style={{ color: event.attendanceEmailSentAt ? "#22c55e" : "#94a3b8" }}
+          >
+            {event.attendanceEmailSentAt
+              ? `已寄出 ${formatAttendanceEmailSentAt(event.attendanceEmailSentAt)}`
+              : "未寄出"}
+          </span>
         </div>
       </div>
 

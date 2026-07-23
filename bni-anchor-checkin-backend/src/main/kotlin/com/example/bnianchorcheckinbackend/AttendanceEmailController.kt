@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestParam
@@ -60,6 +61,32 @@ class AttendanceEmailController(
             log.error("Attendance email failed for eventId={}: {}", eventId, e.message)
             ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(
                 mapOf("status" to "error", "message" to (e.message ?: "Failed to send email"))
+            )
+        }
+    }
+
+    @DeleteMapping("/api/events/{eventId}/attendance-email")
+    @Operation(summary = "Reset attendance email sent flag so the event can be emailed again by cron or manual send")
+    fun resetAttendanceEmail(@PathVariable eventId: Int): ResponseEntity<Map<String, Any?>> {
+        return try {
+            val result = eventAttendanceEmailService.resetAttendanceEmailSent(eventId)
+            ResponseEntity.ok(
+                mapOf(
+                    "status" to result.status,
+                    "message" to result.message,
+                    "eventId" to result.eventId,
+                    "eventName" to result.eventName,
+                    "eventDate" to result.eventDate
+                )
+            )
+        } catch (e: IllegalArgumentException) {
+            ResponseEntity.status(HttpStatus.NOT_FOUND).body(
+                mapOf("status" to "error", "message" to (e.message ?: "Event not found"))
+            )
+        } catch (e: Exception) {
+            log.error("Reset attendance email failed for eventId={}: {}", eventId, e.message)
+            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+                mapOf("status" to "error", "message" to (e.message ?: "Reset failed"))
             )
         }
     }

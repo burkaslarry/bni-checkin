@@ -827,7 +827,8 @@ class AttendanceController(
                 endTime = ev.endTime?.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")) ?: "09:00",
                 registrationStartTime = ev.registrationStartTime.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")),
                 onTimeCutoff = ev.onTimeCutoffTime.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")),
-                createdAt = ev.createDate.toString()
+                createdAt = ev.createDate.toString(),
+                attendanceEmailSentAt = ev.attendanceEmailSentAt?.toString()
             )
         )
     }

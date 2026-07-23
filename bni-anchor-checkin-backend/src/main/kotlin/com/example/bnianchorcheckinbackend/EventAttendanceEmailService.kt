@@ -140,6 +140,32 @@ class EventAttendanceEmailService(
         )
     }
 
+    /**
+     * Clear [Event.attendanceEmailSentAt] so cron / manual send can treat the event as not yet emailed.
+     */
+    @Transactional
+    fun resetAttendanceEmailSent(eventId: Int): AttendanceEmailResult {
+        val event = eventRepository.findById(eventId.toLong()).orElse(null)
+            ?: throw IllegalArgumentException("Event not found: $eventId")
+        if (event.deletedAt != null) {
+            throw IllegalArgumentException("Event is deleted: $eventId")
+        }
+        val previous = event.attendanceEmailSentAt?.toString()
+        event.attendanceEmailSentAt = null
+        eventRepository.save(event)
+        return AttendanceEmailResult(
+            status = "success",
+            message = if (previous != null) {
+                "Attendance email status reset (was sent at $previous)"
+            } else {
+                "Attendance email status was already clear"
+            },
+            eventId = eventId,
+            eventName = event.name,
+            eventDate = event.eventDate.toString()
+        )
+    }
+
     /** Process all due events; returns count of successful sends. */
     fun processDueEvents(): Int {
         if (!isReady()) {

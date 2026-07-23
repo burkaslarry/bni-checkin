@@ -284,7 +284,8 @@ class EventDbService(
             endTime = event.endTime?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: "09:00",
             registrationStartTime = event.registrationStartTime.format(DateTimeFormatter.ofPattern("HH:mm")),
             onTimeCutoff = event.onTimeCutoffTime.format(DateTimeFormatter.ofPattern("HH:mm")),
-            createdAt = event.createDate.toString()
+            createdAt = event.createDate.toString(),
+            attendanceEmailSentAt = event.attendanceEmailSentAt?.toString()
         )
     }
 

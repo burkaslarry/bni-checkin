@@ -80,7 +80,9 @@ data class EventData(
     val endTime: String,
     val registrationStartTime: String,
     val onTimeCutoff: String,
-    val createdAt: String
+    val createdAt: String,
+    /** ISO timestamp when attendance CSV was emailed; null if never sent. */
+    val attendanceEmailSentAt: String? = null
 )
 
 // Role types for attendees

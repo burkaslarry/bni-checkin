@@ -462,6 +462,28 @@ export async function sendAttendanceEmail(
   return handleResponse(response);
 }
 
+/**
+ * Clear attendance-email-sent flag for an event.
+ * DELETE /api/events/{eventId}/attendance-email
+ */
+export async function resetAttendanceEmail(
+  eventId: number | string
+): Promise<SendAttendanceEmailResult> {
+  const id = normalizeApiEventId(eventId);
+  if (id === undefined) {
+    throw new Error("Invalid event id");
+  }
+  const response = await fetch(
+    `${API_BASE}/api/events/${encodeURIComponent(String(id))}/attendance-email`,
+    {
+      method: "DELETE",
+      mode: "cors",
+      headers: jsonHeaders
+    }
+  );
+  return handleResponse(response);
+}
+
 /** Response from POST /api/events/import-attendance-csv (multipart). */
 export type ImportAttendanceCsvResult = {
   status: string;
@@ -594,6 +616,8 @@ export type EventData = {
   registrationStartTime: string;
   onTimeCutoff: string;
   createdAt: string;
+  /** ISO timestamp when attendance CSV was emailed; null/undefined if never sent. */
+  attendanceEmailSentAt?: string | null;
 };
 
 /** List all events (latest first). GET /api/events. Side effect: network. */

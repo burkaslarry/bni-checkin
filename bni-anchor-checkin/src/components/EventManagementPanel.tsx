@@ -8,7 +8,8 @@ import {
   activateEvent,
   deleteEvent,
   normalizeApiEventId,
-  sendAttendanceEmail
+  sendAttendanceEmail,
+  resetAttendanceEmail
 } from "../api";
 import { EventSummaryCard } from "./EventSummaryCard";
 import { EventAttendanceDetailModal } from "./EventAttendanceDetailModal";
@@ -34,6 +35,7 @@ export const EventManagementPanel = ({ onNotify, onNavigateToGenerate }: EventMa
   const [isDeleting, setIsDeleting] = useState(false);
   const [exportingEventId, setExportingEventId] = useState<number | null>(null);
   const [emailingEventId, setEmailingEventId] = useState<number | null>(null);
+  const [resettingEmailEventId, setResettingEmailEventId] = useState<number | null>(null);
   const [importingEventId, setImportingEventId] = useState<number | null>(null);
   const importFileRef = useRef<HTMLInputElement>(null);
   const [pendingImport, setPendingImport] = useState<{ eventId: number; date: string } | null>(null);
@@ -202,9 +204,12 @@ export const EventManagementPanel = ({ onNotify, onNavigateToGenerate }: EventMa
   };
 
   const handleSendAttendanceEmail = async (ev: EventData) => {
+    const alreadySent = Boolean(ev.attendanceEmailSentAt);
     if (
       !window.confirm(
-        `測試寄送出席 CSV 電郵？\n\n活動：${ev.name}\n日期：${ev.date}\n\n會寄到後端設定的 ATTENDANCE_EMAIL_TO（預設 lo.wailun5@gmail.com）。`
+        alreadySent
+          ? `重新寄送出席 CSV 電郵？\n\n活動：${ev.name}\n日期：${ev.date}\n上次寄出：${ev.attendanceEmailSentAt}\n\n會寄到 ATTENDANCE_EMAIL_TO。`
+          : `寄送出席 CSV 電郵？\n\n活動：${ev.name}\n日期：${ev.date}\n\n會寄到 ATTENDANCE_EMAIL_TO（預設 lo.wailun5@gmail.com）。`
       )
     ) {
       return;
@@ -217,10 +222,31 @@ export const EventManagementPanel = ({ onNotify, onNavigateToGenerate }: EventMa
           ? `（${result.recipient ?? ""}${result.rowCount != null ? ` · ${result.rowCount} 列` : ""}）`
           : "";
       onNotify(`${result.message || "已寄出出席 CSV"}${extra}`, result.status === "success" ? "success" : "info");
+      await fetchCurrentEvent();
     } catch (e) {
       onNotify("寄送失敗: " + (e instanceof Error ? e.message : "未知錯誤"), "error");
     } finally {
       setEmailingEventId(null);
+    }
+  };
+
+  const handleResetAttendanceEmail = async (ev: EventData) => {
+    if (
+      !window.confirm(
+        `重置「已寄出」狀態？\n\n活動：${ev.name}\n日期：${ev.date}\n\n重置後 cron 可再自動寄一次；唔會刪除已收到嘅電郵。`
+      )
+    ) {
+      return;
+    }
+    setResettingEmailEventId(ev.id);
+    try {
+      const result = await resetAttendanceEmail(ev.id);
+      onNotify(result.message || "已重置寄送狀態", "success");
+      await fetchCurrentEvent();
+    } catch (e) {
+      onNotify("重置失敗: " + (e instanceof Error ? e.message : "未知錯誤"), "error");
+    } finally {
+      setResettingEmailEventId(null);
     }
   };
 
@@ -309,10 +335,26 @@ export const EventManagementPanel = ({ onNotify, onNavigateToGenerate }: EventMa
                   style={{ backgroundColor: "#64748b" }}
                   disabled={emailingEventId === ev.id || exportingEventId === ev.id}
                   onClick={() => void handleSendAttendanceEmail(ev)}
-                  title="測試寄送出席 CSV 到 ATTENDANCE_EMAIL_TO（Resend）"
+                  title="寄送／重新寄送出席 CSV 到 ATTENDANCE_EMAIL_TO（Resend）"
                 >
-                  {emailingEventId === ev.id ? "⏳ 寄送中..." : "✉️ 測試寄送 CSV"}
+                  {emailingEventId === ev.id
+                    ? "⏳ 寄送中..."
+                    : ev.attendanceEmailSentAt
+                      ? "✉️ 重新寄出 CSV"
+                      : "✉️ 寄送出席 CSV"}
                 </button>
+                {ev.attendanceEmailSentAt ? (
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    style={{ borderColor: "#94a3b8", color: "#cbd5e1" }}
+                    disabled={resettingEmailEventId === ev.id || emailingEventId === ev.id}
+                    onClick={() => void handleResetAttendanceEmail(ev)}
+                    title="清除已寄出標記，之後可再由 cron 自動寄一次"
+                  >
+                    {resettingEmailEventId === ev.id ? "⏳ 重置中..." : "↺ 重置寄送狀態"}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="button"
