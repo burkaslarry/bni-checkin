@@ -6,13 +6,14 @@ import { QRGeneratorPanel } from "../components/QRGeneratorPanel";
 import { AdminManualEntryPanel } from "../components/AdminManualEntryPanel";
 import { EventManagementPanel } from "../components/EventManagementPanel";
 import { StrategicPlanningPanel } from "../components/StrategicPlanningPanel";
+import { ChapterPasswordPanel } from "../components/ChapterPasswordPanel";
 import { AppVersionFooter } from "../components/AppVersionFooter";
 import { AnchorOnlyNotice } from "../components/AnchorOnlyNotice";
 import { ClientAdminLoginPanel } from "../components/ClientAdminLoginPanel";
 import { useChapter } from "../chapterContext";
 import { getCurrentEvent, type EventData } from "../api";
 
-type AdminView = "home" | "generate" | "manual" | "event" | "strategic";
+type AdminView = "home" | "generate" | "manual" | "event" | "strategic" | "chapter-password";
 
 const navTargets: { id: AdminView; title: string; description: string; icon: string }[] = [
   {
@@ -44,6 +45,7 @@ export default function AdminPage() {
     isClientMode,
     isAuthenticated,
     authReady,
+    isAnchorMode,
     chapter,
     chapterTag,
     chapterId,
@@ -75,7 +77,7 @@ export default function AdminPage() {
   // Handle URL parameter for direct navigation (keep client=true / chapter)
   useEffect(() => {
     const viewParam = searchParams.get("view");
-    if (viewParam && ["generate", "manual", "event", "strategic"].includes(viewParam)) {
+    if (viewParam && ["generate", "manual", "event", "strategic", "chapter-password"].includes(viewParam)) {
       setActiveView(viewParam as AdminView);
       const next = new URLSearchParams();
       if (searchParams.get("client") === "true" || searchParams.get("client") === "1") {
@@ -125,6 +127,8 @@ export default function AdminPage() {
         return <QRGeneratorPanel onNotify={handlePanelNotification} />;
       case "manual":
         return <AdminManualEntryPanel onNotify={handlePanelNotification} />;
+      case "chapter-password":
+        return <ChapterPasswordPanel onNotify={handlePanelNotification} />;
       default:
         return null;
     }
@@ -292,6 +296,18 @@ export default function AdminPage() {
               <strong className="nav-title">公開嘉賓登記連結</strong>
               <span className="hint">教你點樣 share /public/guest 俾人填</span>
             </Link>
+
+            {isAnchorMode && (
+              <button
+                type="button"
+                className="nav-card"
+                onClick={() => setActiveView("chapter-password")}
+              >
+                <span className="nav-icon">🔑</span>
+                <strong className="nav-title">Chapter 密碼</strong>
+                <span className="hint">重設其他 chapter 的 AdminPassword</span>
+              </button>
+            )}
           </div>
         </section>
       )}

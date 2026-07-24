@@ -83,4 +83,33 @@ class ChapterController(
             mapOf("status" to "success", "chapter" to chapterService.toInfo(chapter))
         )
     }
+
+    @PutMapping("/api/chapters/{tag}/admin-password")
+    @Operation(summary = "Anchor-only: reset another chapter AdminPassword (stored as MD5)")
+    fun updateChapterAdminPassword(
+        @PathVariable tag: String,
+        @RequestHeader(value = "X-Client-Token", required = false) token: String?,
+        @RequestBody request: ChapterAdminPasswordRequest
+    ): ResponseEntity<Map<String, Any>> {
+        return try {
+            chapterService.requireAnchorSession(token)
+            val updated = chapterService.updateChapterAdminPassword(tag, request.adminPassword ?: "")
+            ResponseEntity.ok(
+                mapOf(
+                    "status" to "success",
+                    "chapter" to mapOf(
+                        "tag" to updated.tag,
+                        "displayName" to updated.displayName
+                    )
+                )
+            )
+        } catch (e: IllegalArgumentException) {
+            val msg = e.message ?: "Update failed"
+            val unauthorized =
+                msg.contains("Not authenticated", ignoreCase = true) ||
+                    msg.contains("Only Anchor", ignoreCase = true)
+            ResponseEntity.status(if (unauthorized) HttpStatus.UNAUTHORIZED else HttpStatus.BAD_REQUEST)
+                .body(mapOf("status" to "error", "message" to msg))
+        }
+    }
 }

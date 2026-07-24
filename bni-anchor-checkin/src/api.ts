@@ -364,6 +364,29 @@ export async function fetchClientSession(
   return handleResponse(response);
 }
 
+export async function listChapters(): Promise<{ chapters: ChapterInfo[] }> {
+  const response = await fetch(`${API_BASE}/api/chapters`, { mode: "cors" });
+  return handleResponse(response);
+}
+
+/** Anchor-only: reset another chapter's AdminPassword. */
+export async function updateChapterAdminPassword(
+  token: string,
+  tag: string,
+  adminPassword: string
+): Promise<{ status: string; chapter: { tag: string; displayName: string } }> {
+  const response = await fetch(
+    `${API_BASE}/api/chapters/${encodeURIComponent(tag)}/admin-password`,
+    {
+      method: "PUT",
+      headers: { ...jsonHeaders, "X-Client-Token": token },
+      body: JSON.stringify({ AdminPassword: adminPassword }),
+      mode: "cors"
+    }
+  );
+  return handleResponse(response);
+}
+
 /**
  * Pre-registered guest item (name, profession, referrer, optional eventDate).
  * @typedef {Object} GuestInfo

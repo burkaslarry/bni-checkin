@@ -13,7 +13,8 @@ export function AnchorOnlyNotice() {
         <code>chapter=anchor</code>）。
       </p>
       <p>
-        若要管理其他 chapter（例如 AMax），請登出後以該 chapter 的 AdminLogin（如 <code>amax</code>）重新登入。
+        若要管理其他 chapter（例如 AMax）的日常資料，請登出後以該 chapter 的 AdminLogin（如{" "}
+        <code>amax</code>）重新登入。你亦可在本頁「Chapter 密碼」重設其他 chapter 的登入密碼。
       </p>
     </aside>
   );
