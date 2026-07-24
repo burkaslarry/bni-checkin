@@ -5,13 +5,16 @@ import java.time.OffsetDateTime
 
 @Entity
 @Table(
-    name = "bni_anchor_attendances",
+    name = "bni_eventxp_attendances",
     uniqueConstraints = [UniqueConstraint(columnNames = ["member_id", "event_id"])]
 )
 data class Attendance(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long? = null,
+
+    @Column(name = "chapter_id", nullable = false)
+    var chapterId: Int = 1,
 
     @Column(name = "member_id", nullable = false)
     var memberId: Int,

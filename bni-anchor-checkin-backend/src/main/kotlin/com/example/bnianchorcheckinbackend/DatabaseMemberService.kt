@@ -24,8 +24,8 @@ class DatabaseMemberService(
     private val chapterService: ChapterService
 ) {
 
-    fun getAllMembers(chapterTag: String? = null): List<Map<String, Any>> {
-        val chapterId = chapterService.resolveChapterId(chapterTag)
+    fun getAllMembers(chapterTag: String? = null, chapterIdParam: Int? = null): List<Map<String, Any>> {
+        val chapterId = chapterService.resolveChapterId(chapterIdParam, chapterTag)
         val groupByName = professionGroupRepository.findAll().associate { it.code to it.name }
         return memberRepository.findAllByChapterIdOrderByNameAsc(chapterId).map { member ->
             mapOf(

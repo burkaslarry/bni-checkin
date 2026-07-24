@@ -367,9 +367,12 @@ class AttendanceController(
      */
     @GetMapping("/api/members")
     @Operation(summary = "Get list of members with domain info and standing")
-    fun getMembers(@RequestParam(required = false) chapter: String?): Map<String, List<Map<String, Any>>> {
+    fun getMembers(@RequestParam(required = false) chapter: String?, @RequestParam(required = false) chapterId: Int?): Map<String, List<Map<String, Any>>> {
         val chapterTag = chapter?.trim()?.lowercase().orEmpty()
-        val useCsvFallback = chapterTag.isBlank() || chapterTag == "anchor"
+        val useCsvFallback = when {
+            chapterId != null && chapterId > 0 -> chapterId == 1
+            else -> chapterTag.isBlank() || chapterTag == "anchor"
+        }
         val csvFallback: List<Map<String, Any>> = if (useCsvFallback) {
             attendanceService.getMembersWithDomain()
                 .mapIndexed { idx, m -> m + ("id" to (m["id"] ?: (idx + 1))) }
@@ -379,7 +382,7 @@ class AttendanceController(
         return try {
             if (databaseMemberService != null) {
                 try {
-                    val dbMembers = withDbRetry("getMembers") { databaseMemberService.getAllMembers(chapter) }
+                    val dbMembers = withDbRetry("getMembers") { databaseMemberService.getAllMembers(chapter, chapterId) }
                     // Non-anchor chapters: return DB result even if empty (never leak Anchor CSV).
                     if (!useCsvFallback || dbMembers.isNotEmpty()) mapOf("members" to dbMembers)
                     else mapOf("members" to csvFallback)
@@ -450,10 +453,14 @@ class AttendanceController(
      */
     @PostMapping("/api/checkin")
     @Operation(summary = "Record check-in (in-memory + DB for members)")
-    fun checkIn(@RequestBody request: CheckInRequest, @RequestParam(required = false) chapter: String?): ResponseEntity<Map<String, String>> {
+    fun checkIn(
+        @RequestBody request: CheckInRequest,
+        @RequestParam(required = false) chapter: String?,
+        @RequestParam(required = false) chapterId: Int?
+    ): ResponseEntity<Map<String, String>> {
         return try {
             if (eventDbService != null) {
-                val activeEvent = withDbRetry("checkIn-getCurrentEvent") { eventDbService.getCurrentEvent(chapter) }
+                val activeEvent = withDbRetry("checkIn-getCurrentEvent") { eventDbService.getCurrentEvent(chapter, chapterId) }
                     ?: return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body(mapOf("status" to "error", "message" to "尚未設定當前活動"))
                 val eventDate = activeEvent.date
@@ -489,7 +496,7 @@ class AttendanceController(
                         checkedInAt = request.currentTime,
                         status = status
                     )
-                    withDbRetry("checkIn-logAttendance") { eventDbService.logAttendance(logReq, chapter) }
+                    withDbRetry("checkIn-logAttendance") { eventDbService.logAttendance(logReq, chapter, chapterId) }
                     attendanceWebSocketHandler?.broadcast(mapOf("type" to "attendance_updated"))
                     return ResponseEntity.ok(mapOf("status" to "success", "message" to "Check-in successful"))
                 }
@@ -670,10 +677,14 @@ class AttendanceController(
      */
     @GetMapping("/api/report")
     @Operation(summary = "Get report data for an event (DB members + in-memory guests). Omit eventId for active/current event.")
-    fun getReportData(@RequestParam(name = "eventId", required = false) eventId: Int?, @RequestParam(required = false) chapter: String?): ResponseEntity<ReportData> {
+    fun getReportData(
+        @RequestParam(name = "eventId", required = false) eventId: Int?,
+        @RequestParam(required = false) chapter: String?,
+        @RequestParam(required = false) chapterId: Int?
+    ): ResponseEntity<ReportData> {
         val fromDb: ReportData? = try {
             if (eventDbService != null) {
-                withDbRetry("getReportData") { eventDbService.getReportData(eventId, chapter) }
+                withDbRetry("getReportData") { eventDbService.getReportData(eventId, chapter, chapterId) }
             } else null
         } catch (e: Exception) {
             log.warn("DB getReportData failed for eventId={}: {}", eventId, e.message, e)
@@ -689,9 +700,12 @@ class AttendanceController(
     /** Get current event (DB or in-memory). GET /api/events/current. Side effect: DB read when present. @return 200 | 404 */
     @GetMapping("/api/events/current")
     @Operation(summary = "Get current event (DB only, no attendance data)")
-    fun getCurrentEvent(@RequestParam(required = false) chapter: String?): ResponseEntity<EventData> {
+    fun getCurrentEvent(
+        @RequestParam(required = false) chapter: String?,
+        @RequestParam(required = false) chapterId: Int?
+    ): ResponseEntity<EventData> {
         val event = try {
-            if (eventDbService != null) withDbRetry("getCurrentEvent") { eventDbService.getCurrentEvent(chapter) } else null
+            if (eventDbService != null) withDbRetry("getCurrentEvent") { eventDbService.getCurrentEvent(chapter, chapterId) } else null
         } catch (e: Exception) {
             log.warn("DB getCurrentEvent failed: {}", e.message)
             null
@@ -705,9 +719,12 @@ class AttendanceController(
 
     @GetMapping("/api/events")
     @Operation(summary = "List events (latest first)")
-    fun listEvents(@RequestParam(required = false) chapter: String?): ResponseEntity<List<EventData>> {
+    fun listEvents(
+        @RequestParam(required = false) chapter: String?,
+        @RequestParam(required = false) chapterId: Int?
+    ): ResponseEntity<List<EventData>> {
         val events = try {
-            if (eventDbService != null) withDbRetry("listEvents") { eventDbService.listEvents(chapter) } else emptyList()
+            if (eventDbService != null) withDbRetry("listEvents") { eventDbService.listEvents(chapter, chapterId) } else emptyList()
         } catch (e: Exception) {
             log.warn("DB listEvents failed: {}", e.message)
             emptyList()

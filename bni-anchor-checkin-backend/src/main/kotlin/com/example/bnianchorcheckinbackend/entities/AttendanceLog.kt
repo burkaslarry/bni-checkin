@@ -4,7 +4,7 @@ import jakarta.persistence.*
 import java.time.Instant
 
 @Entity
-@Table(name = "bni_anchor_attendance_logs")
+@Table(name = "bni_eventxp_attendance_logs")
 data class AttendanceLog(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

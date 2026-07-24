@@ -5,7 +5,7 @@ import java.time.OffsetDateTime
 
 @Entity
 @Table(
-    name = "bni_anchor_observers",
+    name = "bni_eventxp_observers",
     uniqueConstraints = [UniqueConstraint(columnNames = ["chapter_id", "name", "event_date"])]
 )
 data class Observer(

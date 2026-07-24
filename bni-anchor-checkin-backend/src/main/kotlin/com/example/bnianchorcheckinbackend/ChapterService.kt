@@ -61,6 +61,16 @@ class ChapterService(
     fun resolveChapterId(tagRaw: String?): Int =
         requireChapter(tagRaw).id!!.toInt()
 
+    /** Prefer explicit chapterId (e.g. 1 = Anchor); fall back to chapter tag. */
+    fun resolveChapterId(chapterId: Int?, tagRaw: String?): Int {
+        if (chapterId != null && chapterId > 0) {
+            return chapterRepository.findById(chapterId.toLong()).orElseThrow {
+                IllegalArgumentException("Unknown chapter id: $chapterId")
+            }.id!!.toInt()
+        }
+        return resolveChapterId(tagRaw)
+    }
+
     fun toInfo(chapter: Chapter): ChapterInfo =
         ChapterInfo(
             id = chapter.id!!.toInt(),
@@ -111,5 +121,45 @@ class ChapterService(
 
     fun logout(token: String?) {
         if (!token.isNullOrBlank()) sessions.remove(token)
+    }
+
+    /** Require a valid session belonging to the Anchor chapter. */
+    fun requireAnchorSession(token: String?): Chapter {
+        val chapter = resolveChapterFromSession(token)
+            ?: throw IllegalArgumentException("Not authenticated")
+        if (!chapter.tag.equals("anchor", ignoreCase = true)) {
+            throw IllegalArgumentException("Only Anchor admin can update chapter passwords")
+        }
+        return chapter
+    }
+
+    /**
+     * Anchor-only: set AdminPassword for a non-anchor chapter (stored as MD5).
+     * @throws IllegalArgumentException on validation / unknown chapter
+     */
+    fun updateChapterAdminPassword(targetTagRaw: String?, newPassword: String): ChapterInfo {
+        val targetTag = normalizeTag(targetTagRaw)
+        if (targetTag == "anchor") {
+            throw IllegalArgumentException("Cannot reset Anchor password via this endpoint")
+        }
+        validateNewAdminPassword(newPassword)
+        val chapter = requireChapter(targetTag)
+        chapter.adminPasswordMd5 = md5Hex(newPassword)
+        return toInfo(chapterRepository.save(chapter))
+    }
+
+    companion object {
+        const val MIN_ADMIN_PASSWORD_LENGTH = 8
+
+        fun validateNewAdminPassword(password: String) {
+            if (password.isBlank()) {
+                throw IllegalArgumentException("AdminPassword is required")
+            }
+            if (password.length < MIN_ADMIN_PASSWORD_LENGTH) {
+                throw IllegalArgumentException(
+                    "AdminPassword must be at least $MIN_ADMIN_PASSWORD_LENGTH characters"
+                )
+            }
+        }
     }
 }

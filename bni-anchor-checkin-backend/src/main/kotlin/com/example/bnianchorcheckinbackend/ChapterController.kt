@@ -15,6 +15,11 @@ data class ClientLoginRequest(
     val adminPassword: String? = null
 )
 
+data class ChapterAdminPasswordRequest(
+    @JsonProperty("AdminPassword")
+    val adminPassword: String? = null
+)
+
 @RestController
 @Tag(name = "Chapter / Client Auth", description = "Chapter resolution and client admin login")
 @ConditionalOnProperty(name = ["spring.datasource.url"])

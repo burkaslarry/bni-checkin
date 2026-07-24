@@ -63,6 +63,7 @@ class EventDbServiceSubstituteTest {
         )
         val attendance = Attendance(
             id = 10L,
+            chapterId = 1,
             memberId = 3,
             eventId = 38,
             checkInTime = OffsetDateTime.of(eventDate, LocalTime.of(7, 4), ZoneOffset.ofHours(8)),

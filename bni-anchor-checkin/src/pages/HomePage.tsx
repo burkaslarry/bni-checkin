@@ -4,17 +4,18 @@ import { NotificationEntry } from "../components/ScanPanel";
 import { NotificationStack } from "../components/NotificationStack";
 import { CheckinFormPanel } from "../components/CheckinFormPanel";
 import { AppVersionFooter } from "../components/AppVersionFooter";
-import { setActiveApiChapterTag } from "../api";
+import { setActiveApiChapter, ANCHOR_CHAPTER_ID, CHAPTER_TAG_TO_ID } from "../api";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
 }
 
-/** Public check-in: bare `/` → Anchor; `/?chapter=amax` → that chapter. */
+/** Public check-in: bare `/` → Anchor (chapterId=1); `/?chapter=amax` → that chapter. */
 export default function HomePage() {
   const [searchParams] = useSearchParams();
   const chapterTag = (searchParams.get("chapter") || "anchor").trim().toLowerCase() || "anchor";
+  const chapterId = CHAPTER_TAG_TO_ID[chapterTag] ?? ANCHOR_CHAPTER_ID;
   const isAnchor = chapterTag === "anchor";
   const [chapterReady, setChapterReady] = useState(false);
 
@@ -24,15 +25,15 @@ export default function HomePage() {
   );
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
 
-  // Bind chapter before child effects fetch members/events (avoid Anchor leak).
+  // Bind chapter before child effects fetch members/events (default Anchor id=1 on reload).
   useLayoutEffect(() => {
-    setActiveApiChapterTag(chapterTag);
+    setActiveApiChapter({ id: chapterId, tag: chapterTag });
     setChapterReady(true);
     return () => {
-      setActiveApiChapterTag(null);
+      setActiveApiChapter({ id: ANCHOR_CHAPTER_ID, tag: "anchor" });
       setChapterReady(false);
     };
-  }, [chapterTag]);
+  }, [chapterTag, chapterId]);
 
   const pushNotification = useCallback((note: NotificationEntry) => {
     setNotifications((current) => [...current, note]);

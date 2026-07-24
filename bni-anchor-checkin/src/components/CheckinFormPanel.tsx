@@ -6,8 +6,8 @@ type CheckinType = "member" | "guest" | "observer";
 /** Resolved event for check-in UI: always from backend (current event or 3-day fallback), never from URL. */
 type EventSnapshot = { id: number; date: string; name: string };
 
-async function resolveActiveEventForCheckin(): Promise<EventSnapshot | null> {
-  const current = await getCurrentEvent();
+async function resolveActiveEventForCheckin(chapterTag?: string | null): Promise<EventSnapshot | null> {
+  const current = await getCurrentEvent(chapterTag);
   if (current?.date) {
     return { id: current.id, date: current.date, name: current.name };
   }
@@ -16,7 +16,7 @@ async function resolveActiveEventForCheckin(): Promise<EventSnapshot | null> {
     const d = new Date(base);
     d.setDate(base.getDate() + delta);
     const dateStr = d.toISOString().split("T")[0];
-    const evt = await getEventForDate(dateStr);
+    const evt = await getEventForDate(dateStr, chapterTag);
     if (evt) {
       return { id: evt.id, date: dateStr, name: evt.name };
     }
@@ -114,7 +114,7 @@ export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFor
   const fetchMembers = useCallback(async () => {
     setIsLoading(true);
     try {
-      const result = await getMembers();
+      const result = await getMembers(chapterTag);
       const mappedMembers = (result.members ?? []).map((m, idx) => ({
         id: typeof m.id === "number" ? m.id : idx + 1,
         name: m.name,
@@ -127,13 +127,13 @@ export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFor
       onNotify(`無法載入會員列表: ${msg}`, "error");
     }
     setIsLoading(false);
-  }, [onNotify]);
+  }, [onNotify, chapterTag]);
 
   const fetchGuestsForDate = useCallback(
     async (forDate: string) => {
       setIsLoading(true);
       try {
-        const result = await getGuests(forDate);
+        const result = await getGuests(forDate, chapterTag);
         const mappedGuests = (result.guests ?? []).map((g, idx) => ({
           id: idx + 1,
           name: g.name,
@@ -147,14 +147,14 @@ export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFor
       }
       setIsLoading(false);
     },
-    [onNotify]
+    [onNotify, chapterTag]
   );
 
   const fetchObserversForDate = useCallback(
     async (forDate: string) => {
       setIsLoading(true);
       try {
-        const result = await getObservers(forDate);
+        const result = await getObservers(forDate, chapterTag);
         const mappedObservers = (result.observers ?? []).map((o) => ({
           id: o.id,
           name: o.name,
@@ -168,7 +168,7 @@ export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFor
       }
       setIsLoading(false);
     },
-    [onNotify]
+    [onNotify, chapterTag]
   );
 
   fetchMembersRef.current = () => fetchMembers();
@@ -189,7 +189,7 @@ export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFor
     let cancelled = false;
     (async () => {
       try {
-        const snap = await resolveActiveEventForCheckin();
+        const snap = await resolveActiveEventForCheckin(chapterTag);
         if (cancelled) return;
         applyResolvedSnapshot(snap);
       } catch {
@@ -203,7 +203,7 @@ export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFor
     return () => {
       cancelled = true;
     };
-  }, [applyResolvedSnapshot]);
+  }, [applyResolvedSnapshot, chapterTag]);
 
   // When current event changes (id/date) or tab switches member/guest: reset selection and reload lists
   useEffect(() => {
@@ -224,7 +224,7 @@ export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFor
 
   const runPushRefresh = useCallback(async () => {
     try {
-      const snap = await resolveActiveEventForCheckin();
+      const snap = await resolveActiveEventForCheckin(chapterTag);
       applyResolvedSnapshot(snap);
       const ct = checkinTypeRef.current;
       if (ct === "member") void fetchMembersRef.current();
@@ -233,7 +233,7 @@ export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFor
     } catch {
       applyResolvedSnapshot(null);
     }
-  }, [applyResolvedSnapshot]);
+  }, [applyResolvedSnapshot, chapterTag]);
 
   const schedulePushRefresh = useCallback(() => {
     if (pushRefreshDebounceRef.current) clearTimeout(pushRefreshDebounceRef.current);
@@ -335,7 +335,8 @@ export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFor
         selected?.profession ?? "",
         eventSnapshot.date,
         checkinType === "observer" ? "" : now.toISOString(),
-        checkinType === "observer" ? "present" : status
+        checkinType === "observer" ? "present" : status,
+        chapterTag
       );
       setSuccessCheckInTime(now);
       setSubstituteName("");
@@ -363,7 +364,7 @@ export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFor
   const dismissCheckInSuccess = async () => {
     if (checkinType === "member" && eventSnapshot?.date && selectedName && substituteName.trim()) {
       try {
-        await updateAttendanceSubstitute(eventSnapshot.date, selectedName, substituteName);
+        await updateAttendanceSubstitute(eventSnapshot.date, selectedName, substituteName, chapterTag);
       } catch (error) {
         onNotify(
           `替代人未能儲存: ${error instanceof Error ? error.message : "Unknown error"}`,

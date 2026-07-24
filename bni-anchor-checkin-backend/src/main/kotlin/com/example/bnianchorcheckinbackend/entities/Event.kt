@@ -6,7 +6,7 @@ import java.time.LocalTime
 import java.time.OffsetDateTime
 
 @Entity
-@Table(name = "bni_anchor_events")
+@Table(name = "bni_eventxp_events")
 data class Event(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

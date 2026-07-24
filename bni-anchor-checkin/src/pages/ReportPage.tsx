@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useState, useEffect, useCallback, useRef, useMemo, useLayoutEffect } from "react";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import {
   getReportData, getReportWebSocketUrl, exportRecords, getRecords, clearRecords, deleteRecord, markAttendanceAbsent, getCurrentEvent,
+  setActiveApiChapter, ANCHOR_CHAPTER_ID, CHAPTER_TAG_TO_ID,
   ReportData, ReportAttendance, AttendeeRole, CheckInRecord
 } from "../api";
 import { buildAttendanceCsvBasename, buildAttendanceCsvFilename } from "../lib/attendanceExportFilename";
@@ -11,6 +12,14 @@ type ViewTab = "report" | "records";
 
 export default function ReportPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const chapterTag = (searchParams.get("chapter") || "anchor").trim().toLowerCase() || "anchor";
+  const chapterId = CHAPTER_TAG_TO_ID[chapterTag] ?? ANCHOR_CHAPTER_ID;
+
+  useLayoutEffect(() => {
+    setActiveApiChapter({ id: chapterId, tag: chapterTag });
+  }, [chapterTag, chapterId]);
+
   const [reportData, setReportData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [noEvent, setNoEvent] = useState(false);
@@ -43,7 +52,7 @@ export default function ReportPage() {
 
   const fetchReportData = useCallback(async () => {
     try {
-      const currentEvent = await getCurrentEvent();
+      const currentEvent = await getCurrentEvent(chapterTag, chapterId);
       const data = await getReportData(currentEvent?.id);
       if (!data) {
         setNoEvent(true);
@@ -71,7 +80,7 @@ export default function ReportPage() {
       }
       setLoading(false);
     }
-  }, []);
+  }, [chapterTag, chapterId]);
 
   const fetchRecords = useCallback(async () => {
     setRecordsLoading(true);

@@ -45,6 +45,8 @@ export default function AdminPage() {
     isAuthenticated,
     authReady,
     chapter,
+    chapterTag,
+    chapterId,
     adminHref,
     logout
   } = useChapter();
@@ -56,19 +58,19 @@ export default function AdminPage() {
   const loadHomeCurrentEvent = useCallback(async () => {
     setHomeEventLoading(true);
     try {
-      setHomeCurrentEvent(await getCurrentEvent());
+      setHomeCurrentEvent(await getCurrentEvent(chapterTag, chapterId));
     } catch {
       setHomeCurrentEvent(null);
     } finally {
       setHomeEventLoading(false);
     }
-  }, []);
+  }, [chapterTag, chapterId]);
 
   useEffect(() => {
     if (activeView === "home" && isAuthenticated) {
       void loadHomeCurrentEvent();
     }
-  }, [activeView, loadHomeCurrentEvent, isAuthenticated]);
+  }, [activeView, loadHomeCurrentEvent, isAuthenticated, chapterTag, chapterId]);
 
   // Handle URL parameter for direct navigation (keep client=true / chapter)
   useEffect(() => {

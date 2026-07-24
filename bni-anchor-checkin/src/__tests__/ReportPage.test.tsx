@@ -4,6 +4,9 @@ import { BrowserRouter } from "react-router-dom";
 import ReportPage from "../pages/ReportPage";
 
 vi.mock("../api", () => ({
+  ANCHOR_CHAPTER_ID: 1,
+  CHAPTER_TAG_TO_ID: { anchor: 1, amax: 2, dynasty: 3 },
+  setActiveApiChapter: vi.fn(),
   getCurrentEvent: vi.fn().mockResolvedValue({ id: 1, name: "BNI Anchor Meeting", date: "2026-02-10" }),
   getReportData: vi.fn().mockResolvedValue({
     eventId: 1,

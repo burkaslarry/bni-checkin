@@ -12,7 +12,9 @@ import {
   clientLogin,
   clientLogout,
   fetchClientSession,
-  setActiveApiChapterTag,
+  setActiveApiChapter,
+  ANCHOR_CHAPTER_ID,
+  CHAPTER_TAG_TO_ID,
   type ChapterInfo
 } from "./api";
 
@@ -34,6 +36,7 @@ type ChapterContextValue = {
   /** Logged-in (or defaulting) as Anchor */
   isAnchorMode: boolean;
   chapterTag: string;
+  chapterId: number;
   chapter: ChapterInfo | null;
   clientToken: string | null;
   authReady: boolean;
@@ -131,7 +134,7 @@ export function ChapterProvider({ children }: { children: ReactNode }) {
       };
       writeStoredSession(next);
       setSession(next);
-      setActiveApiChapterTag(result.chapter.tag);
+      setActiveApiChapter({ id: result.chapter.id, tag: result.chapter.tag });
       return true;
     } catch (e) {
       setLoginError(e instanceof Error ? e.message : "登入失敗");
@@ -143,7 +146,7 @@ export function ChapterProvider({ children }: { children: ReactNode }) {
     const token = session?.token;
     writeStoredSession(null);
     setSession(null);
-    setActiveApiChapterTag(null);
+    setActiveApiChapter({ id: ANCHOR_CHAPTER_ID, tag: "anchor" });
     if (token) {
       try {
         await clientLogout(token);
@@ -171,12 +174,17 @@ export function ChapterProvider({ children }: { children: ReactNode }) {
     const chapterTag =
       tagFromSession ||
       (isAdminRoute ? tagFromQuery || "anchor" : "anchor");
+    const chapterId =
+      session?.chapter?.id ??
+      CHAPTER_TAG_TO_ID[chapterTag] ??
+      ANCHOR_CHAPTER_ID;
     const isAnchor = chapterTag === "anchor";
     return {
       isAdminRoute,
       isClientMode: isAdminRoute && !isAnchor,
       isAnchorMode: isAdminRoute && isAnchor && !!session?.token,
       chapterTag,
+      chapterId,
       chapter: session?.chapter ?? null,
       clientToken: session?.token ?? null,
       authReady,
@@ -197,17 +205,28 @@ export function ChapterProvider({ children }: { children: ReactNode }) {
     adminHref
   ]);
 
+  // Keep module-level API scope in sync for both admin session and public `/?chapter=`.
+  // Previously non-admin routes always cleared the tag, which wiped HomePage's amax binding
+  // and caused check-in to load Anchor members/events.
   useEffect(() => {
-    if (!isAdminRoute) {
-      setActiveApiChapterTag(null);
+    if (isAdminRoute) {
+      if (session?.chapter) {
+        setActiveApiChapter({ id: session.chapter.id, tag: session.chapter.tag });
+      } else {
+        const tagFromQuery = (searchParams.get("chapter") || "anchor").trim().toLowerCase() || "anchor";
+        setActiveApiChapter({
+          id: CHAPTER_TAG_TO_ID[tagFromQuery] ?? ANCHOR_CHAPTER_ID,
+          tag: tagFromQuery
+        });
+      }
       return;
     }
-    if (session?.chapter?.tag) {
-      setActiveApiChapterTag(session.chapter.tag);
-    } else {
-      setActiveApiChapterTag(null);
-    }
-  }, [isAdminRoute, session?.chapter?.tag]);
+    const publicTag = (searchParams.get("chapter") || "anchor").trim().toLowerCase() || "anchor";
+    setActiveApiChapter({
+      id: CHAPTER_TAG_TO_ID[publicTag] ?? ANCHOR_CHAPTER_ID,
+      tag: publicTag
+    });
+  }, [isAdminRoute, session?.chapter, searchParams]);
 
   return <ChapterContext.Provider value={value}>{children}</ChapterContext.Provider>;
 }

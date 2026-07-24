@@ -43,7 +43,7 @@ describe("API helpers", () => {
     const { getReportData } = await import("../api");
     await getReportData("9" as unknown as number);
     expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringMatching(/\/api\/report\?eventId=9$/),
+      expect.stringMatching(/\/api\/report\?eventId=9&chapterId=1&chapter=anchor$/),
       expect.anything()
     );
   });

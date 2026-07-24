@@ -4,7 +4,7 @@ import jakarta.persistence.*
 import java.time.OffsetDateTime
 
 @Entity
-@Table(name = "bni_anchor_members")
+@Table(name = "bni_eventxp_members")
 data class Member(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

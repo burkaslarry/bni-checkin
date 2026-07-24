@@ -73,24 +73,61 @@ const jsonHeaders = {
   "Content-Type": "application/json"
 };
 
-/** Append ?chapter= when not blank / not default-only callers that pass tag. */
-let activeApiChapterTag: string | null = null;
+/** Default public chapter: Anchor (id=1). */
+export const ANCHOR_CHAPTER_ID = 1;
+export const ANCHOR_CHAPTER_TAG = "anchor";
+
+/** Known chapter tags → ids (matches bni_eventxp_chapters seed). */
+export const CHAPTER_TAG_TO_ID: Record<string, number> = {
+  anchor: 1,
+  amax: 2,
+  dynasty: 3
+};
+
+/** Append ?chapter= / ?chapterId= for multi-chapter API scope. */
+let activeApiChapterTag: string | null = ANCHOR_CHAPTER_TAG;
+let activeApiChapterId: number | null = ANCHOR_CHAPTER_ID;
+
+/** Sync chapter scope for API calls (public `/` defaults to Anchor id=1). */
+export function setActiveApiChapter(scope: { id?: number | null; tag?: string | null }) {
+  if (scope.id !== undefined) {
+    activeApiChapterId = scope.id != null && scope.id > 0 ? scope.id : null;
+  }
+  if (scope.tag !== undefined) {
+    const t = scope.tag?.trim();
+    activeApiChapterTag = t && t.length > 0 ? t : null;
+    if (activeApiChapterId == null && t) {
+      const mapped = CHAPTER_TAG_TO_ID[t.toLowerCase()];
+      if (mapped) activeApiChapterId = mapped;
+    }
+  }
+}
 
 /** Sync from ChapterProvider so admin APIs scope to the logged-in chapter. */
 export function setActiveApiChapterTag(tag: string | null | undefined) {
-  const t = tag?.trim();
-  activeApiChapterTag = t && t.length > 0 ? t : null;
+  setActiveApiChapter({ tag });
 }
 
 export function getActiveApiChapterTag(): string | null {
   return activeApiChapterTag;
 }
 
-function withChapterQuery(url: string, chapter?: string | null): string {
+export function getActiveApiChapterId(): number | null {
+  return activeApiChapterId;
+}
+
+function withChapterQuery(url: string, chapter?: string | null, chapterId?: number | null): string {
   const tag = (chapter !== undefined && chapter !== null ? chapter : activeApiChapterTag)?.trim();
-  if (!tag) return url;
+  const id =
+    chapterId !== undefined && chapterId !== null
+      ? chapterId
+      : activeApiChapterId;
+  const params = new URLSearchParams();
+  if (id != null && id > 0) params.set("chapterId", String(id));
+  if (tag) params.set("chapter", tag);
+  if ([...params.keys()].length === 0) return url;
   const sep = url.includes("?") ? "&" : "?";
-  return `${url}${sep}chapter=${encodeURIComponent(tag)}`;
+  return `${url}${sep}${params.toString()}`;
 }
 
 const FETCH_TIMEOUT_MS = 25000;
@@ -346,11 +383,14 @@ export type GuestInfo = {
  * @returns {Promise<{ guests: GuestInfo[] }>}
  * @throws {Error} AbortError → 連線逾時 message
  */
-export async function getGuests(eventDate?: string): Promise<{ guests: GuestInfo[] }> {
+export async function getGuests(
+  eventDate?: string,
+  chapter?: string | null
+): Promise<{ guests: GuestInfo[] }> {
   try {
     const url = eventDate
-      ? withChapterQuery(`${API_BASE}/api/guests?eventDate=${encodeURIComponent(eventDate)}`)
-      : withChapterQuery(`${API_BASE}/api/guests`);
+      ? withChapterQuery(`${API_BASE}/api/guests?eventDate=${encodeURIComponent(eventDate)}`, chapter)
+      : withChapterQuery(`${API_BASE}/api/guests`, chapter);
     const response = await fetchWithRetry(url, { mode: "cors" }, 12000, 3);
     return handleResponse(response);
   } catch (e) {
@@ -713,9 +753,9 @@ export async function listEvents(): Promise<EventData[]> {
  * Side effect: network.
  * @returns {Promise<EventData | null>}
  */
-export async function getCurrentEvent(): Promise<EventData | null> {
+export async function getCurrentEvent(chapter?: string | null, chapterId?: number | null): Promise<EventData | null> {
   try {
-    const response = await fetch(withChapterQuery(`${API_BASE}/api/events/current`), { mode: "cors" });
+    const response = await fetch(withChapterQuery(`${API_BASE}/api/events/current`, chapter, chapterId), { mode: "cors" });
     if (response.status === 404) {
       return null;
     }
@@ -888,10 +928,13 @@ export async function checkEventExists(date: string): Promise<boolean> {
  * @param {string} date - YYYY-MM-DD
  * @returns {Promise<{ id: number; name: string } | null>}
  */
-export async function getEventForDate(date: string): Promise<{ id: number; name: string } | null> {
+export async function getEventForDate(
+  date: string,
+  chapter?: string | null
+): Promise<{ id: number; name: string } | null> {
   try {
     const response = await fetchWithRetry(
-      withChapterQuery(`${API_BASE}/api/events/for-date?date=${encodeURIComponent(date)}`),
+      withChapterQuery(`${API_BASE}/api/events/for-date?date=${encodeURIComponent(date)}`, chapter),
       { mode: "cors" },
       10000,
       3
@@ -946,9 +989,10 @@ export async function logAttendance(
   attendeeProfession: string,
   eventDate: string,
   checkedInAt: string,
-  status: string
+  status: string,
+  chapter?: string | null
 ): Promise<{ status: string; message: string }> {
-  const response = await fetch(withChapterQuery(`${API_BASE}/api/attendance/log`), {
+  const response = await fetch(withChapterQuery(`${API_BASE}/api/attendance/log`, chapter), {
     method: "POST",
     headers: jsonHeaders,
     body: JSON.stringify({
@@ -971,9 +1015,10 @@ export async function logAttendance(
 export async function updateAttendanceSubstitute(
   eventDate: string,
   memberName: string,
-  substituteName?: string
+  substituteName?: string,
+  chapter?: string | null
 ): Promise<{ status: string; message: string }> {
-  const response = await fetch(withChapterQuery(`${API_BASE}/api/attendance/substitute-for`), {
+  const response = await fetch(withChapterQuery(`${API_BASE}/api/attendance/substitute-for`, chapter), {
     method: "POST",
     headers: jsonHeaders,
     body: JSON.stringify({
@@ -1398,9 +1443,12 @@ export type UpdateObserverRequest = {
   eventDate?: string;
 };
 
-export async function getObservers(eventDate?: string): Promise<{ observers: ObserverInfo[] }> {
+export async function getObservers(
+  eventDate?: string,
+  chapter?: string | null
+): Promise<{ observers: ObserverInfo[] }> {
   const q = eventDate ? `?eventDate=${encodeURIComponent(eventDate)}` : "";
-  const response = await fetch(withChapterQuery(`${API_BASE}/api/observers${q}`), { mode: "cors" });
+  const response = await fetch(withChapterQuery(`${API_BASE}/api/observers${q}`, chapter), { mode: "cors" });
   return handleResponse(response);
 }
 
