@@ -51,6 +51,17 @@ export type MemberInfo = {
   standing?: MemberStanding;
   professionCode?: string;
   professionGroupName?: string; // from bni_anchor_profession_groups join
+  membershipId?: string;
+  position?: string;
+  chapterId?: number;
+};
+
+export type ChapterInfo = {
+  id: number;
+  tag: string;
+  displayName: string;
+  timezone: string;
+  status: string;
 };
 
 // Backend API: in dev uses Vite proxy (''), in prod uses VITE_API_BASE
@@ -61,6 +72,14 @@ const API_BASE = import.meta.env.DEV
 const jsonHeaders = {
   "Content-Type": "application/json"
 };
+
+/** Append ?chapter= when not blank / not default-only callers that pass tag. */
+function withChapterQuery(url: string, chapter?: string | null): string {
+  const tag = chapter?.trim();
+  if (!tag) return url;
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}chapter=${encodeURIComponent(tag)}`;
+}
 
 const FETCH_TIMEOUT_MS = 25000;
 
@@ -234,9 +253,14 @@ export async function searchEventAttendance(
  * @returns {Promise<{ members: MemberInfo[] }>}
  * @throws {Error} On failure; AbortError mapped to 連線逾時 message
  */
-export async function getMembers(): Promise<{ members: MemberInfo[] }> {
+export async function getMembers(chapter?: string | null): Promise<{ members: MemberInfo[] }> {
   try {
-    const response = await fetchWithRetry(`${API_BASE}/api/members`, { mode: "cors" }, 12000, 3);
+    const response = await fetchWithRetry(
+      withChapterQuery(`${API_BASE}/api/members`, chapter),
+      { mode: "cors" },
+      12000,
+      3
+    );
     return handleResponse(response);
   } catch (e) {
     if ((e as Error).name === "AbortError") {
@@ -244,6 +268,51 @@ export async function getMembers(): Promise<{ members: MemberInfo[] }> {
     }
     throw e;
   }
+}
+
+export async function clientLogin(
+  adminLogin: string,
+  adminPassword: string
+): Promise<{ token: string; chapter: ChapterInfo; expiresAtEpochMs: number }> {
+  const response = await fetch(`${API_BASE}/api/client/login`, {
+    method: "POST",
+    headers: jsonHeaders,
+    body: JSON.stringify({ AdminLogin: adminLogin, AdminPassword: adminPassword }),
+    mode: "cors"
+  });
+  const data = await handleResponse<{
+    status: string;
+    token: string;
+    chapter: ChapterInfo;
+    expiresAtEpochMs: number;
+    message?: string;
+  }>(response);
+  if (!data.token || !data.chapter) {
+    throw new Error(data.message || "Login failed");
+  }
+  return {
+    token: data.token,
+    chapter: data.chapter,
+    expiresAtEpochMs: data.expiresAtEpochMs
+  };
+}
+
+export async function clientLogout(token: string): Promise<void> {
+  await fetch(`${API_BASE}/api/client/logout`, {
+    method: "POST",
+    headers: { ...jsonHeaders, "X-Client-Token": token },
+    mode: "cors"
+  });
+}
+
+export async function fetchClientSession(
+  token: string
+): Promise<{ chapter: ChapterInfo }> {
+  const response = await fetch(`${API_BASE}/api/client/session`, {
+    headers: { "X-Client-Token": token },
+    mode: "cors"
+  });
+  return handleResponse(response);
 }
 
 /**
@@ -1076,12 +1145,13 @@ export type ImportResult = {
  * @throws {Error} AbortError → 連線逾時
  */
 export async function bulkImport(
-  request: BulkImportRequest
+  request: BulkImportRequest,
+  chapter?: string | null
 ): Promise<ImportResult> {
   try {
     const endpoint =
       request.type === "member"
-        ? `${API_BASE}/api/bulk-import-members`
+        ? withChapterQuery(`${API_BASE}/api/bulk-import-members`, chapter)
         : `${API_BASE}/api/bulk-import-guest`;
     const response = await fetchWithRetry(endpoint, {
       method: "POST",
@@ -1150,9 +1220,10 @@ export type CreateMemberRequest = {
  * Side effect: network; backend DB insert.
  */
 export async function createMember(
-  request: CreateMemberRequest
+  request: CreateMemberRequest,
+  chapter?: string | null
 ): Promise<{ status: string; message: string; member?: MemberInfo }> {
-  const response = await fetch(`${API_BASE}/api/members`, {
+  const response = await fetch(withChapterQuery(`${API_BASE}/api/members`, chapter), {
     method: "POST",
     headers: jsonHeaders,
     body: JSON.stringify(request),

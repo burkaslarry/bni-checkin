@@ -11,4 +11,8 @@ interface MemberRepository : JpaRepository<Member, Long> {
     fun findByNameIgnoreCase(name: String): Optional<Member>
     fun existsByNameIgnoreCase(name: String): Boolean
     fun findAllByOrderByNameAsc(): List<Member>
+
+    fun findByChapterIdAndNameIgnoreCase(chapterId: Int, name: String): Optional<Member>
+    fun existsByChapterIdAndNameIgnoreCase(chapterId: Int, name: String): Boolean
+    fun findAllByChapterIdOrderByNameAsc(chapterId: Int): List<Member>
 }

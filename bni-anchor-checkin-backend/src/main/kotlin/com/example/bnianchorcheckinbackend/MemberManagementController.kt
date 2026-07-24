@@ -47,7 +47,8 @@ data class CreateMemberRequest(
     val standing: String? = null,
     val professionCode: String? = null,
     val membershipId: String? = null,
-    val position: String? = null
+    val position: String? = null,
+    val chapter: String? = null
 )
 
 @RestController
@@ -61,7 +62,10 @@ class MemberManagementController(
 
     @PostMapping("/api/members")
     @Operation(summary = "Create member (registration only, no check-in)")
-    fun createMember(@RequestBody request: CreateMemberRequest): ResponseEntity<Map<String, Any>> {
+    fun createMember(
+        @RequestParam(required = false) chapter: String?,
+        @RequestBody request: CreateMemberRequest
+    ): ResponseEntity<Map<String, Any>> {
         val name = request.name.trim()
         val profession = request.profession.trim()
         if (name.isBlank() || profession.isBlank()) {
@@ -77,6 +81,7 @@ class MemberManagementController(
                 "message" to "Invalid standing value. Must be GREEN, YELLOW, RED, or BLACK"
             ))
         }
+        val chapterTag = chapter?.takeIf { it.isNotBlank() } ?: request.chapter
         return try {
             val created = databaseMemberService.createMember(
                 name = name,
@@ -84,7 +89,8 @@ class MemberManagementController(
                 standing = standing,
                 professionCode = request.professionCode?.trim()?.takeIf { it.isNotEmpty() } ?: "A",
                 membershipId = request.membershipId?.trim()?.takeIf { it.isNotEmpty() },
-                position = request.position?.trim()?.takeIf { it.isNotEmpty() } ?: "Member"
+                position = request.position?.trim()?.takeIf { it.isNotEmpty() } ?: "Member",
+                chapterTag = chapterTag
             )
             attendanceWebSocketHandler?.broadcast(mapOf("type" to "member_registry_updated"))
             ResponseEntity.status(HttpStatus.CREATED).body(
@@ -113,8 +119,9 @@ class MemberManagementController(
     @Operation(summary = "Update member information")
     fun updateMember(
         @PathVariable name: String,
+        @RequestParam(required = false) chapter: String?,
         @RequestBody request: UpdateMemberRequest
-    ): ResponseEntity<Map<String, Any>> = applyMemberUpdateByName(name, request)
+    ): ResponseEntity<Map<String, Any>> = applyMemberUpdateByName(name, request, chapter)
 
     @PutMapping(value = ["/api/members"], params = ["memberId"])
     @Operation(summary = "Update member by database id (preferred for names with /)")
@@ -127,6 +134,7 @@ class MemberManagementController(
     @Operation(summary = "Update member by current name query param (supports names with /)")
     fun updateMemberByCurrentName(
         @RequestParam currentName: String,
+        @RequestParam(required = false) chapter: String?,
         @RequestBody request: UpdateMemberRequest
     ): ResponseEntity<Map<String, Any>> {
         val trimmed = currentName.trim()
@@ -136,7 +144,7 @@ class MemberManagementController(
                 "message" to "currentName is required"
             ))
         }
-        return applyMemberUpdateByName(trimmed, request)
+        return applyMemberUpdateByName(trimmed, request, chapter)
     }
 
     /** @deprecated Prefer PUT /api/members?currentName=... */
@@ -180,7 +188,8 @@ class MemberManagementController(
 
     private fun applyMemberUpdateByName(
         currentName: String,
-        request: UpdateMemberRequest
+        request: UpdateMemberRequest,
+        chapterTag: String? = null
     ): ResponseEntity<Map<String, Any>> {
         val validationError = validateMemberUpdateRequest(request)
         if (validationError != null) return validationError
@@ -190,7 +199,8 @@ class MemberManagementController(
                 newName = request.name?.trim()?.takeIf { it.isNotEmpty() },
                 profession = request.profession,
                 standing = parseStanding(request.standing),
-                professionCode = request.professionCode?.trim()?.takeIf { it.isNotEmpty() }?.uppercase()?.take(1)
+                professionCode = request.professionCode?.trim()?.takeIf { it.isNotEmpty() }?.uppercase()?.take(1),
+                chapterTag = chapterTag
             )
         }
     }
@@ -265,8 +275,11 @@ class MemberManagementController(
 
     @DeleteMapping("/api/members/{name}")
     @Operation(summary = "Delete a member")
-    fun deleteMember(@PathVariable name: String): ResponseEntity<Map<String, String>> =
-        applyMemberDelete(name)
+    fun deleteMember(
+        @PathVariable name: String,
+        @RequestParam(required = false) chapter: String?
+    ): ResponseEntity<Map<String, String>> =
+        applyMemberDelete(name, chapter)
 
     @DeleteMapping(value = ["/api/members"], params = ["memberId"])
     @Operation(summary = "Delete member by database id (preferred for names with /)")
@@ -287,12 +300,15 @@ class MemberManagementController(
 
     @DeleteMapping(value = ["/api/members"], params = ["name"])
     @Operation(summary = "Delete member by name query param (supports names with /)")
-    fun deleteMemberByQuery(@RequestParam name: String): ResponseEntity<Map<String, String>> {
+    fun deleteMemberByQuery(
+        @RequestParam name: String,
+        @RequestParam(required = false) chapter: String?
+    ): ResponseEntity<Map<String, String>> {
         val trimmed = name.trim()
         if (trimmed.isBlank()) {
             return ResponseEntity.badRequest().body(mapOf("status" to "error", "message" to "name is required"))
         }
-        return applyMemberDelete(trimmed)
+        return applyMemberDelete(trimmed, chapter)
     }
 
     /** @deprecated Prefer DELETE /api/members?name=... */
@@ -306,9 +322,9 @@ class MemberManagementController(
         return applyMemberDelete(name)
     }
 
-    private fun applyMemberDelete(name: String): ResponseEntity<Map<String, String>> {
+    private fun applyMemberDelete(name: String, chapterTag: String? = null): ResponseEntity<Map<String, String>> {
         val deleted = try {
-            databaseMemberService.deleteMember(name)
+            databaseMemberService.deleteMember(name, chapterTag)
         } catch (e: Exception) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(mapOf("status" to "error", "message" to "資料庫暫時無法連線，無法刪除會員。"))

@@ -7,6 +7,9 @@ import { AdminManualEntryPanel } from "../components/AdminManualEntryPanel";
 import { EventManagementPanel } from "../components/EventManagementPanel";
 import { StrategicPlanningPanel } from "../components/StrategicPlanningPanel";
 import { AppVersionFooter } from "../components/AppVersionFooter";
+import { AnchorOnlyNotice } from "../components/AnchorOnlyNotice";
+import { ClientAdminLoginPanel } from "../components/ClientAdminLoginPanel";
+import { useChapter } from "../chapterContext";
 import { getCurrentEvent, type EventData } from "../api";
 
 type AdminView = "home" | "generate" | "manual" | "event" | "strategic";
@@ -37,6 +40,14 @@ const createNotificationId = () =>
 
 export default function AdminPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const {
+    isClientMode,
+    isAuthenticated,
+    authReady,
+    chapter,
+    adminHref,
+    logout
+  } = useChapter();
   const [activeView, setActiveView] = useState<AdminView>("home");
   const [notifications, setNotifications] = useState<NotificationEntry[]>([]);
   const [homeCurrentEvent, setHomeCurrentEvent] = useState<EventData | null>(null);
@@ -54,18 +65,23 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => {
-    if (activeView === "home") {
+    if (activeView === "home" && (!isClientMode || isAuthenticated)) {
       void loadHomeCurrentEvent();
     }
-  }, [activeView, loadHomeCurrentEvent]);
+  }, [activeView, loadHomeCurrentEvent, isClientMode, isAuthenticated]);
 
-  // Handle URL parameter for direct navigation
+  // Handle URL parameter for direct navigation (keep client=true)
   useEffect(() => {
     const viewParam = searchParams.get("view");
     if (viewParam && ["generate", "manual", "event", "strategic"].includes(viewParam)) {
       setActiveView(viewParam as AdminView);
-      // Clear the URL parameter after navigating
-      setSearchParams({}, { replace: true });
+      const next = new URLSearchParams();
+      if (searchParams.get("client") === "true" || searchParams.get("client") === "1") {
+        next.set("client", "true");
+      }
+      const chapterTag = searchParams.get("chapter");
+      if (chapterTag) next.set("chapter", chapterTag);
+      setSearchParams(next, { replace: true });
     }
   }, [searchParams, setSearchParams]);
 
@@ -112,25 +128,78 @@ export default function AdminPage() {
     }
   };
 
+  const title = isClientMode
+    ? `🛠️ EventXP — ${chapter?.displayName || "Chapter"} 管理後台`
+    : "🛠️ EventXP for BNI Anchor 管理後台";
+  const subtitle = isClientMode
+    ? `Client Admin · ${chapter?.tag || "login required"}`
+    : "Admin Dashboard · BNI Anchor only";
+
+  if (isClientMode && !authReady) {
+    return (
+      <div className="app-shell">
+        <header className="site-header">
+          <div>
+            <p className="hint">EventXP Client Admin</p>
+            <h1>載入登入狀態…</h1>
+          </div>
+        </header>
+      </div>
+    );
+  }
+
+  if (isClientMode && !isAuthenticated) {
+    return (
+      <div className="app-shell">
+        <NotificationStack notifications={notifications} />
+        <header className="site-header">
+          <div>
+            <p className="hint">EventXP Client Admin</p>
+            <h1>其他 Chapter 管理入口</h1>
+            <p className="hint">非 Anchor 分會請由此登入</p>
+          </div>
+          <div className="header-meta">
+            <Link to="/admin" className="ghost-button back-home-btn">
+              ← Anchor 管理後台
+            </Link>
+          </div>
+        </header>
+        <ClientAdminLoginPanel />
+      </div>
+    );
+  }
+
   return (
     <div className="app-shell">
       <NotificationStack notifications={notifications} />
       
       <header className="site-header">
         <div>
-          <p className="hint">EventXP for BNI Anchor</p>
-          <h1>🛠️ EventXP for BNI Anchor 管理後台</h1>
-          <p className="hint">Admin Dashboard</p>
+          <p className="hint">{isClientMode ? "EventXP Client Admin" : "EventXP for BNI Anchor"}</p>
+          <h1>{title}</h1>
+          <p className="hint">{subtitle}</p>
         </div>
         <div className="header-meta">
+          {isClientMode && (
+            <button
+              type="button"
+              className="ghost-button"
+              style={{ marginRight: "0.5rem" }}
+              onClick={() => void logout()}
+            >
+              登出
+            </button>
+          )}
           <Link to="/report" className="ghost-button" style={{ marginRight: "0.5rem" }}>
             📊 即時報告
           </Link>
-          <Link to="/admin" className="ghost-button back-home-btn">
+          <Link to={adminHref("/admin")} className="ghost-button back-home-btn">
             ← 返回首頁
           </Link>
         </div>
       </header>
+
+      <AnchorOnlyNotice />
 
       {activeView === "home" && (
         <section className="section admin-panel">
@@ -203,32 +272,31 @@ export default function AdminPage() {
               <span className="hint">直接前往報表頁（包含匯出 CSV）</span>
             </a>
             
-            {/* External Links to New Pages */}
-            <Link to="/admin/members" className="nav-card" style={{ textDecoration: 'none' }}>
+            <Link to={adminHref("/admin/members")} className="nav-card" style={{ textDecoration: "none" }}>
               <span className="nav-icon">👥</span>
               <strong className="nav-title">會員管理</strong>
               <span className="hint">管理會員資料和狀態</span>
             </Link>
             
-            <Link to="/admin/guests" className="nav-card" style={{ textDecoration: 'none' }}>
+            <Link to={adminHref("/admin/guests")} className="nav-card" style={{ textDecoration: "none" }}>
               <span className="nav-icon">🎫</span>
               <strong className="nav-title">嘉賓管理</strong>
               <span className="hint">管理嘉賓資料</span>
             </Link>
 
-            <Link to="/admin/observers" className="nav-card" style={{ textDecoration: 'none' }}>
+            <Link to={adminHref("/admin/observers")} className="nav-card" style={{ textDecoration: "none" }}>
               <span className="nav-icon">👁️</span>
               <strong className="nav-title">觀察員管理</strong>
               <span className="hint">維護觀察員名單及匯出出席</span>
             </Link>
             
-            <Link to="/admin/import" className="nav-card" style={{ textDecoration: 'none' }}>
+            <Link to={adminHref("/admin/import")} className="nav-card" style={{ textDecoration: "none" }}>
               <span className="nav-icon">📥</span>
               <strong className="nav-title">批量匯入</strong>
               <span className="hint">CSV 批量新增會員/嘉賓</span>
             </Link>
 
-            <Link to="/admin/public-guest" className="nav-card" style={{ textDecoration: "none" }}>
+            <Link to={adminHref("/admin/public-guest")} className="nav-card" style={{ textDecoration: "none" }}>
               <span className="nav-icon">🔗</span>
               <strong className="nav-title">公開嘉賓登記連結</strong>
               <span className="hint">教你點樣 share /public/guest 俾人填</span>

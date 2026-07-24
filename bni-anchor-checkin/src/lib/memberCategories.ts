@@ -1,7 +1,7 @@
 import type { MemberInfo } from "../api";
 
 /** BNI profession groups — aligned with member list poster / init-database.sql */
-export type MemberCategoryCode = "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "J" | "K";
+export type MemberCategoryCode = "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K";
 
 export type MemberCategory = {
   code: MemberCategoryCode | "OTHER";
@@ -19,6 +19,7 @@ export const MEMBER_CATEGORIES: MemberCategory[] = [
   { code: "F", nameZh: "品牌及廠商", nameEn: "Brand & Vendor", accent: "#a3a3a3" },
   { code: "G", nameZh: "食品及餐飲", nameEn: "Food & Beverage", accent: "#38bdf8" },
   { code: "H", nameZh: "醫療、健康及運動", nameEn: "Medical, Health & Sports", accent: "#1d4ed8" },
+  { code: "I", nameZh: "金融及投資", nameEn: "Finance & Investment", accent: "#dc2626" },
   { code: "J", nameZh: "教育及培訓", nameEn: "Education & Training", accent: "#6366f1" },
   { code: "K", nameZh: "金融、投資及地產", nameEn: "Finance, Investment & Property", accent: "#a855f7" },
 ];
@@ -37,6 +38,7 @@ const GROUP_NAME_TO_CODE: Record<string, MemberCategoryCode | "OTHER"> = {
   食品及餐飲: "G",
   "醫療、健康及運動": "H",
   教育及培訓: "J",
+  金融及投資: "I",
   "金融、投資及地產": "K",
 };
 

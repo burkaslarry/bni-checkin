@@ -10,6 +10,9 @@ data class Member(
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long? = null,
 
+    @Column(name = "chapter_id", nullable = false)
+    var chapterId: Int = 1,
+
     @Column(nullable = false)
     var name: String,
 
@@ -22,13 +25,13 @@ data class Member(
     @Column
     var position: String = "Member",
 
-    @Column(name = "membership_id", unique = true)
+    @Column(name = "membership_id")
     var membershipId: String? = null,
 
-    @Column(unique = true)
+    @Column
     var email: String? = null,
 
-    @Column(name = "phone_number", unique = true)
+    @Column(name = "phone_number")
     var phoneNumber: String? = null,
 
     @Column(name = "standing")

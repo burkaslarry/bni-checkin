@@ -366,17 +366,24 @@ class AttendanceController(
      */
     @GetMapping("/api/members")
     @Operation(summary = "Get list of members with domain info and standing")
-    fun getMembers(): Map<String, List<Map<String, Any>>> {
-        val csvFallback: List<Map<String, Any>> = attendanceService.getMembersWithDomain()
-            .mapIndexed { idx, m -> m + ("id" to (m["id"] ?: (idx + 1))) }
+    fun getMembers(@RequestParam(required = false) chapter: String?): Map<String, List<Map<String, Any>>> {
+        val chapterTag = chapter?.trim()?.lowercase().orEmpty()
+        val useCsvFallback = chapterTag.isBlank() || chapterTag == "anchor"
+        val csvFallback: List<Map<String, Any>> = if (useCsvFallback) {
+            attendanceService.getMembersWithDomain()
+                .mapIndexed { idx, m -> m + ("id" to (m["id"] ?: (idx + 1))) }
+        } else {
+            emptyList()
+        }
         return try {
             if (databaseMemberService != null) {
                 try {
-                    val dbMembers = withDbRetry("getMembers") { databaseMemberService.getAllMembers() }
-                    if (dbMembers.isNotEmpty()) mapOf("members" to dbMembers)
+                    val dbMembers = withDbRetry("getMembers") { databaseMemberService.getAllMembers(chapter) }
+                    // Non-anchor chapters: return DB result even if empty (never leak Anchor CSV).
+                    if (!useCsvFallback || dbMembers.isNotEmpty()) mapOf("members" to dbMembers)
                     else mapOf("members" to csvFallback)
                 } catch (e: Exception) {
-                    log.warn("DB getMembers failed ({}), using CSV fallback", e.message)
+                    log.warn("DB getMembers failed ({}), using CSV fallback={}", e.message, useCsvFallback)
                     mapOf("members" to csvFallback)
                 }
             } else {

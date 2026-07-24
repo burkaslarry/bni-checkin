@@ -2,10 +2,22 @@ import { useState, useEffect, useMemo, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { getMembers, MemberInfo, MemberStanding, updateMember, deleteMember, createMember } from "../api";
 import { groupMembersByCategory, MEMBER_CATEGORIES, resolveMemberCategoryCode, type MemberCategoryCode } from "../lib/memberCategories";
+import { AnchorOnlyNotice } from "../components/AnchorOnlyNotice";
+import { ClientAuthGate } from "../components/ClientAuthGate";
+import { useChapter } from "../chapterContext";
 
 type MembersPageProps = {};
 
 export default function MembersPage({}: MembersPageProps) {
+  return (
+    <ClientAuthGate>
+      <MembersPageInner />
+    </ClientAuthGate>
+  );
+}
+
+function MembersPageInner() {
+  const { chapterTag, adminHref, isClientMode, isAuthenticated, authReady, chapter } = useChapter();
   const [members, setMembers] = useState<MemberInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingMember, setEditingMember] = useState<MemberInfo | null>(null);
@@ -21,12 +33,14 @@ export default function MembersPage({}: MembersPageProps) {
   const [notification, setNotification] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
 
   useEffect(() => {
+    if (isClientMode && (!authReady || !isAuthenticated)) return;
     fetchMembers();
-  }, []);
+  }, [chapterTag, isClientMode, authReady, isAuthenticated]);
 
   const fetchMembers = async () => {
     try {
-      const data = await getMembers();
+      setLoading(true);
+      const data = await getMembers(chapterTag);
       setMembers(data.members);
     } catch (error) {
       showNotification("無法載入會員列表", "error");
@@ -95,7 +109,10 @@ export default function MembersPage({}: MembersPageProps) {
     }
 
     try {
-      await createMember({ name, profession, standing: newStanding, professionCode: newProfessionCode });
+      await createMember(
+        { name, profession, standing: newStanding, professionCode: newProfessionCode },
+        chapterTag
+      );
       showNotification(`已新增會員 ${name}`, "success");
       setShowAddMember(false);
       setNewName("");
@@ -222,9 +239,9 @@ export default function MembersPage({}: MembersPageProps) {
 
       <header className="site-header">
         <div>
-        <p className="hint">EventXP for BNI Anchor</p>
-          <h1>👥 EventXP for BNI Anchor 會員管理</h1>
-          <p className="hint">Member Management</p>
+        <p className="hint">{isClientMode ? `EventXP · ${chapter?.displayName || chapterTag}` : "EventXP for BNI Anchor"}</p>
+          <h1>👥 {isClientMode ? `${chapter?.displayName || chapterTag} 會員管理` : "EventXP for BNI Anchor 會員管理"}</h1>
+          <p className="hint">Member Management · chapter={chapterTag}</p>
         </div>
         <div className="header-meta members-page-header-actions">
           <button
@@ -234,11 +251,13 @@ export default function MembersPage({}: MembersPageProps) {
           >
             ➕ 新增會員
           </button>
-          <Link to="/admin" className="ghost-button back-home-btn">
+          <Link to={adminHref("/admin")} className="ghost-button back-home-btn">
             ← 返回管理頁
           </Link>
         </div>
       </header>
+
+      <AnchorOnlyNotice />
 
       <section className="section members-page-section">
         <div className="section-header members-section-header">

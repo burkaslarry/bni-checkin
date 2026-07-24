@@ -1302,6 +1302,49 @@ td {
   background: var(--panel);
 }
 
+.anchor-only-notice {
+  margin: 0 0 1.25rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid rgba(234, 179, 8, 0.45);
+  border-radius: 12px;
+  background: rgba(234, 179, 8, 0.12);
+  color: var(--text, #e2e8f0);
+}
+
+.anchor-only-notice strong {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: #facc15;
+}
+
+.anchor-only-notice p {
+  margin: 0.4rem 0 0;
+  line-height: 1.5;
+  font-size: 0.95rem;
+  color: var(--muted, #94a3b8);
+}
+
+.anchor-only-notice code {
+  font-size: 0.9em;
+}
+
+.client-login-panel .client-login-form {
+  display: grid;
+  gap: 1rem;
+  max-width: 28rem;
+}
+
+.client-login-panel label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.95rem;
+}
+
+.client-login-panel .error-text {
+  color: #f87171;
+  margin: 0;
+}
+
 .admin-panel .nav-grid {
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 }

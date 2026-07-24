@@ -20,19 +20,24 @@ class DatabaseMemberService(
     private val guestRepository: GuestRepository,
     private val observerRepository: ObserverRepository,
     private val professionGroupRepository: ProfessionGroupRepository,
-    private val attendanceRepository: AttendanceRepository
+    private val attendanceRepository: AttendanceRepository,
+    private val chapterService: ChapterService
 ) {
 
-    fun getAllMembers(): List<Map<String, Any>> {
+    fun getAllMembers(chapterTag: String? = null): List<Map<String, Any>> {
+        val chapterId = chapterService.resolveChapterId(chapterTag)
         val groupByName = professionGroupRepository.findAll().associate { it.code to it.name }
-        return memberRepository.findAllByOrderByNameAsc().map { member ->
+        return memberRepository.findAllByChapterIdOrderByNameAsc(chapterId).map { member ->
             mapOf(
                 "id" to (member.id!!.toInt()),
                 "name" to member.name,
                 "domain" to (member.profession ?: ""),
                 "standing" to member.standing.name,
                 "professionCode" to member.professionCode.toString(),
-                "professionGroupName" to (groupByName[member.professionCode] ?: "")
+                "professionGroupName" to (groupByName[member.professionCode] ?: ""),
+                "membershipId" to (member.membershipId ?: ""),
+                "position" to member.position,
+                "chapterId" to member.chapterId
             )
         }
     }
@@ -63,8 +68,9 @@ class DatabaseMemberService(
         }
     }
 
-    fun getMemberByName(name: String): MemberData? {
-        val member = memberRepository.findByNameIgnoreCase(name).orElse(null) ?: return null
+    fun getMemberByName(name: String, chapterTag: String? = null): MemberData? {
+        val chapterId = chapterService.resolveChapterId(chapterTag)
+        val member = memberRepository.findByChapterIdAndNameIgnoreCase(chapterId, name).orElse(null) ?: return null
         return MemberData(
             name = member.name,
             domain = member.profession ?: "",
@@ -88,8 +94,9 @@ class DatabaseMemberService(
         professionGroupRepository.existsById(code.uppercase().take(1))
 
     @Transactional
-    fun updateMemberStanding(name: String, standing: MemberStanding): Member? {
-        val member = memberRepository.findByNameIgnoreCase(name).orElse(null) ?: return null
+    fun updateMemberStanding(name: String, standing: MemberStanding, chapterTag: String? = null): Member? {
+        val chapterId = chapterService.resolveChapterId(chapterTag)
+        val member = memberRepository.findByChapterIdAndNameIgnoreCase(chapterId, name).orElse(null) ?: return null
         member.standing = standing
         return memberRepository.save(member)
     }
@@ -112,9 +119,11 @@ class DatabaseMemberService(
         newName: String? = null,
         profession: String? = null,
         standing: MemberStanding? = null,
-        professionCode: String? = null
+        professionCode: String? = null,
+        chapterTag: String? = null
     ): Member? {
-        val member = memberRepository.findByNameIgnoreCase(name).orElse(null) ?: return null
+        val chapterId = chapterService.resolveChapterId(chapterTag)
+        val member = memberRepository.findByChapterIdAndNameIgnoreCase(chapterId, name).orElse(null) ?: return null
         return applyMemberChanges(member, newName, profession, standing, professionCode)
     }
 
@@ -126,7 +135,7 @@ class DatabaseMemberService(
         professionCode: String?
     ): Member {
         if (newName != null && !newName.equals(member.name, ignoreCase = true)) {
-            if (memberRepository.existsByNameIgnoreCase(newName)) {
+            if (memberRepository.existsByChapterIdAndNameIgnoreCase(member.chapterId, newName)) {
                 throw IllegalArgumentException("Member already exists")
             }
             member.name = newName
@@ -154,13 +163,16 @@ class DatabaseMemberService(
         standing: MemberStanding = MemberStanding.GREEN,
         professionCode: String = "A",
         membershipId: String? = null,
-        position: String = "Member"
+        position: String = "Member",
+        chapterTag: String? = null
     ): Member {
-        if (memberRepository.existsByNameIgnoreCase(name)) {
+        val chapterId = chapterService.resolveChapterId(chapterTag)
+        if (memberRepository.existsByChapterIdAndNameIgnoreCase(chapterId, name)) {
             throw IllegalArgumentException("Member already exists")
         }
         return memberRepository.save(
             Member(
+                chapterId = chapterId,
                 name = name,
                 profession = profession,
                 professionCode = professionCode.uppercase().take(1).ifBlank { "A" },
@@ -180,8 +192,9 @@ class DatabaseMemberService(
     }
 
     @Transactional
-    fun deleteMember(name: String): Boolean {
-        val member = memberRepository.findByNameIgnoreCase(name).orElse(null) ?: return false
+    fun deleteMember(name: String, chapterTag: String? = null): Boolean {
+        val chapterId = chapterService.resolveChapterId(chapterTag)
+        val member = memberRepository.findByChapterIdAndNameIgnoreCase(chapterId, name).orElse(null) ?: return false
         attendanceRepository.deleteByMemberId(member.id!!.toInt())
         memberRepository.delete(member)
         return true

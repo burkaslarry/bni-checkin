@@ -3,6 +3,9 @@ import { Link } from "react-router-dom";
 import { useDropzone } from "react-dropzone";
 import Papa from "papaparse";
 import { bulkImport, ImportRecord, getEventForDate, getCurrentEvent, createEvent } from "../api";
+import { AnchorOnlyNotice } from "../components/AnchorOnlyNotice";
+import { ClientAuthGate } from "../components/ClientAuthGate";
+import { useChapter } from "../chapterContext";
 
 type ImportType = "member" | "guest";
 
@@ -14,6 +17,9 @@ type ImportRow = {
   referrer?: string;
   standing?: string;
   eventDate?: string;
+  membershipId?: string;
+  professionCode?: string;
+  position?: string;
 };
 
 const normalizeHeader = (key: string): string =>
@@ -39,6 +45,15 @@ const pickValue = (row: Record<string, unknown>, aliases: string[]): string => {
 };
 
 export default function ImportPage() {
+  return (
+    <ClientAuthGate>
+      <ImportPageInner />
+    </ClientAuthGate>
+  );
+}
+
+function ImportPageInner() {
+  const { chapterTag, adminHref, isClientMode, chapter } = useChapter();
   const [importType, setImportType] = useState<ImportType>("guest");
   const [importData, setImportData] = useState<ImportRow[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
@@ -63,10 +78,13 @@ export default function ImportPage() {
           name: pickValue(row, ["name"]),
           profession: pickValue(row, ["profession", "category"]),
           email: pickValue(row, ["email"]) || "",
-          phone: pickValue(row, ["phone"]) || "",
+          phone: pickValue(row, ["phone", "phone_number", "phonenumber"]) || "",
           referrer: pickValue(row, ["referrer"]),
           standing: pickValue(row, ["standing"]),
-          eventDate: pickValue(row, ["event_date", "eventdate"])
+          eventDate: pickValue(row, ["event_date", "eventdate"]),
+          membershipId: pickValue(row, ["membership_id", "membershipid", "id"]),
+          professionCode: pickValue(row, ["profession_code", "professioncode", "code"]),
+          position: pickValue(row, ["position", "title"])
         }));
         const validationErrors: string[] = [];
 
@@ -171,14 +189,20 @@ export default function ImportPage() {
           phoneNumber: row.phone || "",
           referrer: row.referrer || "",
           standing: row.standing || "GREEN",
-          eventDate
+          eventDate,
+          membershipId: row.membershipId || undefined,
+          professionCode: row.professionCode || undefined,
+          position: row.position || undefined
         };
       });
 
-      const result = await bulkImport({
-        type: importType,
-        records
-      });
+      const result = await bulkImport(
+        {
+          type: importType,
+          records
+        },
+        importType === "member" ? chapterTag : undefined
+      );
 
       setImportData([]);
       setErrors([]);
@@ -246,16 +270,21 @@ export default function ImportPage() {
 
       <header className="site-header">
         <div>
-        <p className="hint">EventXP for BNI Anchor</p>
+        <p className="hint">{isClientMode ? `EventXP · ${chapter?.displayName || chapterTag}` : "EventXP for BNI Anchor"}</p>
           <h1>📥 批量匯入會員或嘉賓資料</h1>
-          <p className="hint">Bulk Import Members & Guests</p>
+          <p className="hint">
+            Bulk Import · chapter={chapterTag}
+            {importType === "member" ? "（會員會寫入此 chapter）" : ""}
+          </p>
         </div>
         <div className="header-meta">
-          <Link to="/admin" className="ghost-button back-home-btn">
+          <Link to={adminHref("/admin")} className="ghost-button back-home-btn">
             ← 返回管理頁
           </Link>
         </div>
       </header>
+
+      <AnchorOnlyNotice />
 
       <section className="section">
         <div className="section-header">

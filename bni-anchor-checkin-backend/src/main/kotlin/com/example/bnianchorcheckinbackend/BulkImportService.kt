@@ -12,7 +12,8 @@ import org.springframework.transaction.annotation.Transactional
 
 data class BulkImportRequest(
     val type: String, // "member" or "guest"
-    val records: List<ImportRecord>
+    val records: List<ImportRecord>,
+    val chapter: String? = null
 )
 
 data class ImportRecord(
@@ -42,18 +43,30 @@ class BulkImportService(
     private val memberRepository: MemberRepository,
     private val guestRepository: GuestRepository,
     private val observerRepository: ObserverRepository,
+    private val chapterService: ChapterService,
 ) {
 
     @Transactional
-    fun bulkImportMembers(records: List<ImportRecord>): ImportResult {
+    fun bulkImportMembers(records: List<ImportRecord>, chapterTag: String? = null): ImportResult {
         var inserted = 0
         var updated = 0
         var failed = 0
         val errors = mutableListOf<String>()
+        val chapterId = try {
+            chapterService.resolveChapterId(chapterTag)
+        } catch (e: IllegalArgumentException) {
+            return ImportResult(
+                total = records.size,
+                inserted = 0,
+                updated = 0,
+                failed = records.size,
+                errors = listOf(e.message ?: "Invalid chapter")
+            )
+        }
 
         for (record in records) {
             try {
-                val existingMember = memberRepository.findByNameIgnoreCase(record.name)
+                val existingMember = memberRepository.findByChapterIdAndNameIgnoreCase(chapterId, record.name)
                 
                 if (existingMember.isPresent) {
                     // Update existing member
@@ -82,6 +95,7 @@ class BulkImportService(
                     val phoneNumber = if (record.phoneNumber.isNullOrBlank() || record.phoneNumber == "12345678") null else record.phoneNumber
                     
                     val member = Member(
+                        chapterId = chapterId,
                         name = record.name,
                         profession = record.profession,
                         email = email,
@@ -197,7 +211,7 @@ class BulkImportService(
 
     fun bulkImport(request: BulkImportRequest): ImportResult {
         return when (request.type.lowercase()) {
-            "member" -> bulkImportMembers(request.records)
+            "member" -> bulkImportMembers(request.records, request.chapter)
             "guest" -> bulkImportGuests(request.records)
             "observer" -> bulkImportObservers(request.records)
             else -> ImportResult(

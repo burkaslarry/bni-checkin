@@ -36,36 +36,43 @@ class BulkImportController(
             "無法連線" in msg || "timeout" in msg || "no route" in msg
     }
 
+    private fun resolveChapterParam(queryChapter: String?, bodyChapter: String?): String? =
+        queryChapter?.takeIf { it.isNotBlank() } ?: bodyChapter
+
     @PostMapping("/api/bulk-import")
     @Operation(summary = "Bulk import members or guests from CSV data")
-    fun bulkImport(@RequestBody request: BulkImportRequest): ResponseEntity<ImportResult> {
+    fun bulkImport(
+        @RequestParam(required = false) chapter: String?,
+        @RequestBody request: BulkImportRequest
+    ): ResponseEntity<ImportResult> {
+        val scoped = request.copy(chapter = resolveChapterParam(chapter, request.chapter))
         if (bulkImportService == null) {
-            return if (request.type.lowercase() == "guest") {
-                val fallback = guestService.addBulkImportedGuests(request.records)
+            return if (scoped.type.lowercase() == "guest") {
+                val fallback = guestService.addBulkImportedGuests(scoped.records)
                 notifyGuestRegistryUpdated(fallback)
                 ResponseEntity.ok(fallback)
             } else {
                 ResponseEntity.ok(ImportResult(
-                    total = request.records.size, inserted = 0, updated = 0, failed = request.records.size,
+                    total = scoped.records.size, inserted = 0, updated = 0, failed = scoped.records.size,
                     errors = listOf("匯入會員需要資料庫連線，請設定 spring.datasource.url")
                 ))
             }
         }
         return try {
-            val result = bulkImportService.bulkImport(request)
-            if (result.failed > 0 && request.type.lowercase() == "guest" && isDbConnectionError(result.errors)) {
+            val result = bulkImportService.bulkImport(scoped)
+            if (result.failed > 0 && scoped.type.lowercase() == "guest" && isDbConnectionError(result.errors)) {
                 log.warn("DB unavailable for guest import, falling back to in-memory store")
-                val fallback = guestService.addBulkImportedGuests(request.records)
+                val fallback = guestService.addBulkImportedGuests(scoped.records)
                 notifyGuestRegistryUpdated(fallback)
                 return ResponseEntity.ok(fallback)
             }
-            if (request.type.lowercase() == "guest") notifyGuestRegistryUpdated(result)
+            if (scoped.type.lowercase() == "guest") notifyGuestRegistryUpdated(result)
             ResponseEntity.ok(result)
         } catch (e: Exception) {
             log.error("Bulk import failed: {}", e.message, e)
-            if (request.type.lowercase() == "guest") {
+            if (scoped.type.lowercase() == "guest") {
                 try {
-                    val fallback = guestService.addBulkImportedGuests(request.records)
+                    val fallback = guestService.addBulkImportedGuests(scoped.records)
                     notifyGuestRegistryUpdated(fallback)
                     return ResponseEntity.ok(fallback)
                 } catch (e2: Exception) {
@@ -73,7 +80,7 @@ class BulkImportController(
                 }
             }
             ResponseEntity.ok(ImportResult(
-                total = request.records.size, inserted = 0, updated = 0, failed = request.records.size,
+                total = scoped.records.size, inserted = 0, updated = 0, failed = scoped.records.size,
                 errors = listOf("資料庫暫時無法連線，無法儲存匯入資料。請稍後重試。")
             ))
         }
@@ -81,7 +88,10 @@ class BulkImportController(
 
     @PostMapping("/api/bulk-import/members", "/api/bulk-import-members")
     @Operation(summary = "Bulk import members only")
-    fun bulkImportMembers(@RequestBody records: List<ImportRecord>): ResponseEntity<ImportResult> {
+    fun bulkImportMembers(
+        @RequestParam(required = false) chapter: String?,
+        @RequestBody records: List<ImportRecord>
+    ): ResponseEntity<ImportResult> {
         if (bulkImportService == null) {
             return ResponseEntity.ok(ImportResult(
                 total = records.size, inserted = 0, updated = 0, failed = records.size,
@@ -89,7 +99,7 @@ class BulkImportController(
             ))
         }
         return try {
-            ResponseEntity.ok(bulkImportService.bulkImportMembers(records))
+            ResponseEntity.ok(bulkImportService.bulkImportMembers(records, chapter))
         } catch (e: Exception) {
             log.error("Bulk import members failed: {}", e.message)
             ResponseEntity.ok(ImportResult(
