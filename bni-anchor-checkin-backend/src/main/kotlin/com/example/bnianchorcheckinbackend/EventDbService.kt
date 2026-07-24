@@ -20,10 +20,15 @@ class EventDbService(
     private val attendanceRepository: AttendanceRepository,
     private val memberRepository: MemberRepository,
     private val guestRepository: GuestRepository,
-    private val databaseMemberService: DatabaseMemberService
+    private val databaseMemberService: DatabaseMemberService,
+    private val chapterService: ChapterService? = null
 ) {
     private val hkt = ZoneId.of("Asia/Hong_Kong")
     private val activeStatus = "ACTIVE"
+    private fun resolveChapterId(chapterTag: String?): Int = chapterService?.resolveChapterId(chapterTag) ?: 1
+    private fun findScopedEventById(eventId: Int, chapterId: Int): Event? =
+        if (chapterService == null) eventRepository.findById(eventId.toLong()).orElse(null)
+        else eventRepository.findByChapterIdAndId(chapterId, eventId.toLong())
 
     private fun normalizeStatus(status: String?): String {
         val s = (status ?: "").trim()
@@ -93,13 +98,14 @@ class EventDbService(
         }
     }
 
-    private fun resolveMemberId(name: String): Int? {
-        return memberRepository.findByNameIgnoreCase(name).orElse(null)?.id?.toInt()
+    private fun resolveMemberId(name: String, chapterId: Int): Int? {
+        return memberRepository.findByChapterIdAndNameIgnoreCase(chapterId, name).orElse(null)?.id?.toInt()
     }
 
     /** Create a new event in DB and seed [bni_anchor_attendances] with one absent row per member when members exist. */
     @Transactional
-    fun createEvent(request: EventRequest): EventData {
+    fun createEvent(request: EventRequest, chapterTag: String? = null): EventData {
+        val chapterId = resolveChapterId(chapterTag)
         val eventDate = LocalDate.parse(request.date)
         val startTime = parseTime(request.startTime)
         val endTime = parseTime(request.endTime)
@@ -107,6 +113,7 @@ class EventDbService(
         val onTimeCutoff = parseTime(request.onTimeCutoff)
 
         val event = Event(
+            chapterId = chapterId,
             name = request.name,
             createDate = LocalDate.now(hkt),
             eventDate = eventDate,
@@ -120,7 +127,7 @@ class EventDbService(
         )
         val saved = eventRepository.save(event)
         val eventId = saved.id!!.toInt()
-        val allMembers = databaseMemberService.getAllMembers()
+        val allMembers = databaseMemberService.getAllMembers(chapterTag)
         if (allMembers.isNotEmpty()) {
             val defaultAbsentTs =
                 OffsetDateTime.of(saved.eventDate, saved.startTime, hkt.rules.getOffset(Instant.now()))
@@ -135,15 +142,16 @@ class EventDbService(
             attendanceRepository.saveAll(absentRows)
         }
 
-        resetGuestCheckInsForEventDate(request.date)
+        resetGuestCheckInsForEventDate(request.date, chapterTag)
 
         return toEventData(saved)
     }
 
     /** Clear guest `check_in_time` for every row on [eventDateStr] (reload guest list for a new event day). */
     @Transactional
-    fun resetGuestCheckInsForEventDate(eventDateStr: String): Int {
-        val guests = guestRepository.findGuestsByEventDateTrimmed(eventDateStr.trim())
+    fun resetGuestCheckInsForEventDate(eventDateStr: String, chapterTag: String? = null): Int {
+        val chapterId = resolveChapterId(chapterTag)
+        val guests = guestRepository.findGuestsByChapterIdAndEventDateTrimmed(chapterId, eventDateStr.trim())
         var cleared = 0
         for (guest in guests) {
             if (guest.checkInTime != null) {
@@ -157,9 +165,9 @@ class EventDbService(
 
     /** Reset every member attendance row for [eventId] to absent (used when (re)seeding an event day). */
     @Transactional
-    fun resetAllMembersAbsentForEvent(eventId: Int, eventDate: LocalDate, startTime: LocalTime): Int {
+    fun resetAllMembersAbsentForEvent(eventId: Int, eventDate: LocalDate, startTime: LocalTime, chapterTag: String? = null): Int {
         val defaultAbsentTs = OffsetDateTime.of(eventDate, startTime, hkt.rules.getOffset(Instant.now()))
-        val allMembers = databaseMemberService.getAllMembers()
+        val allMembers = databaseMemberService.getAllMembers(chapterTag)
         val byMemberId = attendanceRepository.findByEventId(eventId).associateBy { it.memberId }.toMutableMap()
         for (m in allMembers) {
             val memberId = m["id"] as Int
@@ -180,19 +188,20 @@ class EventDbService(
         return byMemberId.size
     }
 
-    private fun resolveEventForDate(eventDateStr: String): Event {
+    private fun resolveEventForDate(eventDateStr: String, chapterId: Int): Event {
         val eventDate = LocalDate.parse(eventDateStr.trim())
-        return eventRepository.findByEventDateAndDeletedAtIsNull(eventDate)
+        return eventRepository.findByChapterIdAndEventDateAndDeletedAtIsNull(chapterId, eventDate)
             ?: throw IllegalArgumentException("No non-deleted event for date $eventDateStr")
     }
 
     /** Remove a member or guest check-in for [eventDateStr]; returns false when name not found in either registry. */
     @Transactional
-    fun clearAttendeeCheckIn(eventDateStr: String, name: String): Boolean {
-        val event = resolveEventForDate(eventDateStr)
+    fun clearAttendeeCheckIn(eventDateStr: String, name: String, chapterTag: String? = null): Boolean {
+        val chapterId = resolveChapterId(chapterTag)
+        val event = resolveEventForDate(eventDateStr, chapterId)
         val eventId = event.id!!.toInt()
         val defaultAbsentTs = OffsetDateTime.of(event.eventDate, event.startTime, hkt.rules.getOffset(Instant.now()))
-        val memberId = resolveMemberId(name.trim())
+        val memberId = resolveMemberId(name.trim(), chapterId)
         if (memberId != null) {
             val existing = attendanceRepository.findByEventIdAndMemberId(eventId, memberId)
             if (existing != null) {
@@ -203,7 +212,7 @@ class EventDbService(
                 return true
             }
         }
-        val guest = guestRepository.findByNameIgnoreCaseAndEventDateTrimmed(name.trim(), eventDateStr.trim()).orElse(null)
+        val guest = guestRepository.findByChapterIdAndNameIgnoreCaseAndEventDateTrimmed(chapterId, name.trim(), eventDateStr.trim()).orElse(null)
         if (guest != null) {
             guest.checkInTime = null
             guestRepository.save(guest)
@@ -214,10 +223,11 @@ class EventDbService(
 
     /** Set member or guest check-in time for [eventDateStr]; guest must already exist on that date. */
     @Transactional
-    fun setAttendeeCheckIn(eventDateStr: String, name: String, timeCol: String): Boolean {
-        val event = resolveEventForDate(eventDateStr)
+    fun setAttendeeCheckIn(eventDateStr: String, name: String, timeCol: String, chapterTag: String? = null): Boolean {
+        val chapterId = resolveChapterId(chapterTag)
+        val event = resolveEventForDate(eventDateStr, chapterId)
         val eventId = event.id!!.toInt()
-        val memberId = resolveMemberId(name.trim())
+        val memberId = resolveMemberId(name.trim(), chapterId)
         val checkInTime = parseCheckInTimeToOffset(timeCol.trim(), event.eventDate)
             ?: throw IllegalArgumentException("Invalid check-in time for ${name.trim()}: $timeCol")
         val checkInLocalTime = checkInTime.atZoneSameInstant(hkt).toLocalTime()
@@ -242,7 +252,7 @@ class EventDbService(
             return true
         }
 
-        val guest = guestRepository.findByNameIgnoreCaseAndEventDateTrimmed(name.trim(), eventDateStr.trim()).orElse(null)
+        val guest = guestRepository.findByChapterIdAndNameIgnoreCaseAndEventDateTrimmed(chapterId, name.trim(), eventDateStr.trim()).orElse(null)
             ?: return false
         guest.checkInTime = checkInTime
         guestRepository.save(guest)
@@ -250,18 +260,18 @@ class EventDbService(
     }
 
     @Transactional
-    fun applyAttendanceCorrections(request: AttendanceCorrectionsRequest): Map<String, Any> {
+    fun applyAttendanceCorrections(request: AttendanceCorrectionsRequest, chapterTag: String? = null): Map<String, Any> {
         val warnings = mutableListOf<String>()
         var removed = 0
         var added = 0
         for (name in request.removeCheckIns) {
             if (name.isBlank()) continue
-            if (clearAttendeeCheckIn(request.eventDate, name)) removed++ else warnings.add("remove not found: $name")
+            if (clearAttendeeCheckIn(request.eventDate, name, chapterTag)) removed++ else warnings.add("remove not found: $name")
         }
         for (entry in request.addCheckIns) {
             if (entry.name.isBlank()) continue
             try {
-                if (setAttendeeCheckIn(request.eventDate, entry.name, entry.time)) added++
+                if (setAttendeeCheckIn(request.eventDate, entry.name, entry.time, chapterTag)) added++
                 else warnings.add("add not found: ${entry.name}")
             } catch (e: Exception) {
                 warnings.add("add failed for ${entry.name}: ${e.message}")
@@ -285,20 +295,22 @@ class EventDbService(
             registrationStartTime = event.registrationStartTime.format(DateTimeFormatter.ofPattern("HH:mm")),
             onTimeCutoff = event.onTimeCutoffTime.format(DateTimeFormatter.ofPattern("HH:mm")),
             createdAt = event.createDate.toString(),
-            attendanceEmailSentAt = event.attendanceEmailSentAt?.toString()
+            attendanceEmailSentAt = event.attendanceEmailSentAt?.toString(),
+            chapterId = event.chapterId
         )
     }
 
-    fun getReportData(eventId: Int? = null): ReportData? {
+    fun getReportData(eventId: Int? = null, chapterTag: String? = null): ReportData? {
+        val chapterId = resolveChapterId(chapterTag)
         val event = if (eventId != null) {
-            eventRepository.findById(eventId.toLong()).orElse(null)?.takeIf { it.deletedAt == null }
+            findScopedEventById(eventId, chapterId)?.takeIf { it.deletedAt == null }
         } else {
-            resolveActiveEvent()
+            resolveActiveEvent(chapterTag = chapterTag)
         } ?: return null
         val eventDateStr = event.eventDate.toString()
         val resolvedEventId = event.id!!.toInt()
 
-        val allMembers = databaseMemberService.getAllMembers()
+        val allMembers = databaseMemberService.getAllMembers(chapterTag)
         val memberIdToName = allMembers.associate { (it["id"] as Int) to (it["name"] as String) }
         val attendances = attendanceRepository.findByEventId(resolvedEventId)
 
@@ -324,7 +336,7 @@ class EventDbService(
             }
             .sortedByDescending { it.checkInTime ?: "" }
 
-        val guestArrivals = loadGuestAttendanceRecords(eventDateStr, event.onTimeCutoffTime)
+        val guestArrivals = loadGuestAttendanceRecords(eventDateStr, event.onTimeCutoffTime, chapterId)
 
         val attendees = (memberAttendees + guestArrivals).sortedByDescending { it.checkInTime ?: "" }
 
@@ -346,7 +358,7 @@ class EventDbService(
                 .sortedBy { it.memberName }
         }
 
-        val guestAbsentees = loadGuestAbsentRecords(eventDateStr)
+        val guestAbsentees = loadGuestAbsentRecords(eventDateStr, chapterId)
 
         val absentees = (absentMemberRecords + guestAbsentees).sortedBy { it.memberName }
 
@@ -377,13 +389,13 @@ class EventDbService(
      * only guests registered for that event date. Do not infer event membership from
      * check-in day, otherwise old event guest rows can leak into a new report.
      */
-    fun listGuestsCheckedInForReport(eventDateStr: String): List<Guest> =
-        guestsCheckedInForEventCalendarDay(eventDateStr)
+    fun listGuestsCheckedInForReport(eventDateStr: String, chapterTag: String? = null): List<Guest> =
+        guestsCheckedInForEventCalendarDay(eventDateStr, resolveChapterId(chapterTag))
 
-    private fun guestsCheckedInForEventCalendarDay(eventDateStr: String): List<Guest> {
+    private fun guestsCheckedInForEventCalendarDay(eventDateStr: String, chapterId: Int): List<Guest> {
         val norm = eventDateStr.trim()
         val withCi = try {
-            guestRepository.findAllByCheckInTimeIsNotNull()
+            guestRepository.findAllByChapterIdAndCheckInTimeIsNotNull(chapterId)
         } catch (_: Exception) {
             emptyList()
         }
@@ -396,9 +408,9 @@ class EventDbService(
     }
 
     /** Pre-registered guests for [eventDateStr] with no `check_in_time` → absent on report. */
-    private fun loadGuestAbsentRecords(eventDateStr: String): List<AttendanceRecord> {
+    private fun loadGuestAbsentRecords(eventDateStr: String, chapterId: Int): List<AttendanceRecord> {
         return try {
-            guestRepository.findGuestsByEventDateTrimmed(eventDateStr)
+            guestRepository.findGuestsByChapterIdAndEventDateTrimmed(chapterId, eventDateStr)
                 .filter { it.checkInTime == null }
                 .map { AttendanceRecord(memberName = it.name, status = "absent", role = "GUEST") }
                 .sortedBy { it.memberName }
@@ -408,10 +420,10 @@ class EventDbService(
     }
 
     /** Guests registered for [eventDateStr] with `check_in_time` set → live-report attendee rows. */
-    private fun loadGuestAttendanceRecords(eventDateStr: String, onTimeCutoff: LocalTime): List<AttendanceRecord> {
+    private fun loadGuestAttendanceRecords(eventDateStr: String, onTimeCutoff: LocalTime, chapterId: Int): List<AttendanceRecord> {
         val timeFmt = DateTimeFormatter.ofPattern("HH:mm:ss")
         return try {
-            guestsCheckedInForEventCalendarDay(eventDateStr).map { g ->
+            guestsCheckedInForEventCalendarDay(eventDateStr, chapterId).map { g ->
                 val lt = g.checkInTime!!.atZoneSameInstant(hkt).toLocalTime()
                 val status =
                     if (lt.isBefore(onTimeCutoff)) "on-time" else "late"
@@ -433,12 +445,13 @@ class EventDbService(
      * 2) ongoing session (supports overnight)
      * 3) upcoming within today..+2 days (inclusive), by date/time ASC
      */
-    fun resolveActiveEvent(now: ZonedDateTime = ZonedDateTime.now(hkt)): Event? {
+    fun resolveActiveEvent(now: ZonedDateTime = ZonedDateTime.now(hkt), chapterTag: String? = null): Event? {
+        val chapterId = resolveChapterId(chapterTag)
         val manual = eventRepository
-            .findTopByStatusAndIsActiveTrueAndDeletedAtIsNullOrderByEventDateAscStartTimeAsc(activeStatus)
+            .findTopByChapterIdAndStatusAndIsActiveTrueAndDeletedAtIsNullOrderByEventDateAscStartTimeAsc(chapterId, activeStatus)
         if (manual != null) return manual
 
-        val candidates = eventRepository.findAllByStatusAndDeletedAtIsNullOrderByEventDateAscStartTimeAsc(activeStatus)
+        val candidates = eventRepository.findAllByChapterIdAndStatusAndDeletedAtIsNullOrderByEventDateAscStartTimeAsc(chapterId, activeStatus)
         val ongoing = candidates.firstOrNull { e ->
             val start = ZonedDateTime.of(e.eventDate, e.startTime, hkt)
             val endBase = e.endTime ?: e.startTime.plusHours(2)
@@ -458,35 +471,39 @@ class EventDbService(
         }
     }
 
-    fun getCurrentEvent(): EventData? {
-        val event = resolveActiveEvent() ?: return null
+    fun getCurrentEvent(chapterTag: String? = null): EventData? {
+        val event = resolveActiveEvent(chapterTag = chapterTag) ?: return null
         return toEventData(event)
     }
 
-    fun listEvents(): List<EventData> {
-        return eventRepository.findAllByDeletedAtIsNullOrderByIdDesc().map { toEventData(it) }
+    fun listEvents(chapterTag: String? = null): List<EventData> {
+        val chapterId = resolveChapterId(chapterTag)
+        return eventRepository.findAllByChapterIdAndDeletedAtIsNullOrderByIdDesc(chapterId).map { toEventData(it) }
     }
 
-    fun hasEventThisWeek(): Boolean {
+    fun hasEventThisWeek(chapterTag: String? = null): Boolean {
+        val chapterId = resolveChapterId(chapterTag)
         val now = LocalDate.now(hkt)
         val startOfWeek = now.minusDays(now.dayOfWeek.value.toLong() - 1)
         val endOfWeek = startOfWeek.plusDays(6)
-        return eventRepository.existsByEventDateBetweenAndDeletedAtIsNull(startOfWeek, endOfWeek)
+        return eventRepository.existsByChapterIdAndEventDateBetweenAndDeletedAtIsNull(chapterId, startOfWeek, endOfWeek)
     }
 
-    fun hasEventForDate(eventDate: String): Boolean {
+    fun hasEventForDate(eventDate: String, chapterTag: String? = null): Boolean {
+        val chapterId = resolveChapterId(chapterTag)
         return try {
             val date = LocalDate.parse(eventDate)
-            eventRepository.findByEventDateAndDeletedAtIsNull(date) != null
+            eventRepository.findByChapterIdAndEventDateAndDeletedAtIsNull(chapterId, date) != null
         } catch (_: Exception) {
             false
         }
     }
 
-    fun getEventForDate(eventDate: String): EventData? {
+    fun getEventForDate(eventDate: String, chapterTag: String? = null): EventData? {
+        val chapterId = resolveChapterId(chapterTag)
         return try {
             val date = LocalDate.parse(eventDate)
-            val event = eventRepository.findByEventDateAndDeletedAtIsNull(date) ?: return null
+            val event = eventRepository.findByChapterIdAndEventDateAndDeletedAtIsNull(chapterId, date) ?: return null
             toEventData(event)
         } catch (_: Exception) {
             null
@@ -494,13 +511,14 @@ class EventDbService(
     }
 
     @Transactional
-    fun setEventActive(eventId: Int, exclusive: Boolean): EventData? {
-        val event = eventRepository.findById(eventId.toLong()).orElse(null)?.takeIf { it.deletedAt == null } ?: return null
+    fun setEventActive(eventId: Int, exclusive: Boolean, chapterTag: String? = null): EventData? {
+        val chapterId = resolveChapterId(chapterTag)
+        val event = findScopedEventById(eventId, chapterId)?.takeIf { it.deletedAt == null } ?: return null
         event.status = activeStatus
         event.isActive = true
         eventRepository.save(event)
         if (exclusive) {
-            val others = eventRepository.findAllByStatusAndDeletedAtIsNullOrderByEventDateAscStartTimeAsc(activeStatus)
+            val others = eventRepository.findAllByChapterIdAndStatusAndDeletedAtIsNullOrderByEventDateAscStartTimeAsc(chapterId, activeStatus)
                 .filter { it.id != event.id }
             others.forEach { it.isActive = false }
             eventRepository.saveAll(others)
@@ -510,8 +528,9 @@ class EventDbService(
 
     /** Update event name, start time, and/or end time. Returns null if event not found or deleted. */
     @Transactional
-    fun updateEvent(eventId: Int, request: EventUpdateRequest): EventData? {
-        val event = eventRepository.findById(eventId.toLong()).orElse(null)?.takeIf { it.deletedAt == null }
+    fun updateEvent(eventId: Int, request: EventUpdateRequest, chapterTag: String? = null): EventData? {
+        val chapterId = resolveChapterId(chapterTag)
+        val event = findScopedEventById(eventId, chapterId)?.takeIf { it.deletedAt == null }
             ?: return null
         val newName = request.name?.trim()?.takeIf { it.isNotEmpty() }
         val newStartTime = request.startTime?.trim()?.takeIf { it.isNotEmpty() }?.let { parseTime(it) }
@@ -527,8 +546,9 @@ class EventDbService(
     }
 
     @Transactional
-    fun softDeleteEvent(eventId: Int, force: Boolean): Boolean {
-        val event = eventRepository.findById(eventId.toLong()).orElse(null)?.takeIf { it.deletedAt == null } ?: return false
+    fun softDeleteEvent(eventId: Int, force: Boolean, chapterTag: String? = null): Boolean {
+        val chapterId = resolveChapterId(chapterTag)
+        val event = findScopedEventById(eventId, chapterId)?.takeIf { it.deletedAt == null } ?: return false
         if (force) {
             attendanceRepository.deleteByEventId(eventId)
         } else {
@@ -543,12 +563,13 @@ class EventDbService(
     }
 
     @Transactional
-    fun logAttendance(request: AttendanceLogRequest) {
+    fun logAttendance(request: AttendanceLogRequest, chapterTag: String? = null) {
+        val chapterId = resolveChapterId(chapterTag)
         val eventDate = try { LocalDate.parse(request.eventDate) } catch (_: Exception) { return }
-        val event = eventRepository.findByEventDate(eventDate) ?: return
+        val event = eventRepository.findByChapterIdAndEventDate(chapterId, eventDate) ?: return
         val eventId = event.id!!.toInt()
 
-        val memberId = resolveMemberId(request.attendeeName) ?: return
+        val memberId = resolveMemberId(request.attendeeName, chapterId) ?: return
         val checkInTime = parseCheckInTimeToOffset(request.checkedInAt, eventDate)
             ?: OffsetDateTime.now(hkt)
 
@@ -575,11 +596,12 @@ class EventDbService(
 
     /** Set or clear substitute attendee name on a member's attendance row for an event date. */
     @Transactional
-    fun updateMemberSubstitute(eventDateStr: String, memberName: String, substituteName: String?): Boolean {
+    fun updateMemberSubstitute(eventDateStr: String, memberName: String, substituteName: String?, chapterTag: String? = null): Boolean {
+        val chapterId = resolveChapterId(chapterTag)
         val eventDate = try { LocalDate.parse(eventDateStr.trim()) } catch (_: Exception) { return false }
-        val event = eventRepository.findByEventDateAndDeletedAtIsNull(eventDate) ?: return false
+        val event = eventRepository.findByChapterIdAndEventDateAndDeletedAtIsNull(chapterId, eventDate) ?: return false
         val eventId = event.id!!.toInt()
-        val memberId = resolveMemberId(memberName.trim()) ?: return false
+        val memberId = resolveMemberId(memberName.trim(), chapterId) ?: return false
         val existing = attendanceRepository.findByEventIdAndMemberId(eventId, memberId) ?: return false
         existing.substituteFor = substituteName?.trim()?.takeIf { it.isNotEmpty() }
         attendanceRepository.save(existing)
@@ -595,13 +617,15 @@ class EventDbService(
     @Transactional
     fun batchUpsertCurrentEventAttendancesForExport(
         reportData: ReportData?,
-        records: List<CheckInRecord>
+        records: List<CheckInRecord>,
+        chapterTag: String? = null
     ) {
-        val event = eventRepository.findTopByOrderByEventDateDesc() ?: return
+        val chapterId = resolveChapterId(chapterTag)
+        val event = eventRepository.findTopByChapterIdAndDeletedAtIsNullOrderByEventDateDescStartTimeDesc(chapterId) ?: return
         val eventId = event.id!!.toInt()
         val defaultAbsentTs = OffsetDateTime.of(event.eventDate, event.startTime, hkt.rules.getOffset(Instant.now()))
 
-        val allMembers = databaseMemberService.getAllMembers()
+        val allMembers = databaseMemberService.getAllMembers(chapterTag)
         val memberNameToId = allMembers.associate { (it["name"] as String) to (it["id"] as Int) }
         val byMemberId = attendanceRepository.findByEventId(eventId).associateBy { it.memberId }.toMutableMap()
 
@@ -685,9 +709,10 @@ class EventDbService(
      * Upserts member rows in [bni_anchor_attendances]; updates guest [check_in_time] for matching [bni_anchor_guests] on this date.
      */
     @Transactional
-    fun importAttendanceFromExportCsv(eventDateStr: String, csvText: String): Map<String, Any> {
+    fun importAttendanceFromExportCsv(eventDateStr: String, csvText: String, chapterTag: String? = null): Map<String, Any> {
+        val chapterId = resolveChapterId(chapterTag)
         val eventDate = LocalDate.parse(eventDateStr.trim())
-        val event = eventRepository.findByEventDateAndDeletedAtIsNull(eventDate)
+        val event = eventRepository.findByChapterIdAndEventDateAndDeletedAtIsNull(chapterId, eventDate)
             ?: throw IllegalArgumentException("No non-deleted event for date $eventDateStr")
         val eventId = event.id!!.toInt()
         val defaultAbsentTs = OffsetDateTime.of(event.eventDate, event.startTime, hkt.rules.getOffset(Instant.now()))
@@ -708,7 +733,7 @@ class EventDbService(
         val byMemberId = attendanceRepository.findByEventId(eventId).associateBy { it.memberId }.toMutableMap()
 
         fun upsertMember(name: String, statusRaw: String, timeCol: String, substituteCol: String? = null) {
-            val memberId = resolveMemberId(name) ?: run {
+            val memberId = resolveMemberId(name, chapterId) ?: run {
                 warnings.add("member not in DB (skipped): $name")
                 return
             }
@@ -756,7 +781,7 @@ class EventDbService(
             when {
                 cat == "member" -> upsertMember(name, statusRaw, timeCol, substituteCol)
                 cat == "guest" || cat == "vip" || cat == "speaker" -> {
-                    val guest = guestRepository.findByNameIgnoreCaseAndEventDate(name, eventDateStr).orElse(null)
+                    val guest = guestRepository.findByChapterIdAndNameIgnoreCaseAndEventDateTrimmed(chapterId, name, eventDateStr).orElse(null)
                     if (guest == null) {
                         warnings.add("guest not in DB for date (skipped): $name")
                     } else {

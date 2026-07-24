@@ -1,20 +1,19 @@
 import { ReactNode } from "react";
-import { Link } from "react-router-dom";
 import { ClientAdminLoginPanel } from "./ClientAdminLoginPanel";
 import { useChapter } from "../chapterContext";
 
-/** Require client login when visiting /admin/*?client=true */
+/** Require login for all /admin/* routes (Anchor and other chapters). */
 export function ClientAuthGate({ children }: { children: ReactNode }) {
-  const { isClientMode, isAuthenticated, authReady } = useChapter();
+  const { isAdminRoute, isAuthenticated, authReady } = useChapter();
 
-  if (!isClientMode) return <>{children}</>;
+  if (!isAdminRoute) return <>{children}</>;
 
   if (!authReady) {
     return (
       <div className="app-shell">
         <header className="site-header">
           <div>
-            <p className="hint">EventXP Client Admin</p>
+            <p className="hint">EventXP Admin</p>
             <h1>載入登入狀態…</h1>
           </div>
         </header>
@@ -27,14 +26,9 @@ export function ClientAuthGate({ children }: { children: ReactNode }) {
       <div className="app-shell">
         <header className="site-header">
           <div>
-            <p className="hint">EventXP Client Admin</p>
-            <h1>其他 Chapter 管理入口</h1>
-            <p className="hint">請先登入</p>
-          </div>
-          <div className="header-meta">
-            <Link to="/admin" className="ghost-button back-home-btn">
-              ← Anchor 管理後台
-            </Link>
+            <p className="hint">EventXP Admin</p>
+            <h1>管理後台登入</h1>
+            <p className="hint">BNI Anchor 及其他 chapter 請由此登入</p>
           </div>
         </header>
         <ClientAdminLoginPanel />

@@ -24,13 +24,13 @@ object GuestImportSupport {
         return p
     }
 
-    fun resolveExistingGuest(guestRepository: GuestRepository, record: ImportRecord): Guest? {
+    fun resolveExistingGuest(guestRepository: GuestRepository, record: ImportRecord, chapterId: Int = 1): Guest? {
         val name = record.name.trim()
         val eventDate = normalizeEventDate(record.eventDate)
         if (!eventDate.isNullOrBlank()) {
-            guestRepository.findByNameIgnoreCaseAndEventDateTrimmed(name, eventDate).orElse(null)?.let { return it }
+            guestRepository.findByChapterIdAndNameIgnoreCaseAndEventDateTrimmed(chapterId, name, eventDate).orElse(null)?.let { return it }
         }
-        return guestRepository.findByNameIgnoreCase(name).orElse(null)
+        return guestRepository.findByChapterIdAndNameIgnoreCase(chapterId, name).orElse(null)
     }
 
     fun applyGuestFields(guest: Guest, record: ImportRecord) {
@@ -41,8 +41,9 @@ object GuestImportSupport {
         guest.eventDate = normalizeEventDate(record.eventDate)
     }
 
-    fun newGuestEntity(record: ImportRecord): Guest =
+    fun newGuestEntity(record: ImportRecord, chapterId: Int = 1): Guest =
         Guest(
+            chapterId = chapterId,
             name = record.name.trim(),
             profession = record.profession,
             referrer = record.referrer?.trim()?.takeIf { it.isNotBlank() },

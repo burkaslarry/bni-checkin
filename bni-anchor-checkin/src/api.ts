@@ -74,8 +74,20 @@ const jsonHeaders = {
 };
 
 /** Append ?chapter= when not blank / not default-only callers that pass tag. */
+let activeApiChapterTag: string | null = null;
+
+/** Sync from ChapterProvider so admin APIs scope to the logged-in chapter. */
+export function setActiveApiChapterTag(tag: string | null | undefined) {
+  const t = tag?.trim();
+  activeApiChapterTag = t && t.length > 0 ? t : null;
+}
+
+export function getActiveApiChapterTag(): string | null {
+  return activeApiChapterTag;
+}
+
 function withChapterQuery(url: string, chapter?: string | null): string {
-  const tag = chapter?.trim();
+  const tag = (chapter !== undefined && chapter !== null ? chapter : activeApiChapterTag)?.trim();
   if (!tag) return url;
   const sep = url.includes("?") ? "&" : "?";
   return `${url}${sep}chapter=${encodeURIComponent(tag)}`;
@@ -337,8 +349,8 @@ export type GuestInfo = {
 export async function getGuests(eventDate?: string): Promise<{ guests: GuestInfo[] }> {
   try {
     const url = eventDate
-      ? `${API_BASE}/api/guests?eventDate=${encodeURIComponent(eventDate)}`
-      : `${API_BASE}/api/guests`;
+      ? withChapterQuery(`${API_BASE}/api/guests?eventDate=${encodeURIComponent(eventDate)}`)
+      : withChapterQuery(`${API_BASE}/api/guests`);
     const response = await fetchWithRetry(url, { mode: "cors" }, 12000, 3);
     return handleResponse(response);
   } catch (e) {
@@ -403,7 +415,7 @@ export async function createPublicGuest(request: PublicGuestCreateRequest): Prom
 
 /** Get one event by id. GET /api/events/{id}. Side effect: network. */
 export async function getEventById(eventId: number): Promise<EventData> {
-  const response = await fetch(`${API_BASE}/api/events/${encodeURIComponent(String(eventId))}`, { mode: "cors" });
+  const response = await fetch(withChapterQuery(`${API_BASE}/api/events/${encodeURIComponent(String(eventId))}`), { mode: "cors" });
   return handleResponse(response);
 }
 
@@ -416,7 +428,7 @@ export async function getEventById(eventId: number): Promise<EventData> {
 export async function checkIn(
   request: CheckInRequest
 ): Promise<{ status: string; message: string }> {
-  const response = await fetch(`${API_BASE}/api/checkin`, {
+  const response = await fetch(withChapterQuery(`${API_BASE}/api/checkin`), {
     method: "POST",
     headers: jsonHeaders,
     body: JSON.stringify(request),
@@ -432,7 +444,7 @@ export async function checkIn(
  * @throws {Error} On HTTP error
  */
 export async function getRecords(): Promise<{ records: CheckInRecord[] }> {
-  const response = await fetch(`${API_BASE}/api/records`, { mode: "cors" });
+  const response = await fetch(withChapterQuery(`${API_BASE}/api/records`), { mode: "cors" });
   return handleResponse(response);
 }
 
@@ -442,7 +454,7 @@ export async function getRecords(): Promise<{ records: CheckInRecord[] }> {
  * @throws {Error} On HTTP error
  */
 export async function clearRecords(): Promise<{ status: string; message: string }> {
-  const response = await fetch(`${API_BASE}/api/records`, {
+  const response = await fetch(withChapterQuery(`${API_BASE}/api/records`), {
     method: "DELETE",
     mode: "cors"
   });
@@ -468,7 +480,7 @@ export async function markAttendanceAbsent(
   eventDate: string,
   name: string
 ): Promise<{ status: string; removed?: number; warnings?: string[] }> {
-  const response = await fetch(`${API_BASE}/api/events/attendance-corrections`, {
+  const response = await fetch(withChapterQuery(`${API_BASE}/api/events/attendance-corrections`), {
     method: "POST",
     headers: jsonHeaders,
     body: JSON.stringify({
@@ -521,7 +533,7 @@ export async function sendAttendanceEmail(
     throw new Error("Invalid event id");
   }
   const response = await fetch(
-    `${API_BASE}/api/events/${encodeURIComponent(String(id))}/send-attendance-email?force=${force ? "true" : "false"}`,
+    withChapterQuery(`${API_BASE}/api/events/${encodeURIComponent(String(id))}/send-attendance-email?force=${force ? "true" : "false"}`),
     {
       method: "POST",
       mode: "cors",
@@ -543,7 +555,7 @@ export async function resetAttendanceEmail(
     throw new Error("Invalid event id");
   }
   const response = await fetch(
-    `${API_BASE}/api/events/${encodeURIComponent(String(id))}/attendance-email`,
+    withChapterQuery(`${API_BASE}/api/events/${encodeURIComponent(String(id))}/attendance-email`),
     {
       method: "DELETE",
       mode: "cors",
@@ -574,7 +586,7 @@ export async function importAttendanceCsv(eventDate: string, file: File): Promis
   form.append("file", file);
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}/api/events/import-attendance-csv`, {
+    response = await fetch(withChapterQuery(`${API_BASE}/api/events/import-attendance-csv`), {
       method: "POST",
       body: form,
       mode: "cors"
@@ -633,7 +645,7 @@ export async function createEvent(
   onTimeCutoff: string
 ): Promise<{ status: string; message: string; event?: unknown }> {
   try {
-    const response = await fetch(`${API_BASE}/api/events`, {
+    const response = await fetch(withChapterQuery(`${API_BASE}/api/events`), {
       method: "POST",
       headers: jsonHeaders,
       body: JSON.stringify({
@@ -665,7 +677,7 @@ export async function createEvent(
  * @throws {Error} On HTTP error
  */
 export async function clearAllEventsAndAttendance(): Promise<{ status: string; message: string }> {
-  const response = await fetch(`${API_BASE}/api/events/clear-all`, {
+  const response = await fetch(withChapterQuery(`${API_BASE}/api/events/clear-all`), {
     method: "DELETE",
     mode: "cors"
   });
@@ -687,11 +699,12 @@ export type EventData = {
   createdAt: string;
   /** ISO timestamp when attendance CSV was emailed; null/undefined if never sent. */
   attendanceEmailSentAt?: string | null;
+  chapterId?: number;
 };
 
 /** List all events (latest first). GET /api/events. Side effect: network. */
 export async function listEvents(): Promise<EventData[]> {
-  const response = await fetch(`${API_BASE}/api/events`, { mode: "cors" });
+  const response = await fetch(withChapterQuery(`${API_BASE}/api/events`), { mode: "cors" });
   return handleResponse(response);
 }
 
@@ -702,7 +715,7 @@ export async function listEvents(): Promise<EventData[]> {
  */
 export async function getCurrentEvent(): Promise<EventData | null> {
   try {
-    const response = await fetch(`${API_BASE}/api/events/current`, { mode: "cors" });
+    const response = await fetch(withChapterQuery(`${API_BASE}/api/events/current`), { mode: "cors" });
     if (response.status === 404) {
       return null;
     }
@@ -719,7 +732,7 @@ export async function activateEvent(
   eventId: number,
   exclusive = true
 ): Promise<{ status: string; exclusive?: boolean; event?: unknown; message?: string }> {
-  const response = await fetch(`${API_BASE}/api/events/${eventId}/activate`, {
+  const response = await fetch(withChapterQuery(`${API_BASE}/api/events/${eventId}/activate`), {
     method: "POST",
     headers: jsonHeaders,
     body: JSON.stringify({ exclusive }),
@@ -736,7 +749,7 @@ export async function deleteEvent(
   force = false
 ): Promise<{ status: string; message?: string }> {
   const q = force ? "?force=true" : "?force=false";
-  const response = await fetch(`${API_BASE}/api/events/${eventId}${q}`, {
+  const response = await fetch(withChapterQuery(`${API_BASE}/api/events/${eventId}${q}`), {
     method: "DELETE",
     mode: "cors"
   });
@@ -748,7 +761,7 @@ export async function updateEvent(
   eventId: number,
   patch: { name?: string; startTime?: string; endTime?: string }
 ): Promise<EventData> {
-  const response = await fetch(`${API_BASE}/api/events/${eventId}`, {
+  const response = await fetch(withChapterQuery(`${API_BASE}/api/events/${eventId}`), {
     method: "PUT",
     headers: jsonHeaders,
     body: JSON.stringify(patch),
@@ -836,7 +849,7 @@ export type AIInsightResponse = {
 export async function getReportData(eventId?: number | string | null): Promise<ReportData | null> {
   const id = normalizeApiEventId(eventId);
   const q = id !== undefined ? `?eventId=${encodeURIComponent(String(id))}` : "";
-  const response = await fetch(`${API_BASE}/api/report${q}`, { mode: "cors" });
+  const response = await fetch(withChapterQuery(`${API_BASE}/api/report${q}`), { mode: "cors" });
   if (response.ok) {
     return handleResponse(response);
   }
@@ -861,7 +874,7 @@ export async function getReportData(eventId?: number | string | null): Promise<R
  * @returns {Promise<boolean>}
  */
 export async function checkEventExists(date: string): Promise<boolean> {
-  const response = await fetch(`${API_BASE}/api/events/check?date=${encodeURIComponent(date)}`, { mode: "cors" });
+  const response = await fetch(withChapterQuery(`${API_BASE}/api/events/check?date=${encodeURIComponent(date)}`), { mode: "cors" });
   if (response.ok) {
     const data = await response.json();
     return !!data?.exists;
@@ -878,7 +891,7 @@ export async function checkEventExists(date: string): Promise<boolean> {
 export async function getEventForDate(date: string): Promise<{ id: number; name: string } | null> {
   try {
     const response = await fetchWithRetry(
-      `${API_BASE}/api/events/for-date?date=${encodeURIComponent(date)}`,
+      withChapterQuery(`${API_BASE}/api/events/for-date?date=${encodeURIComponent(date)}`),
       { mode: "cors" },
       10000,
       3
@@ -902,7 +915,7 @@ export async function getEventForDate(date: string): Promise<{ id: number; name:
  */
 export async function checkEventThisWeek(): Promise<boolean> {
   try {
-    const response = await fetch(`${API_BASE}/api/events/check-this-week`, { mode: "cors" });
+    const response = await fetch(withChapterQuery(`${API_BASE}/api/events/check-this-week`), { mode: "cors" });
     if (response.ok) {
       const data = await response.json();
       return !!data?.exists;
@@ -935,7 +948,7 @@ export async function logAttendance(
   checkedInAt: string,
   status: string
 ): Promise<{ status: string; message: string }> {
-  const response = await fetch(`${API_BASE}/api/attendance/log`, {
+  const response = await fetch(withChapterQuery(`${API_BASE}/api/attendance/log`), {
     method: "POST",
     headers: jsonHeaders,
     body: JSON.stringify({
@@ -960,7 +973,7 @@ export async function updateAttendanceSubstitute(
   memberName: string,
   substituteName?: string
 ): Promise<{ status: string; message: string }> {
-  const response = await fetch(`${API_BASE}/api/attendance/substitute-for`, {
+  const response = await fetch(withChapterQuery(`${API_BASE}/api/attendance/substitute-for`), {
     method: "POST",
     headers: jsonHeaders,
     body: JSON.stringify({
@@ -1154,7 +1167,7 @@ export async function bulkImport(
     const endpoint =
       request.type === "member"
         ? withChapterQuery(`${API_BASE}/api/bulk-import-members`, chapter)
-        : `${API_BASE}/api/bulk-import-guest`;
+        : withChapterQuery(`${API_BASE}/api/bulk-import-guest`);
     const response = await fetchWithRetry(endpoint, {
       method: "POST",
       headers: jsonHeaders,
@@ -1179,7 +1192,7 @@ export async function bulkImportObservers(
 ): Promise<ImportResult> {
   try {
     const response = await fetchWithRetry(
-      `${API_BASE}/api/bulk-import-observers`,
+      withChapterQuery(`${API_BASE}/api/bulk-import-observers`),
       {
         method: "POST",
         headers: jsonHeaders,
@@ -1301,7 +1314,7 @@ export async function updateGuest(
   if (currentEventDate?.trim()) {
     params.set("currentEventDate", currentEventDate.trim());
   }
-  const response = await fetch(`${API_BASE}/api/guests?${params.toString()}`, {
+  const response = await fetch(withChapterQuery(`${API_BASE}/api/guests?${params.toString()}`), {
     method: "PUT",
     headers: jsonHeaders,
     body: JSON.stringify(request),
@@ -1317,7 +1330,7 @@ export async function updateGuest(
 export async function createGuest(
   request: CreateGuestRequest
 ): Promise<{ status: string; message: string; guest?: GuestInfo }> {
-  const response = await fetch(`${API_BASE}/api/guests`, {
+  const response = await fetch(withChapterQuery(`${API_BASE}/api/guests`), {
     method: "POST",
     headers: jsonHeaders,
     body: JSON.stringify(request),
@@ -1359,7 +1372,7 @@ export async function deleteMember(
 export async function deleteGuest(
   name: string
 ): Promise<{ status: string; message: string }> {
-  const response = await fetch(`${API_BASE}/api/guests/${encodeURIComponent(name)}`, {
+  const response = await fetch(withChapterQuery(`${API_BASE}/api/guests/${encodeURIComponent(name)}`), {
     method: "DELETE",
     mode: "cors"
   });
@@ -1387,14 +1400,14 @@ export type UpdateObserverRequest = {
 
 export async function getObservers(eventDate?: string): Promise<{ observers: ObserverInfo[] }> {
   const q = eventDate ? `?eventDate=${encodeURIComponent(eventDate)}` : "";
-  const response = await fetch(`${API_BASE}/api/observers${q}`, { mode: "cors" });
+  const response = await fetch(withChapterQuery(`${API_BASE}/api/observers${q}`), { mode: "cors" });
   return handleResponse(response);
 }
 
 export async function createObserver(
   request: CreateObserverRequest
 ): Promise<{ status: string; message: string; observer?: ObserverInfo }> {
-  const response = await fetch(`${API_BASE}/api/observers`, {
+  const response = await fetch(withChapterQuery(`${API_BASE}/api/observers`), {
     method: "POST",
     headers: jsonHeaders,
     body: JSON.stringify(request),
@@ -1407,7 +1420,7 @@ export async function updateObserver(
   name: string,
   request: UpdateObserverRequest
 ): Promise<{ status: string; message: string }> {
-  const response = await fetch(`${API_BASE}/api/observers/${encodeURIComponent(name)}`, {
+  const response = await fetch(withChapterQuery(`${API_BASE}/api/observers/${encodeURIComponent(name)}`), {
     method: "PUT",
     headers: jsonHeaders,
     body: JSON.stringify(request),
@@ -1419,7 +1432,7 @@ export async function updateObserver(
 export async function deleteObserver(
   name: string
 ): Promise<{ status: string; message: string }> {
-  const response = await fetch(`${API_BASE}/api/observers/${encodeURIComponent(name)}`, {
+  const response = await fetch(withChapterQuery(`${API_BASE}/api/observers/${encodeURIComponent(name)}`), {
     method: "DELETE",
     mode: "cors"
   });
@@ -1428,7 +1441,7 @@ export async function deleteObserver(
 
 export async function exportObservers(eventDate: string): Promise<Blob> {
   const response = await fetch(
-    `${API_BASE}/api/observers/export?eventDate=${encodeURIComponent(eventDate)}`,
+    withChapterQuery(`${API_BASE}/api/observers/export?eventDate=${encodeURIComponent(eventDate)}`),
     { mode: "cors" }
   );
   if (!response.ok) {

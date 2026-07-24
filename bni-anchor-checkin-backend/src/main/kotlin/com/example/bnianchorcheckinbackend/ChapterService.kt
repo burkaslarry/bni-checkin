@@ -85,9 +85,6 @@ class ChapterService(
         }
         val chapter = chapterRepository.findByAdminLoginIgnoreCase(login).orElse(null)
             ?: throw IllegalArgumentException("Invalid login")
-        if (chapter.tag.equals("anchor", ignoreCase = true)) {
-            throw IllegalArgumentException("Use /admin for BNI Anchor (do not use client login)")
-        }
         if (!chapter.status.equals("active", ignoreCase = true)) {
             throw IllegalArgumentException("Chapter is not active")
         }

@@ -341,14 +341,16 @@ class MemberManagementController(
     @Operation(summary = "Update guest information")
     fun updateGuest(
         @PathVariable name: String,
+        @RequestParam(required = false) chapter: String?,
         @RequestBody request: UpdateGuestRequest
-    ): ResponseEntity<Map<String, Any>> = applyGuestUpdate(name, null, request)
+    ): ResponseEntity<Map<String, Any>> = applyGuestUpdate(name, null, request, chapter)
 
     @PutMapping(value = ["/api/guests"], params = ["currentName"])
     @Operation(summary = "Update guest by current name and optional event date (supports rename)")
     fun updateGuestByCurrentName(
         @RequestParam currentName: String,
         @RequestParam(required = false) currentEventDate: String?,
+        @RequestParam(required = false) chapter: String?,
         @RequestBody request: UpdateGuestRequest
     ): ResponseEntity<Map<String, Any>> {
         val trimmed = currentName.trim()
@@ -358,13 +360,14 @@ class MemberManagementController(
                 "message" to "currentName is required"
             ))
         }
-        return applyGuestUpdate(trimmed, currentEventDate?.trim()?.takeIf { it.isNotEmpty() }, request)
+        return applyGuestUpdate(trimmed, currentEventDate?.trim()?.takeIf { it.isNotEmpty() }, request, chapter)
     }
 
     private fun applyGuestUpdate(
         currentName: String,
         currentEventDate: String?,
-        request: UpdateGuestRequest
+        request: UpdateGuestRequest,
+        chapterTag: String? = null
     ): ResponseEntity<Map<String, Any>> {
         val newName = request.name?.trim()?.takeIf { it.isNotEmpty() }
         if (newName != null && newName.isBlank()) {
@@ -381,7 +384,8 @@ class MemberManagementController(
                 newName = newName,
                 profession = request.profession,
                 referrer = request.referrer,
-                eventDate = request.eventDate
+                eventDate = request.eventDate,
+                chapterTag = chapterTag
             )
         } catch (e: IllegalArgumentException) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(mapOf(
@@ -416,9 +420,12 @@ class MemberManagementController(
 
     @DeleteMapping("/api/guests/{name}")
     @Operation(summary = "Delete a guest")
-    fun deleteGuest(@PathVariable name: String): ResponseEntity<Map<String, String>> {
+    fun deleteGuest(
+        @PathVariable name: String,
+        @RequestParam(required = false) chapter: String?
+    ): ResponseEntity<Map<String, String>> {
         val deleted = try {
-            databaseMemberService.deleteGuest(name)
+            databaseMemberService.deleteGuest(name, chapter)
         } catch (e: Exception) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(mapOf("status" to "error", "message" to "資料庫暫時無法連線，無法刪除嘉賓。"))
@@ -433,7 +440,10 @@ class MemberManagementController(
 
     @PostMapping("/api/guests")
     @Operation(summary = "Create guest (registration only, no check-in)")
-    fun createGuest(@RequestBody request: CreateGuestRequest): ResponseEntity<Map<String, Any>> {
+    fun createGuest(
+        @RequestBody request: CreateGuestRequest,
+        @RequestParam(required = false) chapter: String?
+    ): ResponseEntity<Map<String, Any>> {
         val name = request.name.trim()
         val profession = request.profession.trim()
         if (name.isBlank() || profession.isBlank()) {
@@ -442,7 +452,7 @@ class MemberManagementController(
             )
         }
         val resolvedDate = request.eventDate?.trim().takeUnless { it.isNullOrEmpty() }
-            ?: eventDbService?.getCurrentEvent()?.date
+            ?: eventDbService?.getCurrentEvent(chapter)?.date
         if (resolvedDate.isNullOrBlank()) {
             return ResponseEntity.badRequest().body(
                 mapOf("status" to "error", "message" to "eventDate is required when no current event is active")
@@ -453,7 +463,8 @@ class MemberManagementController(
                 name = name,
                 profession = profession,
                 referrer = request.referrer?.trim()?.takeIf { it.isNotEmpty() },
-                eventDate = resolvedDate
+                eventDate = resolvedDate,
+                chapterTag = chapter
             )
             attendanceWebSocketHandler?.broadcast(mapOf("type" to "guest_registry_updated"))
             ResponseEntity.status(HttpStatus.CREATED).body(

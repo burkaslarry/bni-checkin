@@ -6,6 +6,7 @@ plugins {
 	kotlin("jvm") version "1.9.20"
 	kotlin("plugin.spring") version "1.9.20"
 	kotlin("plugin.jpa") version "1.9.20"
+	id("org.owasp.dependencycheck") version "12.1.0"
 }
 
 group = "com.example"
@@ -29,6 +30,27 @@ dependencies {
 	implementation("org.jetbrains.kotlin:kotlin-reflect")
 	implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0")
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
+}
+
+// SRAA Security Risk Assessment: SCA scan; fail on High/Critical (CVSS >= 7)
+dependencyCheck {
+	failBuildOnCVSS = 7.0f
+	formats = listOf("HTML", "JSON")
+	outputDirectory = layout.buildDirectory.dir("reports").get().asFile
+	suppressionFile = "dependency-check-suppressions.xml"
+	nvd {
+		apiKey = System.getenv("NVD_API_KEY")
+	}
+	analyzers {
+		assemblyEnabled = false
+		ossIndexEnabled = true
+	}
+}
+
+tasks.register("sraaSecurityAudit") {
+	group = "verification"
+	description = "SRAA gate: OWASP Dependency-Check (CVSS>=7) + unit tests + bootJar"
+	dependsOn("dependencyCheckAnalyze", "test", "bootJar")
 }
 
 tasks.withType<KotlinCompile> {

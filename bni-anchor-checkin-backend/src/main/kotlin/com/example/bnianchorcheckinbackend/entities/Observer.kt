@@ -6,12 +6,15 @@ import java.time.OffsetDateTime
 @Entity
 @Table(
     name = "bni_anchor_observers",
-    uniqueConstraints = [UniqueConstraint(columnNames = ["name", "event_date"])]
+    uniqueConstraints = [UniqueConstraint(columnNames = ["chapter_id", "name", "event_date"])]
 )
 data class Observer(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long? = null,
+
+    @Column(name = "chapter_id", nullable = false)
+    var chapterId: Int = 1,
 
     @Column(nullable = false)
     var name: String,

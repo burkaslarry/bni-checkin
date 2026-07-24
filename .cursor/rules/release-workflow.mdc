@@ -80,14 +80,30 @@ Never force-push `master`. Never skip hooks unless user explicitly asks.
 
 ### 4. Deploy
 
-**Backend → Render** (repo `bni-anchor-checkin-backend`, branch `main`):
-```bash
-cd bni-anchor-checkin-backend && git push origin main
-```
-Render auto-deploys on push. Manual fallback: `render deploys create srv-d4lvmf3uibrs7389dfj0 --confirm --wait`.
-Verify: `curl -sS https://bni-anchor-checkin-backend.onrender.com/api/members` and `/api/observers`.
-
 **DB migrations**: Render Postgres only (`render psql dpg-d6iok5q4d50c738643c0-a`). Do NOT use Supabase.
+
+**Backend → Render** (SRAA gate — **required before every production deploy**):
+
+Security Risk Assessment (SRA): OWASP Dependency-Check SCA; fail on High/Critical (CVSS ≥ 7.0).  
+Security Audit (SA): `./gradlew test` + `bootJar` must pass before deploy.
+
+```bash
+# Preferred (audit log → docs/security/)
+chmod +x scripts/deploy-render-production.sh
+# Push backend main first, then:
+./scripts/deploy-render-production.sh
+
+# Audit + jar only (no Render deploy):
+SKIP_RENDER=1 ./scripts/deploy-render-production.sh
+
+# Offline / no NVD (not for production release):
+SKIP_OWASP=1 SKIP_RENDER=1 ./scripts/deploy-render-production.sh
+```
+
+Optional: `export NVD_API_KEY=...` to avoid NVD rate limits.  
+Gradle: `cd bni-anchor-checkin-backend && ./gradlew sraaSecurityAudit`  
+Manual fallback deploy: `render deploys create srv-d4lvmf3uibrs7389dfj0 --confirm --wait`.  
+Verify: `curl -sS https://bni-anchor-checkin-backend.onrender.com/api/chapters` and `/api/observers`.
 
 **Frontend → Vercel** (SRAA gate — **required before every production deploy**):
 

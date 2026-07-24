@@ -68,8 +68,8 @@ class EventDbServiceSubstituteTest {
             checkInTime = OffsetDateTime.of(eventDate, LocalTime.of(7, 4), ZoneOffset.ofHours(8)),
             status = "on-time"
         )
-        `when`(eventRepository.findByEventDateAndDeletedAtIsNull(eventDate)).thenReturn(event)
-        `when`(memberRepository.findByNameIgnoreCase("Max Chan/William Lai")).thenReturn(
+        `when`(eventRepository.findByChapterIdAndEventDateAndDeletedAtIsNull(1, eventDate)).thenReturn(event)
+        `when`(memberRepository.findByChapterIdAndNameIgnoreCase(1, "Max Chan/William Lai")).thenReturn(
             Optional.of(Member(id = 3L, name = "Max Chan/William Lai", profession = "區塊鏈"))
         )
         `when`(attendanceRepository.findByEventIdAndMemberId(38, 3)).thenReturn(attendance)

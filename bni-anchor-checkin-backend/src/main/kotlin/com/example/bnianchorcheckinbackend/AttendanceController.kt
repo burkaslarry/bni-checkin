@@ -62,6 +62,7 @@ class AttendanceController(
     @Autowired(required = false) private val eventRepository: EventRepository?,
     @Autowired(required = false) private val guestRepository: com.example.bnianchorcheckinbackend.repositories.GuestRepository?,
     @Autowired(required = false) private val attendanceWebSocketHandler: AttendanceWebSocketHandler?,
+    @Autowired(required = false) private val chapterService: ChapterService?,
 ) {
     private val log = org.slf4j.LoggerFactory.getLogger(AttendanceController::class.java)
     private val hkt: java.time.ZoneId = java.time.ZoneId.of("Asia/Hong_Kong")
@@ -131,11 +132,11 @@ class AttendanceController(
     /**
      * Pick one guest row when saving check-in: exact event_date match first, else single name match, else closest event_date.
      */
-    private fun resolveGuestRowForCheckIn(repo: com.example.bnianchorcheckinbackend.repositories.GuestRepository, name: String, activeEventDate: String): Guest? {
+    private fun resolveGuestRowForCheckIn(repo: com.example.bnianchorcheckinbackend.repositories.GuestRepository, name: String, activeEventDate: String, chapterTag: String? = null): Guest? {
         val n = name.trim()
         val norm = activeEventDate.trim()
         val candidates = try {
-            repo.findAllByNameNormalized(n)
+            repo.findAllByChapterIdAndNameNormalized(chapterService?.resolveChapterId(chapterTag) ?: 1, n)
         } catch (_: Exception) {
             emptyList()
         }
@@ -152,11 +153,11 @@ class AttendanceController(
      * Writes [Guest.checkInTime] on the row resolved by [resolveGuestRowForCheckIn] (same rules as POST /api/checkin).
      * Used by POST /api/checkin, POST /api/attendance/log (onsite check-in form), and QR guest scan.
      */
-    private fun persistGuestCheckInTimeDb(attendeeName: String, checkedInAtRaw: String, eventDateHint: String?) {
+    private fun persistGuestCheckInTimeDb(attendeeName: String, checkedInAtRaw: String, eventDateHint: String?, chapterTag: String? = null) {
         val repo = guestRepository ?: return
         val eventDate = eventDateHint?.trim()?.takeIf { it.isNotEmpty() }
             ?: try {
-                eventDbService?.getCurrentEvent()?.date?.trim()
+                eventDbService?.getCurrentEvent(chapterTag)?.date?.trim()
             } catch (_: Exception) {
                 null
             }
@@ -166,7 +167,7 @@ class AttendanceController(
                 return
             }
         try {
-            val guest = resolveGuestRowForCheckIn(repo, attendeeName.trim(), eventDate) ?: run {
+            val guest = resolveGuestRowForCheckIn(repo, attendeeName.trim(), eventDate, chapterTag) ?: run {
                 log.warn(
                     "Guest check-in DB: no bni_anchor_guests row for name='{}' eventDate='{}'",
                     attendeeName.trim(),
@@ -404,15 +405,15 @@ class AttendanceController(
      */
     @GetMapping("/api/guests")
     @Operation(summary = "Get list of pre-registered guests with profession info")
-    fun getGuests(@RequestParam(required = false) eventDate: String?): Map<String, List<Map<String, String>>> {
+    fun getGuests(@RequestParam(required = false) eventDate: String?, @RequestParam(required = false) chapter: String?): Map<String, List<Map<String, String>>> {
         val filterByDate = eventDate?.trim()?.takeIf { it.isNotEmpty() }
 
         return if (databaseMemberService != null) {
             try {
                 val dbGuests = if (filterByDate != null) {
-                    withDbRetry("getGuestsForEventDate") { databaseMemberService.getGuestsForEventDate(filterByDate) }
+                    withDbRetry("getGuestsForEventDate") { databaseMemberService.getGuestsForEventDate(filterByDate, chapter) }
                 } else {
-                    withDbRetry("getGuests") { databaseMemberService.getAllGuests() }
+                    withDbRetry("getGuests") { databaseMemberService.getAllGuests(chapter) }
                 }
                 if (dbGuests.isNotEmpty()) {
                     mapOf("guests" to dbGuests)
@@ -449,10 +450,10 @@ class AttendanceController(
      */
     @PostMapping("/api/checkin")
     @Operation(summary = "Record check-in (in-memory + DB for members)")
-    fun checkIn(@RequestBody request: CheckInRequest): ResponseEntity<Map<String, String>> {
+    fun checkIn(@RequestBody request: CheckInRequest, @RequestParam(required = false) chapter: String?): ResponseEntity<Map<String, String>> {
         return try {
             if (eventDbService != null) {
-                val activeEvent = withDbRetry("checkIn-getCurrentEvent") { eventDbService.getCurrentEvent() }
+                val activeEvent = withDbRetry("checkIn-getCurrentEvent") { eventDbService.getCurrentEvent(chapter) }
                     ?: return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body(mapOf("status" to "error", "message" to "尚未設定當前活動"))
                 val eventDate = activeEvent.date
@@ -461,14 +462,14 @@ class AttendanceController(
                 if (type in listOf("guest", "vip", "speaker")) {
                     val repo = guestRepository ?: return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                         .body(mapOf("status" to "error", "message" to "嘉賓簽到需要資料庫連線"))
-                    val guest = resolveGuestRowForCheckIn(repo, request.name.trim(), eventDate)
+                    val guest = resolveGuestRowForCheckIn(repo, request.name.trim(), eventDate, chapter)
                         ?: return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                             .body(mapOf("status" to "error", "message" to "嘉賓不在此活動名單，無法簽到"))
                     if (guest.checkInTime != null) {
                         return ResponseEntity.status(HttpStatus.CONFLICT)
                             .body(mapOf("status" to "error", "message" to "${request.name} 已經簽到過了 (Already checked in)"))
                     }
-                    persistGuestCheckInTimeDb(request.name, request.currentTime, eventDate)
+                    persistGuestCheckInTimeDb(request.name, request.currentTime, eventDate, chapter)
                     attendanceWebSocketHandler?.broadcast(mapOf("type" to "attendance_updated"))
                     return ResponseEntity.ok(mapOf("status" to "success", "message" to "Check-in successful"))
                 }
@@ -488,7 +489,7 @@ class AttendanceController(
                         checkedInAt = request.currentTime,
                         status = status
                     )
-                    withDbRetry("checkIn-logAttendance") { eventDbService.logAttendance(logReq) }
+                    withDbRetry("checkIn-logAttendance") { eventDbService.logAttendance(logReq, chapter) }
                     attendanceWebSocketHandler?.broadcast(mapOf("type" to "attendance_updated"))
                     return ResponseEntity.ok(mapOf("status" to "success", "message" to "Check-in successful"))
                 }
@@ -513,7 +514,7 @@ class AttendanceController(
      */
     @GetMapping("/api/records")
     @Operation(summary = "Get all records (DB members + in-memory guests merged)")
-    fun getRecords(): Map<String, List<CheckInRecord>> {
+    fun getRecords(@RequestParam(required = false) chapter: String?): Map<String, List<CheckInRecord>> {
         val hkt = java.time.ZoneId.of("Asia/Hong_Kong")
         val hktFmt = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX")
 
@@ -528,10 +529,10 @@ class AttendanceController(
         }
 
         val dbRecords = try {
-            val reportData = eventDbService?.getReportData()
+            val reportData = eventDbService?.getReportData(chapterTag = chapter)
             if (reportData != null) {
                 val allMembers = try {
-                    databaseMemberService?.getAllMembers() ?: emptyList()
+                    databaseMemberService?.getAllMembers(chapter) ?: emptyList()
                 } catch (_: Exception) { emptyList() }
                 val memberDomainMap = allMembers.associate { (it["name"] as String) to (it["domain"] as? String ?: "") }
                 val eventDate = reportData.eventDate
@@ -554,9 +555,9 @@ class AttendanceController(
 
         // Guest records from DB (persisted check-in time)
         val dbGuestRecords = try {
-            val eventDate = eventDbService?.getCurrentEvent()?.date
+            val eventDate = eventDbService?.getCurrentEvent(chapter)?.date
             if (!eventDate.isNullOrBlank() && eventDbService != null) {
-                eventDbService.listGuestsCheckedInForReport(eventDate.trim())
+                eventDbService.listGuestsCheckedInForReport(eventDate.trim(), chapter)
                     .map { g ->
                         val isoTimestamp = g.checkInTime?.withOffsetSameInstant(hkt.rules.getOffset(java.time.Instant.now()))?.format(hktFmt) ?: ""
                         CheckInRecord(
@@ -612,11 +613,11 @@ class AttendanceController(
      */
     @PostMapping("/api/events")
     @Operation(summary = "Create event; DB mode seeds absent attendance rows for all registered members when member count > 0")
-    fun createEvent(@RequestBody request: EventRequest): ResponseEntity<Map<String, Any>> {
+    fun createEvent(@RequestBody request: EventRequest, @RequestParam(required = false) chapter: String?): ResponseEntity<Map<String, Any>> {
         return try {
             val eventData = if (eventDbService != null) {
                 try {
-                    val created = withDbRetry("createEvent") { eventDbService.createEvent(request) }
+                    val created = withDbRetry("createEvent") { eventDbService.createEvent(request, chapter) }
                     attendanceWebSocketHandler?.broadcast(
                         mapOf("type" to "event_created", "data" to created)
                     )
@@ -669,10 +670,10 @@ class AttendanceController(
      */
     @GetMapping("/api/report")
     @Operation(summary = "Get report data for an event (DB members + in-memory guests). Omit eventId for active/current event.")
-    fun getReportData(@RequestParam(name = "eventId", required = false) eventId: Int?): ResponseEntity<ReportData> {
+    fun getReportData(@RequestParam(name = "eventId", required = false) eventId: Int?, @RequestParam(required = false) chapter: String?): ResponseEntity<ReportData> {
         val fromDb: ReportData? = try {
             if (eventDbService != null) {
-                withDbRetry("getReportData") { eventDbService.getReportData(eventId) }
+                withDbRetry("getReportData") { eventDbService.getReportData(eventId, chapter) }
             } else null
         } catch (e: Exception) {
             log.warn("DB getReportData failed for eventId={}: {}", eventId, e.message, e)
@@ -688,9 +689,9 @@ class AttendanceController(
     /** Get current event (DB or in-memory). GET /api/events/current. Side effect: DB read when present. @return 200 | 404 */
     @GetMapping("/api/events/current")
     @Operation(summary = "Get current event (DB only, no attendance data)")
-    fun getCurrentEvent(): ResponseEntity<EventData> {
+    fun getCurrentEvent(@RequestParam(required = false) chapter: String?): ResponseEntity<EventData> {
         val event = try {
-            if (eventDbService != null) withDbRetry("getCurrentEvent") { eventDbService.getCurrentEvent() } else null
+            if (eventDbService != null) withDbRetry("getCurrentEvent") { eventDbService.getCurrentEvent(chapter) } else null
         } catch (e: Exception) {
             log.warn("DB getCurrentEvent failed: {}", e.message)
             null
@@ -704,9 +705,9 @@ class AttendanceController(
 
     @GetMapping("/api/events")
     @Operation(summary = "List events (latest first)")
-    fun listEvents(): ResponseEntity<List<EventData>> {
+    fun listEvents(@RequestParam(required = false) chapter: String?): ResponseEntity<List<EventData>> {
         val events = try {
-            if (eventDbService != null) withDbRetry("listEvents") { eventDbService.listEvents() } else emptyList()
+            if (eventDbService != null) withDbRetry("listEvents") { eventDbService.listEvents(chapter) } else emptyList()
         } catch (e: Exception) {
             log.warn("DB listEvents failed: {}", e.message)
             emptyList()
@@ -718,12 +719,13 @@ class AttendanceController(
     @Operation(summary = "Manually activate one event; optional exclusive mode")
     fun activateEvent(
         @PathVariable eventId: Int,
+        @RequestParam(required = false) chapter: String?,
         @RequestBody(required = false) request: EventActiveRequest?
     ): ResponseEntity<Map<String, Any>> {
         val service = eventDbService ?: return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED)
             .body(mapOf("status" to "error", "message" to "DB mode required"))
         val exclusive = request?.exclusive ?: false
-        val updated = try { withDbRetry("setEventActive") { service.setEventActive(eventId, exclusive) } }
+        val updated = try { withDbRetry("setEventActive") { service.setEventActive(eventId, exclusive, chapter) } }
         catch (e: Exception) {
             log.warn("activateEvent failed: {}", e.message)
             null
@@ -742,6 +744,7 @@ class AttendanceController(
     @Operation(summary = "Import attendance from export-format CSV for an event date (DB)")
     fun importAttendanceCsv(
         @RequestParam eventDate: String,
+        @RequestParam(required = false) chapter: String?,
         @RequestParam("file") file: MultipartFile
     ): ResponseEntity<Map<String, Any>> {
         val service = eventDbService ?: return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED)
@@ -752,7 +755,7 @@ class AttendanceController(
         return try {
             val csvText = String(file.bytes, Charsets.UTF_8)
             val result = withDbRetry("importAttendanceCsv") {
-                service.importAttendanceFromExportCsv(eventDate, csvText)
+                service.importAttendanceFromExportCsv(eventDate, csvText, chapter)
             }
             ResponseEntity.ok(mapOf("status" to "success") + result)
         } catch (e: IllegalArgumentException) {
@@ -771,12 +774,13 @@ class AttendanceController(
     @Operation(summary = "Soft delete an event; force=true cascades attendance delete")
     fun deleteEvent(
         @PathVariable eventId: Int,
-        @RequestParam(required = false, defaultValue = "false") force: Boolean
+        @RequestParam(required = false, defaultValue = "false") force: Boolean,
+        @RequestParam(required = false) chapter: String?
     ): ResponseEntity<Map<String, String>> {
         val service = eventDbService ?: return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED)
             .body(mapOf("status" to "error", "message" to "DB mode required"))
         return try {
-            val ok = withDbRetry("softDeleteEvent") { service.softDeleteEvent(eventId, force) }
+            val ok = withDbRetry("softDeleteEvent") { service.softDeleteEvent(eventId, force, chapter) }
             if (ok) {
                 attendanceWebSocketHandler?.broadcast(mapOf("type" to "current_event_changed", "eventId" to eventId))
                 ResponseEntity.ok(mapOf("status" to "success", "message" to "Event soft-deleted"))
@@ -794,12 +798,13 @@ class AttendanceController(
     @Operation(summary = "Update event name, start time, and/or end time")
     fun updateEvent(
         @PathVariable eventId: Int,
+        @RequestParam(required = false) chapter: String?,
         @RequestBody request: EventUpdateRequest
     ): ResponseEntity<Map<String, Any>> {
         val service = eventDbService ?: return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED)
             .body(mapOf("status" to "error", "message" to "DB mode required"))
         return try {
-            val updated = withDbRetry("updateEvent") { service.updateEvent(eventId, request) }
+            val updated = withDbRetry("updateEvent") { service.updateEvent(eventId, request, chapter) }
             if (updated != null) {
                 attendanceWebSocketHandler?.broadcast(
                     mapOf("type" to "event_updated", "event" to updated)
@@ -820,9 +825,9 @@ class AttendanceController(
 
     @GetMapping("/api/events/{eventId}")
     @Operation(summary = "Get event by id")
-    fun getEventById(@PathVariable eventId: Int): ResponseEntity<EventData> {
+    fun getEventById(@PathVariable eventId: Int, @RequestParam(required = false) chapter: String?): ResponseEntity<EventData> {
         val repo = eventRepository ?: return ResponseEntity.status(HttpStatus.NOT_FOUND).build()
-        val ev = try { repo.findById(eventId.toLong()).orElse(null) } catch (_: Exception) { null }
+        val ev = try { repo.findByChapterIdAndId(chapterService?.resolveChapterId(chapter) ?: 1, eventId.toLong()) } catch (_: Exception) { null }
             ?: return ResponseEntity.status(HttpStatus.NOT_FOUND).build()
 
         return ResponseEntity.ok(
@@ -843,9 +848,9 @@ class AttendanceController(
     /** Check if event exists for date. GET /api/events/check?date=YYYY-MM-DD. @return { "exists": true|false } */
     @GetMapping("/api/events/check")
     @Operation(summary = "Check if event exists for a given date")
-    fun checkEventExists(@RequestParam date: String): Map<String, Any> {
+    fun checkEventExists(@RequestParam date: String, @RequestParam(required = false) chapter: String?): Map<String, Any> {
         val exists = try {
-            if (eventDbService != null) withDbRetry("checkEventExists") { eventDbService.hasEventForDate(date) } else null
+            if (eventDbService != null) withDbRetry("checkEventExists") { eventDbService.hasEventForDate(date, chapter) } else null
         } catch (e: Exception) { null } ?: (attendanceService.getCurrentEvent()?.date == date)
         return mapOf("exists" to exists)
     }
@@ -853,9 +858,9 @@ class AttendanceController(
     /** Check if event exists in current week (Mon–Sun). GET /api/events/check-this-week. @return { "exists": true|false } */
     @GetMapping("/api/events/check-this-week")
     @Operation(summary = "Check if event exists in the current week")
-    fun checkEventThisWeek(): Map<String, Any> {
+    fun checkEventThisWeek(@RequestParam(required = false) chapter: String?): Map<String, Any> {
         val exists = try {
-            if (eventDbService != null) withDbRetry("checkEventThisWeek") { eventDbService.hasEventThisWeek() } else null
+            if (eventDbService != null) withDbRetry("checkEventThisWeek") { eventDbService.hasEventThisWeek(chapter) } else null
         } catch (e: Exception) { null } ?: run {
             val memEvent = attendanceService.getCurrentEvent()
             if (memEvent != null) {
@@ -872,9 +877,9 @@ class AttendanceController(
     /** Get event for date (DB then in-memory). GET /api/events/for-date?date=YYYY-MM-DD. @return 200 { "id", "name" } | 404 */
     @GetMapping("/api/events/for-date")
     @Operation(summary = "Get event details for a specific date")
-    fun getEventForDate(@RequestParam date: String): ResponseEntity<Map<String, Any>> {
+    fun getEventForDate(@RequestParam date: String, @RequestParam(required = false) chapter: String?): ResponseEntity<Map<String, Any>> {
         val dbEvent = try {
-            if (eventDbService != null) withDbRetry("getEventForDate") { eventDbService.getEventForDate(date) } else null
+            if (eventDbService != null) withDbRetry("getEventForDate") { eventDbService.getEventForDate(date, chapter) } else null
         } catch (e: Exception) { null }
         if (dbEvent != null) {
             return ResponseEntity.ok(mapOf("id" to dbEvent.id, "name" to dbEvent.name))
@@ -896,7 +901,10 @@ class AttendanceController(
      */
     @PostMapping("/api/attendance/log")
     @Operation(summary = "Log attendance record directly")
-    fun logAttendance(@RequestBody request: AttendanceLogRequest): ResponseEntity<Map<String, String>> {
+    fun logAttendance(
+        @RequestBody request: AttendanceLogRequest,
+        @RequestParam(required = false) chapter: String?
+    ): ResponseEntity<Map<String, String>> {
         if (request.attendeeType.lowercase() == "observer") {
             return try {
                 if (databaseMemberService == null) {
@@ -907,7 +915,8 @@ class AttendanceController(
                     databaseMemberService.markObserverAttendance(
                         request.attendeeId,
                         request.attendeeName,
-                        request.eventDate
+                        request.eventDate,
+                        chapter
                     )
                 }
                 attendanceWebSocketHandler?.broadcast(mapOf("type" to "attendance_updated"))
@@ -930,14 +939,19 @@ class AttendanceController(
                     .body(mapOf("status" to "error", "message" to "嘉賓簽到需要資料庫連線"))
             }
             return try {
-                val guest = resolveGuestRowForCheckIn(guestRepository, request.attendeeName.trim(), request.eventDate.trim())
+                val guest = resolveGuestRowForCheckIn(
+                    guestRepository,
+                    request.attendeeName.trim(),
+                    request.eventDate.trim(),
+                    chapter
+                )
                     ?: return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body(mapOf("status" to "error", "message" to "嘉賓不在此活動名單，無法簽到"))
                 if (guest.checkInTime != null) {
                     return ResponseEntity.status(HttpStatus.CONFLICT)
                         .body(mapOf("status" to "already_checked", "message" to "${request.attendeeName} 已經簽到 (Already checked in)"))
                 }
-                persistGuestCheckInTimeDb(request.attendeeName, request.checkedInAt, request.eventDate)
+                persistGuestCheckInTimeDb(request.attendeeName, request.checkedInAt, request.eventDate, chapter)
                 ResponseEntity.ok(mapOf("status" to "success", "message" to "Attendance logged successfully"))
             } catch (e: Exception) {
                 log.error("Guest logAttendance failed", e)
@@ -949,7 +963,7 @@ class AttendanceController(
         // Members → DB (bni_anchor_attendances uses member_id FK)
         return try {
             if (eventDbService != null) {
-                withDbRetry("logAttendance") { eventDbService.logAttendance(request) }
+                withDbRetry("logAttendance") { eventDbService.logAttendance(request, chapter) }
                 attendanceWebSocketHandler?.broadcast(mapOf("type" to "attendance_updated"))
                 ResponseEntity.ok(mapOf("status" to "success", "message" to "Attendance logged successfully"))
             } else {
@@ -975,7 +989,10 @@ class AttendanceController(
 
     @PostMapping("/api/attendance/substitute-for")
     @Operation(summary = "Set or clear substitute attendee name on a member attendance row")
-    fun updateAttendanceSubstitute(@RequestBody request: AttendanceSubstituteRequest): ResponseEntity<Map<String, String>> {
+    fun updateAttendanceSubstitute(
+        @RequestBody request: AttendanceSubstituteRequest,
+        @RequestParam(required = false) chapter: String?
+    ): ResponseEntity<Map<String, String>> {
         val memberName = request.memberName.trim()
         val eventDate = request.eventDate.trim()
         if (memberName.isBlank() || eventDate.isBlank()) {
@@ -987,7 +1004,7 @@ class AttendanceController(
         }
         return try {
             val updated = withDbRetry("updateMemberSubstitute") {
-                eventDbService.updateMemberSubstitute(eventDate, memberName, request.substituteName)
+                eventDbService.updateMemberSubstitute(eventDate, memberName, request.substituteName, chapter)
             }
             if (!updated) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -1004,11 +1021,16 @@ class AttendanceController(
 
     @PostMapping("/api/events/attendance-corrections")
     @Operation(summary = "Apply attendance corrections for an event date (remove/add check-ins)")
-    fun applyAttendanceCorrections(@RequestBody request: AttendanceCorrectionsRequest): ResponseEntity<Map<String, Any>> {
+    fun applyAttendanceCorrections(
+        @RequestBody request: AttendanceCorrectionsRequest,
+        @RequestParam(required = false) chapter: String?
+    ): ResponseEntity<Map<String, Any>> {
         val service = eventDbService ?: return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED)
             .body(mapOf("status" to "error", "message" to "DB mode required"))
         return try {
-            val result = withDbRetry("applyAttendanceCorrections") { service.applyAttendanceCorrections(request) }
+            val result = withDbRetry("applyAttendanceCorrections") {
+                service.applyAttendanceCorrections(request, chapter)
+            }
             request.removeCheckIns.forEach { name ->
                 if (name.isNotBlank()) attendanceService.removeRecordByName(name)
             }
@@ -1043,7 +1065,10 @@ class AttendanceController(
      */
     @GetMapping("/api/export")
     @Operation(summary = "Export records as CSV with attendance status (current event, all 47 members including absent)")
-    fun exportRecords(@RequestParam(name = "eventId", required = false) eventId: Int?): ResponseEntity<ByteArray> {
+    fun exportRecords(
+        @RequestParam(name = "eventId", required = false) eventId: Int?,
+        @RequestParam(required = false) chapter: String?
+    ): ResponseEntity<ByteArray> {
         val out = ByteArrayOutputStream()
         // Add UTF-8 BOM for Excel compatibility
         out.write(byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()))
@@ -1052,7 +1077,7 @@ class AttendanceController(
 
         // Same attendee list as GET /api/report (DB members + persisted guests + in-memory for event date)
         val rawReport = try {
-            eventDbService?.getReportData(eventId)
+            eventDbService?.getReportData(eventId, chapter)
         } catch (e: Exception) {
             log.warn("DB getReportData failed ({}), using in-memory", e.message)
             null
@@ -1069,7 +1094,7 @@ class AttendanceController(
         if (reportData != null) {
             // Members: prefer DB (47 from bni_anchor_members), fallback to CSV
             val membersWithDomain = try {
-                databaseMemberService?.getAllMembers()?.map { m ->
+                databaseMemberService?.getAllMembers(chapter)?.map { m ->
                     mapOf("name" to (m["name"] as String), "domain" to (m["domain"] as? String ?: ""))
                 } ?: attendanceService.getMembersWithDomain()
             } catch (_: Exception) {
@@ -1099,7 +1124,7 @@ class AttendanceController(
 
             // Export guests with profession (prefer DB bni_anchor_guests, fallback to CSV/in-memory)
             val guestDomainMap = try {
-                databaseMemberService?.getAllGuests()
+                databaseMemberService?.getAllGuests(chapter)
                     ?.associate { g -> (g["name"] ?: "") to (g["profession"] ?: "") }
                     ?.filterKeys { it.isNotBlank() }
                     ?: guestService.getAllGuestsWithDomain().associate {
@@ -1143,7 +1168,7 @@ class AttendanceController(
             // Also include ALL guests registered for this event date, even if they did not check in (mark as absent).
             // This matches "嘉賓名單 + 出席狀態" expectation for onsite support.
             val allGuestsForEvent = try {
-                databaseMemberService?.getGuestsForEventDate(reportData.eventDate) ?: emptyList()
+                databaseMemberService?.getGuestsForEventDate(reportData.eventDate, chapter) ?: emptyList()
             } catch (_: Exception) {
                 emptyList()
             }
@@ -1170,7 +1195,7 @@ class AttendanceController(
         try {
             if (eventDbService != null) {
                 withDbRetry("batchUpsertCurrentEventAttendancesForExport") {
-                    eventDbService.batchUpsertCurrentEventAttendancesForExport(reportData, records)
+                    eventDbService.batchUpsertCurrentEventAttendancesForExport(reportData, records, chapter)
                 }
             }
         } catch (e: Exception) {

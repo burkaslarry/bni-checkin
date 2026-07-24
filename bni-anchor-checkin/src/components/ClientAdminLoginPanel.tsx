@@ -1,9 +1,17 @@
 import { FormEvent, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useChapter } from "../chapterContext";
 
+/** Unified admin login for Anchor and other chapters. */
 export function ClientAdminLoginPanel() {
   const { login, loginError } = useChapter();
-  const [adminLogin, setAdminLogin] = useState("");
+  const [searchParams] = useSearchParams();
+  const suggested =
+    searchParams.get("chapter")?.trim() ||
+    (searchParams.get("client") === "true" || searchParams.get("client") === "1"
+      ? "amax"
+      : "anchor");
+  const [adminLogin, setAdminLogin] = useState(suggested);
   const [adminPassword, setAdminPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -20,9 +28,10 @@ export function ClientAdminLoginPanel() {
   return (
     <section className="section admin-panel client-login-panel">
       <div className="section-header">
-        <h2>其他 Chapter 管理登入</h2>
+        <h2>EventXP 管理登入</h2>
         <p className="hint">
-          此入口供非 Anchor chapter（例如 AMax、Dynasty）使用。請輸入章節 AdminLogin / AdminPassword。
+          請輸入分會 AdminLogin / AdminPassword。例如 Anchor 用 <code>anchor</code>，AMax 用{" "}
+          <code>amax</code>。
         </p>
       </div>
       <form className="client-login-form" onSubmit={onSubmit}>
@@ -33,7 +42,7 @@ export function ClientAdminLoginPanel() {
             value={adminLogin}
             onChange={(e) => setAdminLogin(e.target.value)}
             autoComplete="username"
-            placeholder="amax"
+            placeholder="anchor"
             required
           />
         </label>

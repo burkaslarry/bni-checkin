@@ -111,10 +111,13 @@ class BulkImportController(
 
     @PostMapping("/api/bulk-import/guests", "/api/bulk-import-guest")
     @Operation(summary = "Bulk import guests only")
-    fun bulkImportGuests(@RequestBody records: List<ImportRecord>): ResponseEntity<ImportResult> {
+    fun bulkImportGuests(
+        @RequestBody records: List<ImportRecord>,
+        @RequestParam(required = false) chapter: String?
+    ): ResponseEntity<ImportResult> {
         return try {
             if (bulkImportService != null) {
-                val r = bulkImportService.bulkImportGuests(records)
+                val r = bulkImportService.bulkImportGuests(records, chapter)
                 notifyGuestRegistryUpdated(r)
                 ResponseEntity.ok(r)
             } else {
@@ -139,7 +142,10 @@ class BulkImportController(
 
     @PostMapping("/api/bulk-import/observers", "/api/bulk-import-observers")
     @Operation(summary = "Bulk import observers only")
-    fun bulkImportObservers(@RequestBody records: List<ImportRecord>): ResponseEntity<ImportResult> {
+    fun bulkImportObservers(
+        @RequestBody records: List<ImportRecord>,
+        @RequestParam(required = false) chapter: String?
+    ): ResponseEntity<ImportResult> {
         if (bulkImportService == null) {
             return ResponseEntity.ok(ImportResult(
                 total = records.size, inserted = 0, updated = 0, failed = records.size,
@@ -147,7 +153,7 @@ class BulkImportController(
             ))
         }
         return try {
-            val r = bulkImportService.bulkImportObservers(records)
+            val r = bulkImportService.bulkImportObservers(records, chapter)
             notifyObserverRegistryUpdated(r)
             ResponseEntity.ok(r)
         } catch (e: Exception) {

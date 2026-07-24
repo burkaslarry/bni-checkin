@@ -65,12 +65,12 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => {
-    if (activeView === "home" && (!isClientMode || isAuthenticated)) {
+    if (activeView === "home" && isAuthenticated) {
       void loadHomeCurrentEvent();
     }
-  }, [activeView, loadHomeCurrentEvent, isClientMode, isAuthenticated]);
+  }, [activeView, loadHomeCurrentEvent, isAuthenticated]);
 
-  // Handle URL parameter for direct navigation (keep client=true)
+  // Handle URL parameter for direct navigation (keep client=true / chapter)
   useEffect(() => {
     const viewParam = searchParams.get("view");
     if (viewParam && ["generate", "manual", "event", "strategic"].includes(viewParam)) {
@@ -128,19 +128,15 @@ export default function AdminPage() {
     }
   };
 
-  const title = isClientMode
-    ? `🛠️ EventXP — ${chapter?.displayName || "Chapter"} 管理後台`
-    : "🛠️ EventXP for BNI Anchor 管理後台";
-  const subtitle = isClientMode
-    ? `Client Admin · ${chapter?.tag || "login required"}`
-    : "Admin Dashboard · BNI Anchor only";
+  const title = `🛠️ EventXP — ${chapter?.displayName || "Chapter"} 管理後台`;
+  const subtitle = `Admin · ${chapter?.tag || "login required"}`;
 
-  if (isClientMode && !authReady) {
+  if (!authReady) {
     return (
       <div className="app-shell">
         <header className="site-header">
           <div>
-            <p className="hint">EventXP Client Admin</p>
+            <p className="hint">EventXP Admin</p>
             <h1>載入登入狀態…</h1>
           </div>
         </header>
@@ -148,20 +144,15 @@ export default function AdminPage() {
     );
   }
 
-  if (isClientMode && !isAuthenticated) {
+  if (!isAuthenticated) {
     return (
       <div className="app-shell">
         <NotificationStack notifications={notifications} />
         <header className="site-header">
           <div>
-            <p className="hint">EventXP Client Admin</p>
-            <h1>其他 Chapter 管理入口</h1>
-            <p className="hint">非 Anchor 分會請由此登入</p>
-          </div>
-          <div className="header-meta">
-            <Link to="/admin" className="ghost-button back-home-btn">
-              ← Anchor 管理後台
-            </Link>
+            <p className="hint">EventXP Admin</p>
+            <h1>管理後台登入</h1>
+            <p className="hint">BNI Anchor 及其他 chapter 請由此登入</p>
           </div>
         </header>
         <ClientAdminLoginPanel />
@@ -175,21 +166,19 @@ export default function AdminPage() {
       
       <header className="site-header">
         <div>
-          <p className="hint">{isClientMode ? "EventXP Client Admin" : "EventXP for BNI Anchor"}</p>
+          <p className="hint">EventXP Admin</p>
           <h1>{title}</h1>
           <p className="hint">{subtitle}</p>
         </div>
         <div className="header-meta">
-          {isClientMode && (
-            <button
-              type="button"
-              className="ghost-button"
-              style={{ marginRight: "0.5rem" }}
-              onClick={() => void logout()}
-            >
-              登出
-            </button>
-          )}
+          <button
+            type="button"
+            className="ghost-button"
+            style={{ marginRight: "0.5rem" }}
+            onClick={() => void logout()}
+          >
+            登出
+          </button>
           <Link to="/report" className="ghost-button" style={{ marginRight: "0.5rem" }}>
             📊 即時報告
           </Link>

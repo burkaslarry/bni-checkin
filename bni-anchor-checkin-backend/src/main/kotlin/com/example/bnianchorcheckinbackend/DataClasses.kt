@@ -82,7 +82,8 @@ data class EventData(
     val onTimeCutoff: String,
     val createdAt: String,
     /** ISO timestamp when attendance CSV was emailed; null if never sent. */
-    val attendanceEmailSentAt: String? = null
+    val attendanceEmailSentAt: String? = null,
+    val chapterId: Int = 1
 )
 
 // Role types for attendees

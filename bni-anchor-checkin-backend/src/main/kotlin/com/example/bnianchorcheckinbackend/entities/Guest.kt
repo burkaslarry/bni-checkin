@@ -10,6 +10,9 @@ data class Guest(
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long? = null,
 
+    @Column(name = "chapter_id", nullable = false)
+    var chapterId: Int = 1,
+
     @Column(nullable = false)
     var name: String,
 

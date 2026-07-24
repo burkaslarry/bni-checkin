@@ -1,21 +1,32 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { NotificationEntry } from "../components/ScanPanel";
 import { NotificationStack } from "../components/NotificationStack";
 import { CheckinFormPanel } from "../components/CheckinFormPanel";
 import { AppVersionFooter } from "../components/AppVersionFooter";
+import { setActiveApiChapterTag } from "../api";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
 }
 
+/** Public check-in: bare `/` → Anchor; `/?chapter=amax` → that chapter. */
 export default function HomePage() {
+  const [searchParams] = useSearchParams();
+  const chapterTag = (searchParams.get("chapter") || "anchor").trim().toLowerCase() || "anchor";
+  const isAnchor = chapterTag === "anchor";
+
   const [notifications, setNotifications] = useState<NotificationEntry[]>([]);
   const [isOnline, setIsOnline] = useState(() =>
     typeof navigator !== "undefined" ? navigator.onLine : true
   );
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+
+  useEffect(() => {
+    setActiveApiChapterTag(chapterTag);
+    return () => setActiveApiChapterTag(null);
+  }, [chapterTag]);
 
   const pushNotification = useCallback((note: NotificationEntry) => {
     setNotifications((current) => [...current, note]);
@@ -83,14 +94,24 @@ export default function HomePage() {
     [notifyMessage]
   );
 
+  const brandLabel = isAnchor ? "EventXP for BNI Anchor" : `EventXP · ${chapterTag}`;
+
   return (
     <div className="app-shell">
       <NotificationStack notifications={notifications} />
       <header className="site-header">
         <div>
-          <p className="hint">EventXP for BNI Anchor</p>
+          <p className="hint">{brandLabel}</p>
           <h1>📱 活動簽到</h1>
-          <p className="hint">掃描 QR 碼快速簽到</p>
+          <p className="hint">
+            掃描 QR 碼快速簽到
+            {!isAnchor && (
+              <>
+                {" "}
+                · chapter=<code>{chapterTag}</code>
+              </>
+            )}
+          </p>
         </div>
         <div className="header-meta">
           <span className={`connection-pill ${isOnline ? "online" : "offline"}`}>
@@ -107,7 +128,6 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* Main Check-in Form */}
       <CheckinFormPanel onNotify={handlePanelNotification} />
 
       <p className="hint status-hint">
@@ -128,4 +148,3 @@ export default function HomePage() {
     </div>
   );
 }
-

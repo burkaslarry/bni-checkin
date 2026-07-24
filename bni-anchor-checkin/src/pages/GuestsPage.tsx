@@ -2,10 +2,22 @@ import { useState, useEffect, useRef, useMemo, type KeyboardEvent } from "react"
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { getGuests, GuestInfo, deleteGuest, updateGuest } from "../api";
 import { guestMatchesKeywords } from "../lib/guestSearch";
+import { AnchorOnlyNotice } from "../components/AnchorOnlyNotice";
+import { ClientAuthGate } from "../components/ClientAuthGate";
+import { useChapter } from "../chapterContext";
 
 type GuestsPageProps = {};
 
 export default function GuestsPage({}: GuestsPageProps) {
+  return (
+    <ClientAuthGate>
+      <GuestsPageInner />
+    </ClientAuthGate>
+  );
+}
+
+function GuestsPageInner() {
+  const { adminHref, isClientMode, chapter } = useChapter();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [guests, setGuests] = useState<GuestInfo[]>([]);
@@ -189,16 +201,18 @@ export default function GuestsPage({}: GuestsPageProps) {
 
       <header className="site-header">
         <div>
-          <p className="hint">EventXP for BNI Anchor</p>
-          <h1>🎫 EventXP for BNI Anchor 嘉賓管理</h1>
+          <p className="hint">{isClientMode ? `EventXP · ${chapter?.displayName || "Chapter"}` : "EventXP for BNI Anchor"}</p>
+          <h1>🎫 {isClientMode ? `${chapter?.displayName || "Chapter"} 嘉賓管理` : "EventXP for BNI Anchor 嘉賓管理"}</h1>
           <p className="hint">Guest Management</p>
         </div>
         <div className="header-meta">
-          <Link to="/admin" className="ghost-button back-home-btn">
+          <Link to={adminHref("/admin")} className="ghost-button back-home-btn">
             ← 返回管理頁
           </Link>
         </div>
       </header>
+
+      <AnchorOnlyNotice />
 
       <section className="section">
         {loadFailedRedirect && (

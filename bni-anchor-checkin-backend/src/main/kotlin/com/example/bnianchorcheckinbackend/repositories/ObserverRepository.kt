@@ -13,7 +13,13 @@ interface ObserverRepository : JpaRepository<Observer, Long> {
     fun findAllByOrderByNameAsc(): List<Observer>
     fun findByNameIgnoreCase(name: String): Optional<Observer>
     fun findByNameIgnoreCaseAndEventDate(name: String, eventDate: String): Optional<Observer>
+    fun findAllByChapterIdOrderByNameAsc(chapterId: Int): List<Observer>
+    fun findByChapterIdAndEventDate(chapterId: Int, eventDate: String): List<Observer>
+    fun findByChapterIdAndNameIgnoreCase(chapterId: Int, name: String): Optional<Observer>
+    fun findByChapterIdAndNameIgnoreCaseAndEventDate(chapterId: Int, name: String, eventDate: String): Optional<Observer>
 
     @Query("SELECT o FROM Observer o WHERE TRIM(o.eventDate) = TRIM(:eventDate) ORDER BY o.name ASC")
     fun findByEventDateTrimmed(@Param("eventDate") eventDate: String): List<Observer>
+    @Query("SELECT o FROM Observer o WHERE o.chapterId = :chapterId AND TRIM(o.eventDate) = TRIM(:eventDate) ORDER BY o.name ASC")
+    fun findByChapterIdAndEventDateTrimmed(@Param("chapterId") chapterId: Int, @Param("eventDate") eventDate: String): List<Observer>
 }

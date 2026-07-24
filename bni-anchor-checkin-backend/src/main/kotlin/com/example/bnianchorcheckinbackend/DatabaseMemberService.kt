@@ -42,8 +42,9 @@ class DatabaseMemberService(
         }
     }
 
-    fun getAllGuests(): List<Map<String, String>> {
-        return guestRepository.findAllByOrderByNameAsc().map { guest ->
+    fun getAllGuests(chapterTag: String? = null): List<Map<String, String>> {
+        val chapterId = chapterService.resolveChapterId(chapterTag)
+        return guestRepository.findAllByChapterIdOrderByNameAsc(chapterId).map { guest ->
             mapOf(
                 "name" to guest.name,
                 "profession" to guest.profession,
@@ -56,9 +57,10 @@ class DatabaseMemberService(
     /**
      * Guests for a specific event date (for onsite support: check-in form, export). Used when eventDate query param is provided.
      */
-    fun getGuestsForEventDate(eventDate: String): List<Map<String, String>> {
+    fun getGuestsForEventDate(eventDate: String, chapterTag: String? = null): List<Map<String, String>> {
         if (eventDate.isBlank()) return emptyList()
-        return guestRepository.findByEventDate(eventDate).map { guest ->
+        val chapterId = chapterService.resolveChapterId(chapterTag)
+        return guestRepository.findByChapterIdAndEventDate(chapterId, eventDate).map { guest ->
             mapOf(
                 "name" to guest.name,
                 "profession" to guest.profession,
@@ -81,8 +83,9 @@ class DatabaseMemberService(
         )
     }
 
-    fun getGuestByName(name: String): GuestData? {
-        val guest = guestRepository.findByNameIgnoreCase(name).orElse(null) ?: return null
+    fun getGuestByName(name: String, chapterTag: String? = null): GuestData? {
+        val chapterId = chapterService.resolveChapterId(chapterTag)
+        val guest = guestRepository.findByChapterIdAndNameIgnoreCase(chapterId, name).orElse(null) ?: return null
         return GuestData(
             name = guest.name,
             profession = guest.profession,
@@ -207,19 +210,21 @@ class DatabaseMemberService(
         newName: String? = null,
         profession: String? = null,
         referrer: String? = null,
-        eventDate: String? = null
+        eventDate: String? = null,
+        chapterTag: String? = null
     ): Guest? {
+        val chapterId = chapterService.resolveChapterId(chapterTag)
         val guest = if (!currentEventDate.isNullOrBlank()) {
-            guestRepository.findByNameIgnoreCaseAndEventDateTrimmed(currentName, currentEventDate).orElse(null)
+            guestRepository.findByChapterIdAndNameIgnoreCaseAndEventDateTrimmed(chapterId, currentName, currentEventDate).orElse(null)
         } else {
-            guestRepository.findByNameIgnoreCase(currentName).orElse(null)
+            guestRepository.findByChapterIdAndNameIgnoreCase(chapterId, currentName).orElse(null)
         } ?: return null
 
         val resolvedEventDate = eventDate?.trim()?.takeIf { it.isNotEmpty() } ?: guest.eventDate
         if (newName != null && !newName.equals(guest.name, ignoreCase = true)) {
             if (!resolvedEventDate.isNullOrBlank()) {
                 val duplicate = guestRepository
-                    .findByNameIgnoreCaseAndEventDateTrimmed(newName, resolvedEventDate)
+                    .findByChapterIdAndNameIgnoreCaseAndEventDateTrimmed(chapterId, newName, resolvedEventDate)
                     .orElse(null)
                 if (duplicate != null && duplicate.id != guest.id) {
                     throw IllegalArgumentException("Guest already exists for this event date")
@@ -234,8 +239,9 @@ class DatabaseMemberService(
     }
 
     @Transactional
-    fun createGuest(name: String, profession: String, referrer: String?, eventDate: String): Guest {
-        val existing = guestRepository.findByNameIgnoreCaseAndEventDate(name, eventDate).orElse(null)
+    fun createGuest(name: String, profession: String, referrer: String?, eventDate: String, chapterTag: String? = null): Guest {
+        val chapterId = chapterService.resolveChapterId(chapterTag)
+        val existing = guestRepository.findByChapterIdAndNameIgnoreCaseAndEventDateTrimmed(chapterId, name, eventDate).orElse(null)
         if (existing != null) {
             existing.profession = profession
             existing.referrer = referrer
@@ -243,6 +249,7 @@ class DatabaseMemberService(
         }
         return guestRepository.save(
             Guest(
+                chapterId = chapterId,
                 name = name,
                 profession = profession,
                 referrer = referrer,
@@ -252,19 +259,22 @@ class DatabaseMemberService(
     }
 
     @Transactional
-    fun deleteGuest(name: String): Boolean {
-        val guest = guestRepository.findByNameIgnoreCase(name).orElse(null) ?: return false
+    fun deleteGuest(name: String, chapterTag: String? = null): Boolean {
+        val chapterId = chapterService.resolveChapterId(chapterTag)
+        val guest = guestRepository.findByChapterIdAndNameIgnoreCase(chapterId, name).orElse(null) ?: return false
         guestRepository.delete(guest)
         return true
     }
 
-    fun getAllObservers(): List<Map<String, Any>> {
-        return observerRepository.findAllByOrderByNameAsc().map { toObserverMap(it) }
+    fun getAllObservers(chapterTag: String? = null): List<Map<String, Any>> {
+        val chapterId = chapterService.resolveChapterId(chapterTag)
+        return observerRepository.findAllByChapterIdOrderByNameAsc(chapterId).map { toObserverMap(it) }
     }
 
-    fun getObserversForEventDate(eventDate: String): List<Map<String, Any>> {
+    fun getObserversForEventDate(eventDate: String, chapterTag: String? = null): List<Map<String, Any>> {
         if (eventDate.isBlank()) return emptyList()
-        return observerRepository.findByEventDateTrimmed(eventDate).map { toObserverMap(it) }
+        val chapterId = chapterService.resolveChapterId(chapterTag)
+        return observerRepository.findByChapterIdAndEventDateTrimmed(chapterId, eventDate).map { toObserverMap(it) }
     }
 
     private fun toObserverMap(observer: Observer): Map<String, Any> = mapOf(
@@ -276,14 +286,16 @@ class DatabaseMemberService(
     )
 
     @Transactional
-    fun createObserver(name: String, profession: String, eventDate: String): Observer {
-        val existing = observerRepository.findByNameIgnoreCaseAndEventDate(name, eventDate).orElse(null)
+    fun createObserver(name: String, profession: String, eventDate: String, chapterTag: String? = null): Observer {
+        val chapterId = chapterService.resolveChapterId(chapterTag)
+        val existing = observerRepository.findByChapterIdAndNameIgnoreCaseAndEventDate(chapterId, name, eventDate).orElse(null)
         if (existing != null) {
             existing.profession = profession
             return observerRepository.save(existing)
         }
         return observerRepository.save(
             Observer(
+                chapterId = chapterId,
                 name = name,
                 profession = profession,
                 eventDate = eventDate,
@@ -293,25 +305,28 @@ class DatabaseMemberService(
     }
 
     @Transactional
-    fun updateObserver(name: String, profession: String?, eventDate: String?): Observer? {
-        val observer = observerRepository.findByNameIgnoreCase(name).orElse(null) ?: return null
+    fun updateObserver(name: String, profession: String?, eventDate: String?, chapterTag: String? = null): Observer? {
+        val chapterId = chapterService.resolveChapterId(chapterTag)
+        val observer = observerRepository.findByChapterIdAndNameIgnoreCase(chapterId, name).orElse(null) ?: return null
         profession?.let { observer.profession = it }
         eventDate?.let { observer.eventDate = it }
         return observerRepository.save(observer)
     }
 
     @Transactional
-    fun deleteObserver(name: String): Boolean {
-        val observer = observerRepository.findByNameIgnoreCase(name).orElse(null) ?: return false
+    fun deleteObserver(name: String, chapterTag: String? = null): Boolean {
+        val chapterId = chapterService.resolveChapterId(chapterTag)
+        val observer = observerRepository.findByChapterIdAndNameIgnoreCase(chapterId, name).orElse(null) ?: return false
         observerRepository.delete(observer)
         return true
     }
 
     @Transactional
-    fun markObserverAttendance(observerId: Int?, observerName: String, eventDate: String): Observer {
+    fun markObserverAttendance(observerId: Int?, observerName: String, eventDate: String, chapterTag: String? = null): Observer {
+        val chapterId = chapterService.resolveChapterId(chapterTag)
         val observer = when {
-            observerId != null -> observerRepository.findById(observerId.toLong()).orElse(null)
-            else -> observerRepository.findByNameIgnoreCaseAndEventDate(observerName.trim(), eventDate).orElse(null)
+            observerId != null -> observerRepository.findById(observerId.toLong()).orElse(null)?.takeIf { it.chapterId == chapterId }
+            else -> observerRepository.findByChapterIdAndNameIgnoreCaseAndEventDate(chapterId, observerName.trim(), eventDate).orElse(null)
         } ?: throw IllegalArgumentException("觀察員不存在 Observer not found")
 
         if (observer.attended) {

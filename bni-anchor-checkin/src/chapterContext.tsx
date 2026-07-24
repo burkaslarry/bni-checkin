@@ -12,10 +12,13 @@ import {
   clientLogin,
   clientLogout,
   fetchClientSession,
+  setActiveApiChapterTag,
   type ChapterInfo
 } from "./api";
 
-const SESSION_KEY = "eventxp_client_session";
+const SESSION_KEY = "eventxp_admin_session";
+/** Legacy key from client-only login era */
+const LEGACY_SESSION_KEY = "eventxp_client_session";
 
 type StoredSession = {
   token: string;
@@ -24,7 +27,11 @@ type StoredSession = {
 };
 
 type ChapterContextValue = {
+  /** True when on any /admin route */
+  isAdminRoute: boolean;
+  /** Non-anchor chapter (AMax / Dynasty / …) */
   isClientMode: boolean;
+  /** Logged-in (or defaulting) as Anchor */
   isAnchorMode: boolean;
   chapterTag: string;
   chapter: ChapterInfo | null;
@@ -34,7 +41,7 @@ type ChapterContextValue = {
   loginError: string | null;
   login: (adminLogin: string, adminPassword: string) => Promise<boolean>;
   logout: () => Promise<void>;
-  /** Preserve client=true (and chapter) on admin links */
+  /** Preserve chapter context on admin links */
   adminHref: (path: string) => string;
 };
 
@@ -42,12 +49,13 @@ const ChapterContext = createContext<ChapterContextValue | null>(null);
 
 function readStoredSession(): StoredSession | null {
   try {
-    const raw = localStorage.getItem(SESSION_KEY);
+    const raw = localStorage.getItem(SESSION_KEY) || localStorage.getItem(LEGACY_SESSION_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as StoredSession;
     if (!parsed?.token || !parsed?.chapter?.tag) return null;
     if (parsed.expiresAtEpochMs && parsed.expiresAtEpochMs < Date.now()) {
       localStorage.removeItem(SESSION_KEY);
+      localStorage.removeItem(LEGACY_SESSION_KEY);
       return null;
     }
     return parsed;
@@ -57,6 +65,7 @@ function readStoredSession(): StoredSession | null {
 }
 
 function writeStoredSession(session: StoredSession | null) {
+  localStorage.removeItem(LEGACY_SESSION_KEY);
   if (!session) {
     localStorage.removeItem(SESSION_KEY);
     return;
@@ -67,18 +76,16 @@ function writeStoredSession(session: StoredSession | null) {
 export function ChapterProvider({ children }: { children: ReactNode }) {
   const [searchParams] = useSearchParams();
   const location = useLocation();
-  const isClientMode =
-    location.pathname.startsWith("/admin") &&
-    (searchParams.get("client") === "true" || searchParams.get("client") === "1");
+  const isAdminRoute = location.pathname.startsWith("/admin");
 
   const [session, setSession] = useState<StoredSession | null>(() =>
-    isClientMode ? readStoredSession() : null
+    isAdminRoute ? readStoredSession() : null
   );
-  const [authReady, setAuthReady] = useState(!isClientMode);
+  const [authReady, setAuthReady] = useState(!isAdminRoute);
   const [loginError, setLoginError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isClientMode) {
+    if (!isAdminRoute) {
       setAuthReady(true);
       return;
     }
@@ -111,7 +118,7 @@ export function ChapterProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [isClientMode]);
+  }, [isAdminRoute]);
 
   const login = useCallback(async (adminLogin: string, adminPassword: string) => {
     setLoginError(null);
@@ -124,6 +131,7 @@ export function ChapterProvider({ children }: { children: ReactNode }) {
       };
       writeStoredSession(next);
       setSession(next);
+      setActiveApiChapterTag(result.chapter.tag);
       return true;
     } catch (e) {
       setLoginError(e instanceof Error ? e.message : "登入失敗");
@@ -135,6 +143,7 @@ export function ChapterProvider({ children }: { children: ReactNode }) {
     const token = session?.token;
     writeStoredSession(null);
     setSession(null);
+    setActiveApiChapterTag(null);
     if (token) {
       try {
         await clientLogout(token);
@@ -146,43 +155,39 @@ export function ChapterProvider({ children }: { children: ReactNode }) {
 
   const adminHref = useCallback(
     (path: string) => {
-      if (!isClientMode) return path;
+      const tag = session?.chapter?.tag;
+      if (!tag || tag === "anchor") return path;
       const url = new URL(path, "http://local");
       url.searchParams.set("client", "true");
-      if (session?.chapter?.tag) {
-        url.searchParams.set("chapter", session.chapter.tag);
-      }
+      url.searchParams.set("chapter", tag);
       return `${url.pathname}${url.search}`;
     },
-    [isClientMode, session?.chapter?.tag]
+    [session?.chapter?.tag]
   );
 
   const value = useMemo<ChapterContextValue>(() => {
-    const chapterTag = isClientMode
-      ? session?.chapter?.tag || searchParams.get("chapter") || ""
-      : "anchor";
+    const tagFromSession = session?.chapter?.tag;
+    const tagFromQuery = searchParams.get("chapter")?.trim() || "";
+    const chapterTag =
+      tagFromSession ||
+      (isAdminRoute ? tagFromQuery || "anchor" : "anchor");
+    const isAnchor = chapterTag === "anchor";
     return {
-      isClientMode,
-      isAnchorMode: !isClientMode && location.pathname.startsWith("/admin"),
-      chapterTag: chapterTag || "anchor",
-      chapter: isClientMode ? session?.chapter ?? null : {
-        id: 1,
-        tag: "anchor",
-        displayName: "BNI Anchor",
-        timezone: "Asia/Hong_Kong",
-        status: "active"
-      },
-      clientToken: isClientMode ? session?.token ?? null : null,
+      isAdminRoute,
+      isClientMode: isAdminRoute && !isAnchor,
+      isAnchorMode: isAdminRoute && isAnchor && !!session?.token,
+      chapterTag,
+      chapter: session?.chapter ?? null,
+      clientToken: session?.token ?? null,
       authReady,
-      isAuthenticated: !isClientMode || !!session?.token,
+      isAuthenticated: !isAdminRoute || !!session?.token,
       loginError,
       login,
       logout,
       adminHref
     };
   }, [
-    isClientMode,
-    location.pathname,
+    isAdminRoute,
     session,
     searchParams,
     authReady,
@@ -191,6 +196,18 @@ export function ChapterProvider({ children }: { children: ReactNode }) {
     logout,
     adminHref
   ]);
+
+  useEffect(() => {
+    if (!isAdminRoute) {
+      setActiveApiChapterTag(null);
+      return;
+    }
+    if (session?.chapter?.tag) {
+      setActiveApiChapterTag(session.chapter.tag);
+    } else {
+      setActiveApiChapterTag(null);
+    }
+  }, [isAdminRoute, session?.chapter?.tag]);
 
   return <ChapterContext.Provider value={value}>{children}</ChapterContext.Provider>;
 }

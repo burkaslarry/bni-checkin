@@ -13,6 +13,9 @@ import {
   getCurrentEvent,
   ImportRecord,
 } from "../api";
+import { AnchorOnlyNotice } from "../components/AnchorOnlyNotice";
+import { ClientAuthGate } from "../components/ClientAuthGate";
+import { useChapter } from "../chapterContext";
 
 type ImportRow = {
   name: string;
@@ -43,6 +46,15 @@ const pickValue = (row: Record<string, unknown>, aliases: string[]): string => {
 };
 
 export default function ObserversPage() {
+  return (
+    <ClientAuthGate>
+      <ObserversPageInner />
+    </ClientAuthGate>
+  );
+}
+
+function ObserversPageInner() {
+  const { adminHref, isClientMode, chapter } = useChapter();
   const [observers, setObservers] = useState<ObserverInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedEventDate, setSelectedEventDate] = useState<string>("all");
@@ -286,16 +298,18 @@ export default function ObserversPage() {
 
       <header className="site-header">
         <div>
-          <p className="hint">EventXP for BNI Anchor</p>
-          <h1>👁️ EventXP 觀察員管理</h1>
+          <p className="hint">{isClientMode ? `EventXP · ${chapter?.displayName || "Chapter"}` : "EventXP for BNI Anchor"}</p>
+          <h1>👁️ {isClientMode ? `${chapter?.displayName || "Chapter"} 觀察員管理` : "EventXP 觀察員管理"}</h1>
           <p className="hint">Observer Maintenance</p>
         </div>
         <div className="header-meta">
-          <Link to="/admin" className="ghost-button back-home-btn">
+          <Link to={adminHref("/admin")} className="ghost-button back-home-btn">
             ← 返回管理頁
           </Link>
         </div>
       </header>
+
+      <AnchorOnlyNotice />
 
       <section className="section">
         <div className="section-header">

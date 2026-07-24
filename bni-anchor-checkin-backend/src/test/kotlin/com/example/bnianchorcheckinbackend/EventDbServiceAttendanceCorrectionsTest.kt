@@ -61,17 +61,17 @@ class EventDbServiceAttendanceCorrectionsTest {
             status = "ACTIVE",
             isActive = true
         )
-        `when`(eventRepository.findByEventDateAndDeletedAtIsNull(eventDate)).thenReturn(event)
-        `when`(memberRepository.findByNameIgnoreCase("Hayes Lam")).thenReturn(
+        `when`(eventRepository.findByChapterIdAndEventDateAndDeletedAtIsNull(1, eventDate)).thenReturn(event)
+        `when`(memberRepository.findByChapterIdAndNameIgnoreCase(1, "Hayes Lam")).thenReturn(
             Optional.of(Member(id = 1L, name = "Hayes Lam", profession = "IT"))
         )
-        `when`(memberRepository.findByNameIgnoreCase("Zoe Wu")).thenReturn(Optional.empty())
+        `when`(memberRepository.findByChapterIdAndNameIgnoreCase(1, "Zoe Wu")).thenReturn(Optional.empty())
         `when`(attendanceRepository.findByEventIdAndMemberId(9, 1)).thenReturn(null)
         `when`(attendanceRepository.save(any(Attendance::class.java))).thenAnswer { it.arguments[0] }
 
         val guest = Guest(id = 2L, name = "Zoe Wu", profession = "Guest", eventDate = "2026-07-02")
         guest.checkInTime = OffsetDateTime.of(eventDate, LocalTime.of(6, 1), ZoneOffset.ofHours(8))
-        `when`(guestRepository.findByNameIgnoreCaseAndEventDateTrimmed("Zoe Wu", "2026-07-02"))
+        `when`(guestRepository.findByChapterIdAndNameIgnoreCaseAndEventDateTrimmed(1, "Zoe Wu", "2026-07-02"))
             .thenReturn(Optional.of(guest))
         `when`(guestRepository.save(any(Guest::class.java))).thenAnswer { it.arguments[0] }
 

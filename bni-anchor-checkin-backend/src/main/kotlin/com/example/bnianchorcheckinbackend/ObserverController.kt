@@ -34,19 +34,25 @@ class ObserverController(
 
     @GetMapping("/api/observers")
     @Operation(summary = "List observers; optional eventDate filter")
-    fun getObservers(@RequestParam(required = false) eventDate: String?): ResponseEntity<Map<String, List<Map<String, Any>>>> {
+    fun getObservers(
+        @RequestParam(required = false) eventDate: String?,
+        @RequestParam(required = false) chapter: String?
+    ): ResponseEntity<Map<String, List<Map<String, Any>>>> {
         val filter = eventDate?.trim()?.takeIf { it.isNotEmpty() }
         val list = if (filter != null) {
-            databaseMemberService.getObserversForEventDate(filter)
+            databaseMemberService.getObserversForEventDate(filter, chapter)
         } else {
-            databaseMemberService.getAllObservers()
+            databaseMemberService.getAllObservers(chapter)
         }
         return ResponseEntity.ok(mapOf("observers" to list))
     }
 
     @PostMapping("/api/observers")
     @Operation(summary = "Create observer for an event date (registration only)")
-    fun createObserver(@RequestBody request: CreateObserverRequest): ResponseEntity<Map<String, Any>> {
+    fun createObserver(
+        @RequestBody request: CreateObserverRequest,
+        @RequestParam(required = false) chapter: String?
+    ): ResponseEntity<Map<String, Any>> {
         val name = request.name.trim()
         val profession = request.profession.trim()
         if (name.isBlank() || profession.isBlank()) {
@@ -55,14 +61,14 @@ class ObserverController(
             )
         }
         val resolvedDate = request.eventDate?.trim().takeUnless { it.isNullOrEmpty() }
-            ?: eventDbService?.getCurrentEvent()?.date
+            ?: eventDbService?.getCurrentEvent(chapter)?.date
         if (resolvedDate.isNullOrBlank()) {
             return ResponseEntity.badRequest().body(
                 mapOf("status" to "error", "message" to "eventDate is required when no current event is active")
             )
         }
         return try {
-            val created = databaseMemberService.createObserver(name, profession, resolvedDate)
+            val created = databaseMemberService.createObserver(name, profession, resolvedDate, chapter)
             attendanceWebSocketHandler?.broadcast(mapOf("type" to "observer_registry_updated"))
             ResponseEntity.status(HttpStatus.CREATED).body(
                 mapOf(
@@ -88,10 +94,11 @@ class ObserverController(
     @Operation(summary = "Update observer information")
     fun updateObserver(
         @PathVariable name: String,
+        @RequestParam(required = false) chapter: String?,
         @RequestBody request: UpdateObserverRequest
     ): ResponseEntity<Map<String, Any>> {
         val updated = try {
-            databaseMemberService.updateObserver(name, request.profession, request.eventDate)
+            databaseMemberService.updateObserver(name, request.profession, request.eventDate, chapter)
         } catch (e: Exception) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(
                 mapOf("status" to "error", "message" to "無法更新觀察員資料。")
@@ -121,9 +128,12 @@ class ObserverController(
 
     @DeleteMapping("/api/observers/{name}")
     @Operation(summary = "Delete an observer")
-    fun deleteObserver(@PathVariable name: String): ResponseEntity<Map<String, String>> {
+    fun deleteObserver(
+        @PathVariable name: String,
+        @RequestParam(required = false) chapter: String?
+    ): ResponseEntity<Map<String, String>> {
         val deleted = try {
-            databaseMemberService.deleteObserver(name)
+            databaseMemberService.deleteObserver(name, chapter)
         } catch (e: Exception) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(mapOf("status" to "error", "message" to "無法刪除觀察員。"))
@@ -138,8 +148,11 @@ class ObserverController(
 
     @GetMapping("/api/observers/export")
     @Operation(summary = "Export observer attendance for an event date (no check-in time)")
-    fun exportObservers(@RequestParam eventDate: String): ResponseEntity<ByteArray> {
-        val observers = databaseMemberService.getObserversForEventDate(eventDate.trim())
+    fun exportObservers(
+        @RequestParam eventDate: String,
+        @RequestParam(required = false) chapter: String?
+    ): ResponseEntity<ByteArray> {
+        val observers = databaseMemberService.getObserversForEventDate(eventDate.trim(), chapter)
         val out = ByteArrayOutputStream()
         out.write(byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()))
         val writer = PrintWriter(out)
