@@ -28,6 +28,10 @@ data class Chapter(
     @Column(nullable = false)
     var status: String = "active",
 
+    /** Preferred meeting weekday: 0=Sunday … 6=Saturday (matches JS Date.getDay). */
+    @Column(name = "meeting_weekday", nullable = false)
+    var meetingWeekday: Int = 4,
+
     @Column(name = "created_at", insertable = false, updatable = false)
     var createdAt: OffsetDateTime? = null,
 

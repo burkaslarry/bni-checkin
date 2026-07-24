@@ -16,7 +16,9 @@ data class ChapterInfo(
     val tag: String,
     val displayName: String,
     val timezone: String,
-    val status: String
+    val status: String,
+    /** Preferred meeting weekday: 0=Sunday … 6=Saturday (JS Date.getDay). */
+    val meetingWeekday: Int = 4
 )
 
 data class ClientLoginResult(
@@ -77,7 +79,8 @@ class ChapterService(
             tag = chapter.tag,
             displayName = chapter.displayName,
             timezone = chapter.timezone,
-            status = chapter.status
+            status = chapter.status,
+            meetingWeekday = chapter.meetingWeekday.coerceIn(0, 6)
         )
 
     fun listActiveChapters(): List<ChapterInfo> =

@@ -62,6 +62,8 @@ export type ChapterInfo = {
   displayName: string;
   timezone: string;
   status: string;
+  /** Preferred meeting weekday: 0=Sunday … 6=Saturday. */
+  meetingWeekday?: number;
 };
 
 // Backend API: in dev uses Vite proxy (''), in prod uses VITE_API_BASE

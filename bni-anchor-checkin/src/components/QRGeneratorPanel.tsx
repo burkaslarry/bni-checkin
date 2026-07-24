@@ -1,8 +1,18 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { createEvent, activateEvent, clearAllEventsAndAttendance, normalizeApiEventId, type EventData } from "../api";
 import { generateQrFlyerPdfBlob } from "../lib/generateQrFlyerPdf";
 import { QrFlyerContent } from "./QrFlyerContent";
+import { useChapter } from "../chapterContext";
+import {
+  WEEKDAY_OPTIONS,
+  buildMeetingDefaults,
+  defaultBusinessMeetingName,
+  formatLocalYmd,
+  isDefaultBusinessMeetingName,
+  nextWeekdayOnOrAfter,
+  resolveMeetingWeekday,
+} from "../lib/chapterMeetingDefaults";
 
 type QRGeneratorPanelProps = {
   onNotify: (message: string, type: "success" | "error" | "info") => void;
@@ -22,35 +32,25 @@ const addMinutesToTime = (time: string, minutes: number): string => {
   return `${String(newHours).padStart(2, "0")}:${String(newMins).padStart(2, "0")}`;
 };
 
-const formatLocalYmd = (d: Date): string => {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-};
-
-/*
- * Week = Monday–Sunday (typical chapter cadence). Return the calendar Thursday in the same week as `ref`.
- */
-const thursdayOfWeekContaining = (ref: Date): Date => {
-  const d = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
-  const dow = d.getDay();
-  const daysSinceMonday = (dow + 6) % 7;
-  d.setDate(d.getDate() - daysSinceMonday + 3);
-  return d;
-};
-
 export const QRGeneratorPanel = ({ onNotify }: QRGeneratorPanelProps) => {
-  const meetingDefaults = useMemo(() => {
-    const ymd = formatLocalYmd(thursdayOfWeekContaining(new Date()));
-    return {
-      name: `BNI Anchor Regular Meeting ${ymd}`,
-      date: ymd
-    };
-  }, []);
+  const { chapter, chapterTag } = useChapter();
+  const displayName = chapter?.displayName || (chapterTag === "anchor" ? "BNI Anchor" : `BNI ${chapterTag}`);
 
-  const [eventName, setEventName] = useState(meetingDefaults.name);
-  const [eventDate, setEventDate] = useState(meetingDefaults.date);
+  const initial = useMemo(
+    () =>
+      buildMeetingDefaults({
+        displayName,
+        tag: chapter?.tag || chapterTag,
+        meetingWeekday: chapter?.meetingWeekday,
+      }),
+    // Only seed once per chapter login context
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [chapter?.id, chapterTag]
+  );
+
+  const [meetingWeekday, setMeetingWeekday] = useState(initial.weekday);
+  const [eventName, setEventName] = useState(initial.name);
+  const [eventDate, setEventDate] = useState(initial.date);
   const [registrationStartTime, setRegistrationStartTime] = useState("06:30");
   const [startTime, setStartTime] = useState("07:00");
   const [onTimeCutoff, setOnTimeCutoff] = useState("07:05");
@@ -61,6 +61,54 @@ export const QRGeneratorPanel = ({ onNotify }: QRGeneratorPanelProps) => {
   const [isSharingEmail, setIsSharingEmail] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [includeEventDateInPdf, setIncludeEventDateInPdf] = useState(true);
+  const prevDateRef = useRef(initial.date);
+
+  // When chapter session loads/changes, refresh weekday + default name/date
+  useEffect(() => {
+    const next = buildMeetingDefaults({
+      displayName,
+      tag: chapter?.tag || chapterTag,
+      meetingWeekday: chapter?.meetingWeekday,
+    });
+    setMeetingWeekday(next.weekday);
+    setEventDate(next.date);
+    setEventName(next.name);
+    prevDateRef.current = next.date;
+  }, [chapter?.id, chapter?.meetingWeekday, chapter?.tag, chapterTag, displayName]);
+
+  const applyWeekday = useCallback(
+    (weekday: number) => {
+      const dateObj = nextWeekdayOnOrAfter(new Date(), weekday);
+      const ymd = formatLocalYmd(dateObj);
+      const keepAutoName = isDefaultBusinessMeetingName(eventName, displayName, prevDateRef.current);
+      setMeetingWeekday(weekday);
+      setEventDate(ymd);
+      if (keepAutoName) {
+        setEventName(defaultBusinessMeetingName(displayName, ymd));
+      }
+      prevDateRef.current = ymd;
+    },
+    [displayName, eventName]
+  );
+
+  const handleDateChange = useCallback(
+    (ymd: string) => {
+      const keepAutoName = isDefaultBusinessMeetingName(eventName, displayName, prevDateRef.current);
+      setEventDate(ymd);
+      if (ymd) {
+        const [y, m, d] = ymd.split("-").map(Number);
+        if (y && m && d) {
+          const parsed = new Date(y, m - 1, d);
+          setMeetingWeekday(parsed.getDay());
+        }
+      }
+      if (keepAutoName && ymd) {
+        setEventName(defaultBusinessMeetingName(displayName, ymd));
+      }
+      prevDateRef.current = ymd;
+    },
+    [displayName, eventName]
+  );
 
   // Auto-calculate times when registration start time changes
   const handleRegistrationStartChange = useCallback((newTime: string) => {
@@ -391,11 +439,34 @@ export const QRGeneratorPanel = ({ onNotify }: QRGeneratorPanelProps) => {
       </div>
 
       <div className="form-group">
+        <label htmlFor="meeting-weekday-input">例會星期 Meeting Weekday</label>
+        <select
+          id="meeting-weekday-input"
+          className="input-field"
+          value={meetingWeekday}
+          onChange={(e) => applyWeekday(Number(e.target.value))}
+        >
+          {WEEKDAY_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.labelEn} · {opt.labelZh}
+            </option>
+          ))}
+        </select>
+        <span className="hint">
+          預設：{displayName} —{" "}
+          {WEEKDAY_OPTIONS.find(
+            (o) => o.value === resolveMeetingWeekday(chapter?.meetingWeekday, chapter?.tag || chapterTag)
+          )?.labelEn || "Thursday"}
+          （由今日起下一個該星期）
+        </span>
+      </div>
+
+      <div className="form-group">
         <label htmlFor="event-name-input">活動名稱 Event Name</label>
         <input
           id="event-name-input"
           className="input-field"
-          placeholder="例如: EventXP for BNI Anchor Meeting"
+          placeholder={`${displayName} Business Meeting YYYY-MM-DD`}
           value={eventName}
           onChange={(e) => setEventName(e.target.value)}
         />
@@ -408,7 +479,7 @@ export const QRGeneratorPanel = ({ onNotify }: QRGeneratorPanelProps) => {
           className="input-field"
           type="date"
           value={eventDate}
-          onChange={(e) => setEventDate(e.target.value)}
+          onChange={(e) => handleDateChange(e.target.value)}
         />
       </div>
 
