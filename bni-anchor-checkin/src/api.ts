@@ -369,6 +369,24 @@ export async function listChapters(): Promise<{ chapters: ChapterInfo[] }> {
   return handleResponse(response);
 }
 
+export type ProfessionGroupInfo = {
+  code: string;
+  name: string;
+  chapterId: number;
+};
+
+/** Chapter-scoped profession groups (AMax chapterId=2 uses different labels than Anchor). */
+export async function getProfessionGroups(
+  chapter?: string | null,
+  chapterId?: number | null
+): Promise<{ professionGroups: ProfessionGroupInfo[] }> {
+  const response = await fetch(
+    withChapterQuery(`${API_BASE}/api/profession-groups`, chapter, chapterId),
+    { mode: "cors" }
+  );
+  return handleResponse(response);
+}
+
 /** Anchor-only: reset another chapter's AdminPassword. */
 export async function updateChapterAdminPassword(
   token: string,

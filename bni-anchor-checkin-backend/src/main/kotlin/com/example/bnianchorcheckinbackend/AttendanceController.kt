@@ -399,6 +399,31 @@ class AttendanceController(
         }
     }
 
+    @GetMapping("/api/profession-groups")
+    @Operation(summary = "List profession groups for a chapter (default anchor / chapterId=1)")
+    fun listProfessionGroups(
+        @RequestParam(required = false) chapter: String?,
+        @RequestParam(required = false) chapterId: Int?
+    ): ResponseEntity<Map<String, Any>> {
+        return try {
+            val groups = if (databaseMemberService != null) {
+                withDbRetry("listProfessionGroups") {
+                    databaseMemberService.listProfessionGroups(chapter, chapterId)
+                }
+            } else {
+                emptyList()
+            }
+            ResponseEntity.ok(mapOf("professionGroups" to groups))
+        } catch (e: IllegalArgumentException) {
+            ResponseEntity.badRequest().body(mapOf("status" to "error", "message" to (e.message ?: "Invalid chapter")))
+        } catch (e: Exception) {
+            log.error("listProfessionGroups failed", e)
+            ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(
+                mapOf("status" to "error", "message" to "Unable to load profession groups")
+            )
+        }
+    }
+
     /**
      * Get list of guests. GET /api/guests. Optional ?eventDate=YYYY-MM-DD: return only guests for that event (onsite support).
      * When eventDate is provided, only guests for that date are returned (DB or CSV filtered). When omitted, returns all guests.

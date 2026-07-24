@@ -26,18 +26,31 @@ class DatabaseMemberService(
 
     fun getAllMembers(chapterTag: String? = null, chapterIdParam: Int? = null): List<Map<String, Any>> {
         val chapterId = chapterService.resolveChapterId(chapterIdParam, chapterTag)
-        val groupByName = professionGroupRepository.findAll().associate { it.code to it.name }
+        val groupByCode = professionGroupRepository.findAllByChapterIdOrderByCodeAsc(chapterId)
+            .associate { it.code.trim() to it.name }
         return memberRepository.findAllByChapterIdOrderByNameAsc(chapterId).map { member ->
+            val code = member.professionCode.trim()
             mapOf(
                 "id" to (member.id!!.toInt()),
                 "name" to member.name,
                 "domain" to (member.profession ?: ""),
                 "standing" to member.standing.name,
-                "professionCode" to member.professionCode.toString(),
-                "professionGroupName" to (groupByName[member.professionCode] ?: ""),
+                "professionCode" to code,
+                "professionGroupName" to (groupByCode[code] ?: ""),
                 "membershipId" to (member.membershipId ?: ""),
                 "position" to member.position,
                 "chapterId" to member.chapterId
+            )
+        }
+    }
+
+    fun listProfessionGroups(chapterTag: String? = null, chapterIdParam: Int? = null): List<Map<String, Any>> {
+        val chapterId = chapterService.resolveChapterId(chapterIdParam, chapterTag)
+        return professionGroupRepository.findAllByChapterIdOrderByCodeAsc(chapterId).map { group ->
+            mapOf(
+                "code" to group.code.trim(),
+                "name" to group.name,
+                "chapterId" to group.chapterId
             )
         }
     }
@@ -93,8 +106,10 @@ class DatabaseMemberService(
         )
     }
 
-    fun isValidProfessionCode(code: String): Boolean =
-        professionGroupRepository.existsById(code.uppercase().take(1))
+    fun isValidProfessionCode(code: String, chapterTag: String? = null, chapterIdParam: Int? = null): Boolean {
+        val chapterId = chapterService.resolveChapterId(chapterIdParam, chapterTag)
+        return professionGroupRepository.existsByChapterIdAndCode(chapterId, code.uppercase().take(1))
+    }
 
     @Transactional
     fun updateMemberStanding(name: String, standing: MemberStanding, chapterTag: String? = null): Member? {
@@ -151,7 +166,7 @@ class DatabaseMemberService(
         }
         if (professionCode != null) {
             val code = professionCode.uppercase().take(1)
-            if (!isValidProfessionCode(code)) {
+            if (!professionGroupRepository.existsByChapterIdAndCode(member.chapterId, code)) {
                 throw IllegalArgumentException("Invalid profession code")
             }
             member.professionCode = code
@@ -173,12 +188,16 @@ class DatabaseMemberService(
         if (memberRepository.existsByChapterIdAndNameIgnoreCase(chapterId, name)) {
             throw IllegalArgumentException("Member already exists")
         }
+        val code = professionCode.uppercase().take(1).ifBlank { "A" }
+        if (!professionGroupRepository.existsByChapterIdAndCode(chapterId, code)) {
+            throw IllegalArgumentException("Invalid profession code for chapter")
+        }
         return memberRepository.save(
             Member(
                 chapterId = chapterId,
                 name = name,
                 profession = profession,
-                professionCode = professionCode.uppercase().take(1).ifBlank { "A" },
+                professionCode = code,
                 position = position.ifBlank { "Member" },
                 membershipId = membershipId?.trim()?.takeIf { it.isNotEmpty() },
                 standing = standing

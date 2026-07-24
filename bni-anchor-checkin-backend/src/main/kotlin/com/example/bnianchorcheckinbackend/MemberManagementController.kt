@@ -219,7 +219,8 @@ class MemberManagementController(
         }
 
         val professionCode = request.professionCode?.trim()?.takeIf { it.isNotEmpty() }?.uppercase()?.take(1)
-        if (professionCode != null && !databaseMemberService.isValidProfessionCode(professionCode)) {
+        // Profession code validity is chapter-scoped; update paths validate against the member's chapter.
+        if (professionCode != null && professionCode.isBlank()) {
             return ResponseEntity.badRequest().body(mapOf(
                 "status" to "error",
                 "message" to "Invalid profession code"

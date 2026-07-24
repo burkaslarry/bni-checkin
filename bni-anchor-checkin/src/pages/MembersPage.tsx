@@ -1,7 +1,22 @@
 import { useState, useEffect, useMemo, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
-import { getMembers, MemberInfo, MemberStanding, updateMember, deleteMember, createMember } from "../api";
-import { groupMembersByCategory, MEMBER_CATEGORIES, resolveMemberCategoryCode, type MemberCategoryCode } from "../lib/memberCategories";
+import {
+  getMembers,
+  getProfessionGroups,
+  MemberInfo,
+  MemberStanding,
+  updateMember,
+  deleteMember,
+  createMember
+} from "../api";
+import {
+  groupMembersByCategory,
+  MEMBER_CATEGORIES,
+  resolveMemberCategoryCode,
+  categoriesFromProfessionGroups,
+  type MemberCategory,
+  type MemberCategoryCode
+} from "../lib/memberCategories";
 import { AnchorOnlyNotice } from "../components/AnchorOnlyNotice";
 import { ClientAuthGate } from "../components/ClientAuthGate";
 import { useChapter } from "../chapterContext";
@@ -17,8 +32,9 @@ export default function MembersPage({}: MembersPageProps) {
 }
 
 function MembersPageInner() {
-  const { chapterTag, adminHref, isClientMode, isAuthenticated, authReady, chapter } = useChapter();
+  const { chapterTag, chapterId, adminHref, isClientMode, isAuthenticated, authReady, chapter } = useChapter();
   const [members, setMembers] = useState<MemberInfo[]>([]);
+  const [categories, setCategories] = useState<MemberCategory[]>(MEMBER_CATEGORIES);
   const [loading, setLoading] = useState(true);
   const [editingMember, setEditingMember] = useState<MemberInfo | null>(null);
   const [showAddMember, setShowAddMember] = useState(false);
@@ -34,8 +50,26 @@ function MembersPageInner() {
 
   useEffect(() => {
     if (isClientMode && (!authReady || !isAuthenticated)) return;
-    fetchMembers();
-  }, [chapterTag, isClientMode, authReady, isAuthenticated]);
+    void loadCategories();
+    void fetchMembers();
+  }, [chapterTag, chapterId, isClientMode, authReady, isAuthenticated]);
+
+  const loadCategories = async () => {
+    try {
+      const data = await getProfessionGroups(chapterTag, chapterId);
+      const next = categoriesFromProfessionGroups(data.professionGroups ?? []);
+      if (next.length > 0) {
+        setCategories(next);
+        setNewProfessionCode((prev) =>
+          next.some((c) => c.code === prev) ? prev : String(next[0].code)
+        );
+      } else {
+        setCategories(MEMBER_CATEGORIES);
+      }
+    } catch {
+      setCategories(MEMBER_CATEGORIES);
+    }
+  };
 
   const fetchMembers = async () => {
     try {
@@ -59,8 +93,8 @@ function MembersPageInner() {
     setEditName(member.name);
     setEditDomain(member.domain);
     setEditStanding(member.standing || "GREEN");
-    const code = resolveMemberCategoryCode(member);
-    setEditProfessionCode(code === "OTHER" ? "A" : code);
+    const code = resolveMemberCategoryCode(member, categories);
+    setEditProfessionCode(code === "OTHER" ? String(categories[0]?.code ?? "A") : code);
   };
 
   const handleSaveEdit = async () => {
@@ -84,7 +118,7 @@ function MembersPageInner() {
         editingMember.id
       );
 
-      const category = MEMBER_CATEGORIES.find((c) => c.code === editProfessionCode);
+      const category = categories.find((c) => c.code === editProfessionCode);
       const renamed = trimmedName !== editingMember.name;
       showNotification(
         renamed
@@ -161,7 +195,10 @@ function MembersPageInner() {
     }
   };
 
-  const memberGroups = useMemo(() => groupMembersByCategory(members), [members]);
+  const memberGroups = useMemo(
+    () => groupMembersByCategory(members, categories),
+    [members, categories]
+  );
 
   const renderCategorySelect = (
     id: string,
@@ -174,9 +211,9 @@ function MembersPageInner() {
       value={value}
       onChange={(e) => onChange(e.target.value as MemberCategoryCode)}
     >
-      {MEMBER_CATEGORIES.map((category) => (
+      {categories.map((category) => (
         <option key={category.code} value={category.code}>
-          {category.nameEn} · {category.nameZh}
+          {category.code} · {category.nameZh}
         </option>
       ))}
     </select>

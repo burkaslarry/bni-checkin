@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { groupMembersByCategory, resolveMemberCategoryCode } from "../lib/memberCategories";
+import {
+  categoriesFromProfessionGroups,
+  groupMembersByCategory,
+  resolveMemberCategoryCode,
+} from "../lib/memberCategories";
 import type { MemberInfo } from "../api";
 
 const member = (overrides: Partial<MemberInfo>): MemberInfo => ({
@@ -33,5 +37,21 @@ describe("memberCategories", () => {
     const groups = groupMembersByCategory([m]);
     expect(groups).toHaveLength(1);
     expect(groups[0].category.code).toBe("OTHER");
+  });
+
+  it("groups amax members with chapterId=2 profession group labels", () => {
+    const amaxCategories = categoriesFromProfessionGroups([
+      { code: "A", name: "生活品味" },
+      { code: "B", name: "醫療保健" },
+      { code: "H", name: "企業服務" },
+    ]);
+    const members: MemberInfo[] = [
+      member({ name: "Ada Li", professionCode: "H", professionGroupName: "企業服務", domain: "物理治療" }),
+      member({ name: "Anthony Lau", professionCode: "A", professionGroupName: "生活品味", domain: "酒" }),
+    ];
+    const groups = groupMembersByCategory(members, amaxCategories);
+    expect(groups.map((g) => g.category.nameZh)).toEqual(["生活品味", "企業服務"]);
+    expect(groups[0].members.map((m) => m.name)).toEqual(["Anthony Lau"]);
+    expect(groups[1].members.map((m) => m.name)).toEqual(["Ada Li"]);
   });
 });
