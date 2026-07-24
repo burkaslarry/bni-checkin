@@ -26,7 +26,9 @@ data class ImportRecord(
     val professionCode: String? = null,
     val position: String? = null,
     val membershipId: String? = null,
-    val eventDate: String? = null
+    val eventDate: String? = null,
+    /** Chapter tag (e.g. anchor, amax). Falls back to request/query chapter, then anchor. */
+    val chapter: String? = null
 )
 
 data class ImportResult(
@@ -52,19 +54,18 @@ class BulkImportService(
         var updated = 0
         var failed = 0
         val errors = mutableListOf<String>()
-        val chapterId = try {
-            chapterService.resolveChapterId(chapterTag)
-        } catch (e: IllegalArgumentException) {
-            return ImportResult(
-                total = records.size,
-                inserted = 0,
-                updated = 0,
-                failed = records.size,
-                errors = listOf(e.message ?: "Invalid chapter")
-            )
-        }
+        val defaultChapterTag = chapterTag?.takeIf { it.isNotBlank() }
 
         for (record in records) {
+            val rowChapterTag = record.chapter?.takeIf { it.isNotBlank() } ?: defaultChapterTag
+            val chapterId = try {
+                chapterService.resolveChapterId(rowChapterTag)
+            } catch (e: IllegalArgumentException) {
+                failed++
+                errors.add("Failed to import ${record.name}: ${e.message ?: "Invalid chapter"}")
+                continue
+            }
+
             try {
                 val existingMember = memberRepository.findByChapterIdAndNameIgnoreCase(chapterId, record.name)
                 
@@ -128,22 +129,23 @@ class BulkImportService(
     }
 
     @Transactional
-    fun bulkImportGuests(records: List<ImportRecord>): ImportResult {
+    fun bulkImportGuests(records: List<ImportRecord>, chapterTag: String? = null): ImportResult {
         var inserted = 0
         var updated = 0
         var failed = 0
         val errors = mutableListOf<String>()
+        val chapterId = chapterService.resolveChapterId(chapterTag)
 
         for (record in records) {
             try {
-                val existingGuest = GuestImportSupport.resolveExistingGuest(guestRepository, record)
+                val existingGuest = GuestImportSupport.resolveExistingGuest(guestRepository, record, chapterId)
 
                 if (existingGuest != null) {
                     GuestImportSupport.applyGuestFields(existingGuest, record)
                     guestRepository.save(existingGuest)
                     updated++
                 } else {
-                    guestRepository.save(GuestImportSupport.newGuestEntity(record))
+                    guestRepository.save(GuestImportSupport.newGuestEntity(record, chapterId))
                     inserted++
                 }
             } catch (e: Exception) {
@@ -162,11 +164,12 @@ class BulkImportService(
     }
 
     @Transactional
-    fun bulkImportObservers(records: List<ImportRecord>): ImportResult {
+    fun bulkImportObservers(records: List<ImportRecord>, chapterTag: String? = null): ImportResult {
         var inserted = 0
         var updated = 0
         var failed = 0
         val errors = mutableListOf<String>()
+        val chapterId = chapterService.resolveChapterId(chapterTag)
 
         for (record in records) {
             try {
@@ -178,7 +181,9 @@ class BulkImportService(
                     errors.add("Failed to import ${record.name}: name, profession, and eventDate are required")
                     continue
                 }
-                val existing = observerRepository.findByNameIgnoreCaseAndEventDate(name, eventDate).orElse(null)
+                val existing = observerRepository
+                    .findByChapterIdAndNameIgnoreCaseAndEventDate(chapterId, name, eventDate)
+                    .orElse(null)
                 if (existing != null) {
                     existing.profession = profession
                     observerRepository.save(existing)
@@ -186,6 +191,7 @@ class BulkImportService(
                 } else {
                     observerRepository.save(
                         Observer(
+                            chapterId = chapterId,
                             name = name,
                             profession = profession,
                             eventDate = eventDate,
@@ -212,8 +218,8 @@ class BulkImportService(
     fun bulkImport(request: BulkImportRequest): ImportResult {
         return when (request.type.lowercase()) {
             "member" -> bulkImportMembers(request.records, request.chapter)
-            "guest" -> bulkImportGuests(request.records)
-            "observer" -> bulkImportObservers(request.records)
+            "guest" -> bulkImportGuests(request.records, request.chapter)
+            "observer" -> bulkImportObservers(request.records, request.chapter)
             else -> ImportResult(
                 total = 0,
                 inserted = 0,

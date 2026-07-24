@@ -1120,6 +1120,8 @@ export type ImportRecord = {
   position?: string;
   membershipId?: string;
   eventDate?: string;
+  /** Chapter tag; empty uses logged-in chapter (anchor default) or ?chapter= query. */
+  chapter?: string;
 };
 
 /** Bulk import request (type + records). */

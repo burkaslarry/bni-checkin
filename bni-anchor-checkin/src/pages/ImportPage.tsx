@@ -12,6 +12,7 @@ type ImportType = "member" | "guest";
 type ImportRow = {
   name: string;
   profession: string;
+  chapter?: string;
   email?: string;
   phone?: string;
   referrer?: string;
@@ -77,6 +78,7 @@ function ImportPageInner() {
         const data: ImportRow[] = rawData.map((row) => ({
           name: pickValue(row, ["name"]),
           profession: pickValue(row, ["profession", "category"]),
+          chapter: pickValue(row, ["chapter"]) || "",
           email: pickValue(row, ["email"]) || "",
           phone: pickValue(row, ["phone", "phone_number", "phonenumber"]) || "",
           referrer: pickValue(row, ["referrer"]),
@@ -95,6 +97,9 @@ function ImportPageInner() {
           }
           if (!row.profession) {
             validationErrors.push(`第 ${index + 1} 行：缺少專業領域 (profession)`);
+          }
+          if (row.chapter && !/^[a-z][a-z0-9_-]*$/i.test(row.chapter.trim())) {
+            validationErrors.push(`第 ${index + 1} 行：無效的 chapter（例如 anchor、amax）`);
           }
           
           // Validate email format if provided
@@ -185,6 +190,7 @@ function ImportPageInner() {
         return {
           name: row.name,
           profession: row.profession || "",
+          chapter: (row.chapter || "").trim() || undefined,
           email: row.email || "",
           phoneNumber: row.phone || "",
           referrer: row.referrer || "",
@@ -231,12 +237,12 @@ function ImportPageInner() {
 
   const downloadTemplate = () => {
     const headers = importType === "member"
-      ? "name,profession"
+      ? "name,profession,chapter"
       : "name,profession,phone,referrer,event_date";
     
     const today = new Date().toISOString().split("T")[0];
     const sampleRow = importType === "member"
-      ? "\nJohn Doe,Software Development"
+      ? `\nJohn Doe,Software Development,${chapterTag || "anchor"}`
       : `\nJane Smith,Marketing Consultant,87654321,Larry Lo,${today}`;
     
     const csvContent = headers + sampleRow;
@@ -352,7 +358,7 @@ function ImportPageInner() {
           </button>
           <p className="hint" style={{ textAlign: "center" }}>
             {importType === "member" 
-              ? "會員範本包含：name, profession" 
+              ? "會員範本：name, profession, chapter（chapter 可留空，預設為目前登入 chapter）" 
               : "嘉賓範本包含：name, profession, phone, referrer, event_date"}
           </p>
         </div>
@@ -426,7 +432,10 @@ function ImportPageInner() {
                       </>
                     )}
                     {importType === "member" && (
-                      <th style={{ padding: "0.5rem", textAlign: "left" }}>狀態</th>
+                      <>
+                        <th style={{ padding: "0.5rem", textAlign: "left" }}>Chapter</th>
+                        <th style={{ padding: "0.5rem", textAlign: "left" }}>狀態</th>
+                      </>
                     )}
                   </tr>
                 </thead>
@@ -443,13 +452,16 @@ function ImportPageInner() {
                         </>
                       )}
                       {importType === "member" && (
-                        <td style={{ padding: "0.5rem" }}>{row.standing || "GREEN"}</td>
+                        <>
+                          <td style={{ padding: "0.5rem" }}>{row.chapter || chapterTag || "anchor"}</td>
+                          <td style={{ padding: "0.5rem" }}>{row.standing || "GREEN"}</td>
+                        </>
                       )}
                     </tr>
                   ))}
                   {importData.length > 10 && (
                     <tr>
-                      <td colSpan={importType === "guest" ? 6 : 5} style={{ padding: "0.5rem", textAlign: "center", fontStyle: "italic" }}>
+                      <td colSpan={importType === "guest" ? 6 : 6} style={{ padding: "0.5rem", textAlign: "center", fontStyle: "italic" }}>
                         ... 還有 {importData.length - 10} 筆資料
                       </td>
                     </tr>

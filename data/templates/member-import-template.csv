@@ -1,3 +1,3 @@
-name,profession,email,phone,standing
-John Doe,Software Development,john@example.com,61234567,GREEN
-Jane Chan,Accounting,jane@example.com,62345678,YELLOW
+name,profession,chapter
+John Doe,Software Development,anchor
+Jane Chan,Accounting,anchor
