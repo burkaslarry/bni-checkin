@@ -41,4 +41,16 @@ describe("QrFlyerContent", () => {
   it("uses a fixed capture width constant for A4 layout", () => {
     expect(PDF_CAPTURE_WIDTH_PX).toBe(718);
   });
+
+  it("shows AMax logo when chapterTag is amax", () => {
+    render(
+      <QrFlyerContent
+        data={sampleData}
+        includeEventDate={true}
+        websiteUrl="https://example.com?chapter=amax"
+        chapterTag="amax"
+      />
+    );
+    expect(screen.getByTestId("qr-flyer-chapter-logo")).toHaveAttribute("src", "/bni-amax-hk.jpg");
+  });
 });

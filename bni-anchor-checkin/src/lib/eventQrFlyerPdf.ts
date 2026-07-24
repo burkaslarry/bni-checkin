@@ -1,6 +1,7 @@
 import type { EventData } from "../api";
 import { generateQrFlyerPdfBlob } from "./generateQrFlyerPdf";
 import type { QrFlyerEventData } from "../components/QrFlyerContent";
+import { buildChapterPdfFilename } from "./chapterBranding";
 
 export function eventToQrFlyerData(event: EventData): QrFlyerEventData {
   return {
@@ -16,7 +17,8 @@ export function eventToQrFlyerData(event: EventData): QrFlyerEventData {
 /** Download QR check-in flyer PDF for an event (element must already be in the DOM). */
 export async function downloadEventQrFlyerPdf(
   event: EventData,
-  captureElementId = "qr-pdf"
+  captureElementId = "qr-pdf",
+  displayName = "BNI Anchor"
 ): Promise<void> {
   const element = document.getElementById(captureElementId);
   if (!element) {
@@ -25,7 +27,7 @@ export async function downloadEventQrFlyerPdf(
   const pdfBlob = await generateQrFlyerPdfBlob(element);
   const url = URL.createObjectURL(pdfBlob);
   const link = document.createElement("a");
-  link.download = `BNI-Anchor-${event.date}.pdf`;
+  link.download = buildChapterPdfFilename(displayName, event.date);
   link.href = url;
   link.click();
   URL.revokeObjectURL(url);

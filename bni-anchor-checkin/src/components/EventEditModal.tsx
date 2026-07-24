@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { updateEvent, type EventData } from "../api";
 import { QrFlyerContent } from "./QrFlyerContent";
-import { ROOT_WEBSITE_URL } from "../lib/publicSiteUrl";
 import { downloadEventQrFlyerPdf, eventToQrFlyerData } from "../lib/eventQrFlyerPdf";
+import { useChapter } from "../chapterContext";
+import { chapterCheckInUrl } from "../lib/chapterBranding";
 
 type EventEditModalProps = {
   event: EventData;
@@ -13,6 +14,9 @@ type EventEditModalProps = {
 };
 
 export function EventEditModal({ event, open, onClose, onSaved, onNotify }: EventEditModalProps) {
+  const { chapter, chapterTag } = useChapter();
+  const displayName = chapter?.displayName || (chapterTag === "anchor" ? "BNI Anchor" : `BNI ${chapterTag}`);
+  const checkInUrl = chapterCheckInUrl(chapter?.tag || chapterTag);
   const [name, setName] = useState(event.name);
   const [startTime, setStartTime] = useState(event.startTime);
   const [endTime, setEndTime] = useState(event.endTime);
@@ -71,7 +75,7 @@ export function EventEditModal({ event, open, onClose, onSaved, onNotify }: Even
       onNotify("活動已更新，正在產生 PDF…", "info");
       setPdfCaptureEvent(updated);
       await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-      await downloadEventQrFlyerPdf(updated, "event-edit-qr-pdf");
+      await downloadEventQrFlyerPdf(updated, "event-edit-qr-pdf", displayName);
       onNotify("活動已更新，PDF 已下載", "success");
       onClose();
     } catch (error) {
@@ -184,7 +188,8 @@ export function EventEditModal({ event, open, onClose, onSaved, onNotify }: Even
           <QrFlyerContent
             data={qrData}
             includeEventDate={includeEventDateInPdf}
-            websiteUrl={ROOT_WEBSITE_URL}
+            websiteUrl={checkInUrl}
+            chapterTag={chapter?.tag || chapterTag}
             qrCodeId="qr-code-event-edit"
           />
         </div>

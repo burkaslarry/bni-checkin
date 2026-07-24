@@ -65,10 +65,22 @@ export async function generateQrFlyerPdfBlob(element: HTMLElement): Promise<Blob
   const restoreCaptureRoot = prepareCaptureRootForHtml2Canvas(element);
 
   try {
-    // Let SVG/QR paint before rasterising (helps mobile WebKit).
+    // Let SVG/QR/logo paint before rasterising (helps mobile WebKit + chapter JPG logos).
     await new Promise<void>((resolve) => {
       requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
     });
+    const imgs = Array.from(element.querySelectorAll("img"));
+    await Promise.all(
+      imgs.map(
+        (img) =>
+          img.complete
+            ? Promise.resolve()
+            : new Promise<void>((resolve) => {
+                img.addEventListener("load", () => resolve(), { once: true });
+                img.addEventListener("error", () => resolve(), { once: true });
+              })
+      )
+    );
 
     const canvas = await html2canvas(element, {
       scale: 2,

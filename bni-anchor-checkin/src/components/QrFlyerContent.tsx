@@ -1,4 +1,5 @@
 import { QRCodeSVG } from "qrcode.react";
+import { chapterPdfLogoSrc } from "../lib/chapterBranding";
 
 /** A4 printable content width at ~96 DPI (190mm with 10mm margins). Device-independent PDF capture. */
 export const PDF_CAPTURE_WIDTH_PX = 718;
@@ -18,6 +19,8 @@ type QrFlyerContentProps = {
   includeEventDate: boolean;
   websiteUrl: string;
   qrCodeId?: string;
+  /** Active chapter tag — drives logo (amax → BNI AMax mark). */
+  chapterTag?: string | null;
 };
 
 /*
@@ -63,11 +66,39 @@ function BniAnchorLogoForPdfCapture() {
   );
 }
 
-export function QrFlyerContent({ data, includeEventDate, websiteUrl, qrCodeId = "qr-code-website" }: QrFlyerContentProps) {
+function ChapterLogoForPdfCapture({ chapterTag }: { chapterTag?: string | null }) {
+  const logoSrc = chapterPdfLogoSrc(chapterTag);
+  if (logoSrc) {
+    return (
+      <img
+        src={logoSrc}
+        alt={`${chapterTag || "chapter"} logo`}
+        crossOrigin="anonymous"
+        data-testid="qr-flyer-chapter-logo"
+        style={{
+          maxWidth: "280px",
+          width: "100%",
+          height: "auto",
+          display: "inline-block",
+          borderRadius: "8px",
+        }}
+      />
+    );
+  }
+  return <BniAnchorLogoForPdfCapture />;
+}
+
+export function QrFlyerContent({
+  data,
+  includeEventDate,
+  websiteUrl,
+  qrCodeId = "qr-code-website",
+  chapterTag = "anchor",
+}: QrFlyerContentProps) {
   return (
     <>
       <div style={{ textAlign: "center", marginBottom: "2rem" }}>
-        <BniAnchorLogoForPdfCapture />
+        <ChapterLogoForPdfCapture chapterTag={chapterTag} />
       </div>
 
       <div

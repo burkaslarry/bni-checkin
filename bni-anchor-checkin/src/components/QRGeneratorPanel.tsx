@@ -13,15 +13,11 @@ import {
   nextWeekdayOnOrAfter,
   resolveMeetingWeekday,
 } from "../lib/chapterMeetingDefaults";
+import { buildChapterPdfFilename, chapterCheckInUrl } from "../lib/chapterBranding";
 
 type QRGeneratorPanelProps = {
   onNotify: (message: string, type: "success" | "error" | "info") => void;
 };
-
-// Root website URL for QR codes - always points to production check-in site
-const ROOT_WEBSITE_URL =
-  (typeof import.meta !== "undefined" && import.meta.env?.VITE_PUBLIC_URL) ||
-  "https://bni-anchor-checkin.vercel.app";
 
 // Helper function to add minutes to a time string (HH:mm format)
 const addMinutesToTime = (time: string, minutes: number): string => {
@@ -35,6 +31,8 @@ const addMinutesToTime = (time: string, minutes: number): string => {
 export const QRGeneratorPanel = ({ onNotify }: QRGeneratorPanelProps) => {
   const { chapter, chapterTag } = useChapter();
   const displayName = chapter?.displayName || (chapterTag === "anchor" ? "BNI Anchor" : `BNI ${chapterTag}`);
+  const checkInUrl = chapterCheckInUrl(chapter?.tag || chapterTag);
+  const pdfFilename = (date: string) => buildChapterPdfFilename(displayName, date);
 
   const initial = useMemo(
     () =>
@@ -266,7 +264,7 @@ export const QRGeneratorPanel = ({ onNotify }: QRGeneratorPanelProps) => {
       const pdfBlob = await generatePDFBlob();
       const url = URL.createObjectURL(pdfBlob);
       const link = document.createElement("a");
-      link.download = `BNI-Anchor-${qrData?.eventDate || "event"}.pdf`;
+      link.download = pdfFilename(qrData?.eventDate || "event");
       link.href = url;
       link.click();
       URL.revokeObjectURL(url);
@@ -284,7 +282,8 @@ export const QRGeneratorPanel = ({ onNotify }: QRGeneratorPanelProps) => {
     try {
       // Generate PDF
       const pdfBlob = await generatePDFBlob();
-      const pdfFile = new File([pdfBlob], `BNI-Anchor-${qrData.eventDate}.pdf`, { type: "application/pdf" });
+      const pdfName = pdfFilename(qrData.eventDate);
+      const pdfFile = new File([pdfBlob], pdfName, { type: "application/pdf" });
 
       const formattedDate = new Date(qrData.eventDate).toLocaleDateString("en-US", {
         weekday: "long",
@@ -292,7 +291,7 @@ export const QRGeneratorPanel = ({ onNotify }: QRGeneratorPanelProps) => {
         month: "long",
         day: "numeric"
       });
-      const message = `🎯 EventXP for BNI Anchor Event Check-in\n\n` +
+      const message = `🎯 EventXP · ${displayName} Event Check-in\n\n` +
         `Event: ${qrData.eventName}\n` +
         `Date: ${formattedDate}\n` +
         `Registration: ${qrData.registrationStartTime}\n` +
@@ -304,7 +303,7 @@ export const QRGeneratorPanel = ({ onNotify }: QRGeneratorPanelProps) => {
       if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
         try {
           await navigator.share({
-            title: `EventXP for BNI Anchor - ${formattedDate}`,
+            title: `EventXP · ${displayName} - ${formattedDate}`,
             text: message,
             files: [pdfFile]
           });
@@ -321,7 +320,7 @@ export const QRGeneratorPanel = ({ onNotify }: QRGeneratorPanelProps) => {
       // Fallback: Download PDF and open WhatsApp web
       const url = URL.createObjectURL(pdfBlob);
       const link = document.createElement("a");
-      link.download = `BNI-Anchor-${qrData.eventDate}.pdf`;
+      link.download = pdfName;
       link.href = url;
       link.click();
       URL.revokeObjectURL(url);
@@ -346,7 +345,8 @@ export const QRGeneratorPanel = ({ onNotify }: QRGeneratorPanelProps) => {
     try {
       // Generate PDF
       const pdfBlob = await generatePDFBlob();
-      const pdfFile = new File([pdfBlob], `BNI-Anchor-${qrData.eventDate}.pdf`, { type: "application/pdf" });
+      const pdfName = pdfFilename(qrData.eventDate);
+      const pdfFile = new File([pdfBlob], pdfName, { type: "application/pdf" });
 
       const formattedDate = new Date(qrData.eventDate).toLocaleDateString("en-US", {
         weekday: "long",
@@ -354,7 +354,7 @@ export const QRGeneratorPanel = ({ onNotify }: QRGeneratorPanelProps) => {
         month: "long",
         day: "numeric"
       });
-      const subject = `EventXP for BNI Anchor - Check-in ${formattedDate}`;
+      const subject = `EventXP · ${displayName} - Check-in ${formattedDate}`;
       const body = `Dear Members,\n\n` +
         `Please find the check-in details for our upcoming event:\n\n` +
         `Event: ${qrData.eventName}\n` +
@@ -364,7 +364,7 @@ export const QRGeneratorPanel = ({ onNotify }: QRGeneratorPanelProps) => {
         `On-time Cutoff: ${qrData.onTimeCutoff}\n\n` +
         `Please scan the QR code in the attached PDF to check in at the event.\n\n` +
         `Best regards,\n` +
-        `EventXP for BNI Anchor Team`;
+        `EventXP · ${displayName} Team`;
 
       // Try Web Share API first (supports file attachments on mobile/some browsers)
       if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
@@ -388,7 +388,7 @@ export const QRGeneratorPanel = ({ onNotify }: QRGeneratorPanelProps) => {
       // Note: mailto: protocol cannot attach files, so we download first
       const url = URL.createObjectURL(pdfBlob);
       const link = document.createElement("a");
-      link.download = `BNI-Anchor-${qrData.eventDate}.pdf`;
+      link.download = pdfName;
       link.href = url;
       link.style.display = "none";
       document.body.appendChild(link);
@@ -396,7 +396,7 @@ export const QRGeneratorPanel = ({ onNotify }: QRGeneratorPanelProps) => {
       document.body.removeChild(link);
       
       // Wait a bit longer to ensure download completes
-      onNotify(`PDF 正在下載: BNI-Anchor-${qrData.eventDate}.pdf`, "info");
+      onNotify(`PDF 正在下載: ${pdfName}`, "info");
       
       const encodedSubject = encodeURIComponent(subject);
       const encodedBody = encodeURIComponent(
@@ -410,12 +410,12 @@ export const QRGeneratorPanel = ({ onNotify }: QRGeneratorPanelProps) => {
         `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
         `📎 IMPORTANT: PDF ATTACHMENT REQUIRED\n` +
         `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-        `The QR code PDF file "BNI-Anchor-${qrData.eventDate}.pdf" has been downloaded to your computer.\n\n` +
+        `The QR code PDF file "${pdfName}" has been downloaded to your computer.\n\n` +
         `⚠️ Please attach this file to your email before sending.\n` +
-        `📁 Look in your Downloads folder for: BNI-Anchor-${qrData.eventDate}.pdf\n\n` +
+        `📁 Look in your Downloads folder for: ${pdfName}\n\n` +
         `Attendees can scan the QR code in the PDF to check in at the event.\n\n` +
         `Best regards,\n` +
-        `EventXP for BNI Anchor Team`
+        `EventXP · ${displayName} Team`
       );
       
       // Longer delay to ensure download completes and user sees the notification
@@ -553,7 +553,8 @@ export const QRGeneratorPanel = ({ onNotify }: QRGeneratorPanelProps) => {
               <QrFlyerContent
                 data={qrData}
                 includeEventDate={includeEventDateInPdf}
-                websiteUrl={ROOT_WEBSITE_URL}
+                websiteUrl={checkInUrl}
+                chapterTag={chapter?.tag || chapterTag}
                 qrCodeId="qr-code-website"
               />
             </div>
@@ -654,7 +655,8 @@ export const QRGeneratorPanel = ({ onNotify }: QRGeneratorPanelProps) => {
                 <QrFlyerContent
                   data={qrData}
                   includeEventDate={includeEventDateInPdf}
-                  websiteUrl={ROOT_WEBSITE_URL}
+                  websiteUrl={checkInUrl}
+                  chapterTag={chapter?.tag || chapterTag}
                   qrCodeId="qr-code-preview"
                 />
               </div>
@@ -680,7 +682,16 @@ export const QRGeneratorPanel = ({ onNotify }: QRGeneratorPanelProps) => {
       <div className="report-link-info">
         <h4>📊 即時報名狀態頁面</h4>
         <p className="hint">
-          建立活動後，可開啟 <a href="/report" target="_blank" rel="noopener noreferrer" className="report-link">/report</a> 頁面查看即時簽到狀態
+          建立活動後，可開啟{" "}
+          <a
+            href={chapterTag === "anchor" ? "/report" : `/report?chapter=${encodeURIComponent(chapterTag)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="report-link"
+          >
+            /report{chapterTag === "anchor" ? "" : `?chapter=${chapterTag}`}
+          </a>{" "}
+          頁面查看即時簽到狀態
         </p>
       </div>
 
