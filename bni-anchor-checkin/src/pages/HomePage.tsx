@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { NotificationEntry } from "../components/ScanPanel";
 import { NotificationStack } from "../components/NotificationStack";
@@ -16,6 +16,7 @@ export default function HomePage() {
   const [searchParams] = useSearchParams();
   const chapterTag = (searchParams.get("chapter") || "anchor").trim().toLowerCase() || "anchor";
   const isAnchor = chapterTag === "anchor";
+  const [chapterReady, setChapterReady] = useState(false);
 
   const [notifications, setNotifications] = useState<NotificationEntry[]>([]);
   const [isOnline, setIsOnline] = useState(() =>
@@ -23,9 +24,14 @@ export default function HomePage() {
   );
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
 
-  useEffect(() => {
+  // Bind chapter before child effects fetch members/events (avoid Anchor leak).
+  useLayoutEffect(() => {
     setActiveApiChapterTag(chapterTag);
-    return () => setActiveApiChapterTag(null);
+    setChapterReady(true);
+    return () => {
+      setActiveApiChapterTag(null);
+      setChapterReady(false);
+    };
   }, [chapterTag]);
 
   const pushNotification = useCallback((note: NotificationEntry) => {
@@ -128,7 +134,17 @@ export default function HomePage() {
         </div>
       </header>
 
-      <CheckinFormPanel onNotify={handlePanelNotification} />
+      {chapterReady ? (
+        <CheckinFormPanel
+          key={chapterTag}
+          onNotify={handlePanelNotification}
+          chapterTag={chapterTag}
+        />
+      ) : (
+        <section className="section">
+          <p className="hint">載入 chapter…</p>
+        </section>
+      )}
 
       <p className="hint status-hint">
         {isOnline

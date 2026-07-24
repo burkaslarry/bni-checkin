@@ -63,6 +63,8 @@ type Observer = {
 
 type CheckinFormPanelProps = {
   onNotify: (message: string, type: "success" | "error" | "info") => void;
+  /** Public check-in chapter tag (from `/?chapter=`). Defaults to anchor. */
+  chapterTag?: string;
 };
 
 /** YYYY-MM-DD in Hong Kong time (matches backend event dates). */
@@ -80,7 +82,7 @@ export function isSameCalendarDayAsEvent(eventDate: string, now: Date = new Date
   return getHktDateString(now) === normalizedEvent;
 }
 
-export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
+export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFormPanelProps) => {
   const [checkinType, setCheckinType] = useState<CheckinType>("member");
   const [members, setMembers] = useState<Member[]>([]);
   const [guests, setGuests] = useState<Guest[]>([]);
@@ -451,7 +453,9 @@ export const CheckinFormPanel = ({ onNotify }: CheckinFormPanelProps) => {
     <section className="section checkin-form-panel">
       {/* Header */}
       <div className="section-header" style={{ marginBottom: "1.5rem" }}>
-        <h2 style={{ margin: 0 }}>✅ EventXP for BNI Anchor 簽到 Check-in</h2>
+        <h2 style={{ margin: 0 }}>
+          ✅ EventXP {chapterTag === "anchor" ? "for BNI Anchor" : `· ${chapterTag}`} 簽到 Check-in
+        </h2>
         <p className="hint" style={{ margin: "0.25rem 0 0 0" }}>
           <strong>{eventSnapshot.name}</strong>
           {" · "}
