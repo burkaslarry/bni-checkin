@@ -1,8 +1,8 @@
 # EventXP System / BNI Anchor Check-in
 
-EventXP System is a full-stack event check-in platform for BNI Anchor Chapter meetings. It supports event creation, QR attendance, member and guest check-in, live reporting, CSV import/export, and AI-assisted networking recommendations.
+EventXP System is a full-stack event check-in platform for BNI chapter meetings (Anchor, AMax, Dynasty, and other chapters). It supports event creation, QR attendance, member and guest check-in, live reporting, CSV import/export, and AI-assisted networking recommendations.
 
-EventXP System 是一個為 BNI Anchor Chapter 會議而設的全端活動簽到系統，支援活動建立、QR 簽到、會員及嘉賓管理、即時出席報告、CSV 匯入/匯出，以及 AI 輔助商務配對建議。
+EventXP System 是一個為 BNI 分會會議而設的全端活動簽到系統（支援 Anchor、AMax、Dynasty 等多 chapter），支援活動建立、QR 簽到、會員及嘉賓管理、即時出席報告、CSV 匯入/匯出，以及 AI 輔助商務配對建議。
 
 This README uses a traceability framework: **Feature Codes** (`F001`, `F002`) identify product capabilities, while **Step Codes** (`S001`, `S002`) identify important process blocks inside those capabilities. The goal is to help developers, operators, and AI coding agents locate logic quickly and edit the correct code path safely.
 
@@ -77,24 +77,27 @@ graph TD
 | `F002` | Attendance Check-in / 簽到 | `S201` select/scan, `S202` verify, `S203` persist, `S204` broadcast | `CheckinFormPanel.tsx`, `MemberCheckinPanel.tsx`, `GuestCheckinPanel.tsx`, `AttendanceController.kt` |
 | `F003` | Guest Registration / 嘉賓登記 | `S301` import/register, `S302` match event date, `S303` store guest row | `PublicGuestWalkinPage.tsx`, `GuestsPage.tsx`, `GuestRepository.kt` |
 | `F004` | Live Report / 即時出席報告 | `S401` load event, `S402` merge records, `S403` classify status, `S404` render filters | `ReportPage.tsx`, `EventAttendanceDetailModal.tsx`, `EventDbService.kt` |
-| `F005` | CSV Import / Export / CSV 匯入匯出 | `S501` parse, `S502` map columns, `S503` upsert, `S504` export | `EventManagementPanel.tsx`, `AttendanceController.kt`, `scripts/import_attendance_csv_to_remote_api.sh` |
+| `F005` | CSV Import / Export / CSV 匯入匯出 | `S501` parse, `S502` map columns, `S503` upsert, `S504` export | `ImportPage.tsx`, `BulkImportService.kt`, `EventManagementPanel.tsx`, `scripts/import-member-csv-chapter.py` |
 | `F006` | AI Matching / AI 配對 | `S601` prepare context, `S602` AI request, `S603` render result | `StrategicPlanningPanel.tsx`, `DeepSeekService.kt` |
 | `F007` | Environment & Deployment / 環境及部署 | `S701` env load, `S702` datasource profile, `S703` startup, `S704` health/logs | `.env.example`, `run.sh`, `scripts/run_local_with_remote_db.sh`, Spring profile files |
 | `F008` | Member Management / 會員管理 | `S801` list by category, `S802` edit name/profession/standing, `S803` upsert by id or name | `MembersPage.tsx`, `memberCategories.ts`, `MemberManagementController.kt`, `DatabaseMemberService.kt` |
+| `F010` | Multi-Chapter / 多 chapter | `S1001` resolve chapter, `S1002` client login, `S1003` scope API/DB, `S1004` bulk import by chapter | `chapterContext.tsx`, `ChapterService.kt`, `migrations/add_chapters_and_member_chapter_id.sql`, `ImportPage.tsx` |
 
 ## Production | 正式環境
 
 | Service | URL |
 |---|---|
 | Frontend (Vercel) | <https://bni-anchor-checkin.vercel.app> |
-| Admin | <https://bni-anchor-checkin.vercel.app/admin> |
+| Admin (BNI Anchor) | <https://bni-anchor-checkin.vercel.app/admin> |
+| Admin (other chapters) | <https://bni-anchor-checkin.vercel.app/admin?client=true&chapter=amax> — login with chapter AdminLogin (e.g. `amax`) |
 | Live report | <https://bni-anchor-checkin.vercel.app/report> |
 | Backend API (Render) | <https://bni-anchor-checkin-backend.onrender.com> |
+| Chapters API | <https://bni-anchor-checkin-backend.onrender.com/api/chapters> |
 
 Latest production tags:
 
-- **Monorepo** (`bni-checkin`, branch `master`): `prod/4.24` — event edit (name, start/end time) with PDF regen, SRAA-aligned Vercel deploy gate, report substitute column, member mark-absent
-- **Backend deploy repo** (`bni-anchor-checkin-backend`, branch `main`): `prod/5.1.6` — `PUT /api/events/{id}` for event metadata updates
+- **Monorepo** (`bni-checkin`, branch `master`): `prod/6.1.2` — multi-chapter member import (`name,profession,chapter`), client chapter login, event edit + PDF regen
+- **Backend deploy repo** (`bni-anchor-checkin-backend`, branch `main`): `prod/6.1.1` — per-row chapter on bulk member import, chapter-scoped members API
 
 Render watches the **separate backend repository** `burkaslarry/bni-anchor-checkin-backend` on `main`, not this monorepo. After changing backend code here, sync `bni-anchor-checkin-backend/` to that repo and push before tagging or deploying.
 
@@ -287,13 +290,47 @@ npm run dev
 .
 ├── bni-anchor-checkin/             # React, TypeScript, Vite PWA
 ├── bni-anchor-checkin-backend/     # Kotlin, Spring Boot API
-├── data/templates/                 # CSV import templates
+├── data/                           # CSV sources and import templates
+│   ├── templates/                  # member-import-template.csv (name,profession,chapter)
+│   └── amax-member-list-chapter.csv  # AMax members (chapter=amax)
 ├── docs/                           # User, setup, deployment, and training docs
 ├── init-database.sql               # Local database schema/bootstrap script
 ├── Makefile                        # Root-level command shortcuts
 ├── run.sh                          # Local full-stack launcher
 └── scripts/                        # Operational helper scripts
 ```
+
+## Multi-Chapter & Member Import | 多 chapter 與會員匯入
+
+Members, events, guests, and observers are scoped by **chapter** (`bni_eventxp_chapters`). Seeded chapters: `anchor`, `amax`, `dynasty`.
+
+| Context | Default chapter |
+|---|---|
+| BNI Anchor admin (`/admin`) | `anchor` |
+| Bulk import — `chapter` column empty | Current login chapter (Anchor → `anchor`; client login `amax` → `amax`) |
+| API query | `GET /api/members?chapter=amax` (omit or `anchor` for Anchor) |
+
+**Member CSV format** (template: `data/templates/member-import-template.csv`):
+
+```csv
+name,profession,chapter
+John Doe,Software Development,anchor
+Rex Lee,髮型師,amax
+```
+
+- UI: **Admin → 批量匯入** (`/admin/import`) — member rows write to the logged-in chapter unless `chapter` is set per row.
+- CLI convert + import:
+
+```bash
+python3 scripts/convert-member-csv-to-chapter-format.py \
+  data/amax-member-list-0415.csv data/amax-member-list-chapter.csv amax
+
+python3 scripts/import-member-csv-chapter.py data/amax-member-list-chapter.csv
+```
+
+- Bulk API: `POST /api/bulk-import-members?chapter=amax` — body is JSON array; each row may include optional `"chapter"` to override.
+
+Apply DB migrations for chapters: `migrations/add_chapters_and_member_chapter_id.sql`, `migrations/add_chapter_id_events_guests_observers.sql` (Render Postgres via `render psql`).
 
 ## Core Runtime Notes | 核心運作備註
 
@@ -304,14 +341,16 @@ npm run dev
 - Guest registration and guest check-in time are stored in `bni_anchor_guests`, including `check_in_time`.
 - `/report` merges member attendance, checked-in guests, and registered-but-not-checked-in guests for the active event date.
 - WebSocket updates refresh operator-facing screens after attendance, event, and registry changes.
-- **Admin → 會員管理** (`/admin/members`) lists members grouped by poster profession categories (A–K). Operators can edit name, profession, category, and standing.
-- Member names may include `/` (e.g. `Max Chan/William Lai`). Use query-param APIs — **not** path variables:
-  - `PUT /api/members?memberId={id}` (preferred)
+- **Admin → 會員管理** (`/admin/members`) lists members for the active chapter, grouped by poster profession categories (A–K). Operators can edit name, profession, category, and standing.
+- Member names may include `/` (e.g. `Max Chan/William Lai`). Use query-param APIs — **not** path variables (add `?chapter=` when not Anchor):
+  - `GET /api/members?chapter=amax`
+  - `PUT /api/members?memberId={id}&chapter=anchor` (preferred)
   - `PUT /api/members?currentName={name}`
   - `DELETE /api/members?memberId={id}` or `?name={name}`
 - Member attendance supports optional **substitute_for** (替代人): recorded after check-in in the success popup, stored on `bni_anchor_attendances`, shown on `/report`, and exported in CSV column `替代人`. Members can be marked absent from the report records table.
 - **Admin → 嘉賓管理** supports guest rename and keyword search when **全部活動 / All Events** is selected.
 - Member sync scripts: `scripts/import-members-from-poster-2026-07.py`, `scripts/sync-local-members-from-poster.sh`, `scripts/update-production-members-2026-07-10.py`.
+- Chapter member scripts: `scripts/convert-member-csv-to-chapter-format.py`, `scripts/import-member-csv-chapter.py`.
 - Operational scripts: `scripts/cleanup-test-events.sh` (soft-delete events whose name contains `TEST`), `scripts/deploy-vercel-production.sh` (SRAA pre-deploy gate).
 
 ## Documentation | 相關文件
