@@ -36,7 +36,7 @@ dependencies {
 dependencyCheck {
 	failBuildOnCVSS = 7.0f
 	formats = listOf("HTML", "JSON")
-	outputDirectory = layout.buildDirectory.dir("reports").get().asFile
+	outputDirectory = "${layout.buildDirectory.get().asFile}/reports"
 	suppressionFile = "dependency-check-suppressions.xml"
 	nvd {
 		apiKey = System.getenv("NVD_API_KEY")
