@@ -185,7 +185,7 @@ export default function AdminPage() {
           >
             登出
           </button>
-          <Link to="/report" className="ghost-button" style={{ marginRight: "0.5rem" }}>
+          <Link to={adminHref("/report")} className="ghost-button" style={{ marginRight: "0.5rem" }}>
             📊 即時報告
           </Link>
           <Link to={adminHref("/admin")} className="ghost-button back-home-btn">
@@ -256,7 +256,7 @@ export default function AdminPage() {
             ))}
 
             <a
-              href="/report"
+              href={adminHref("/report")}
               className="nav-card"
               target="_blank"
               rel="noopener noreferrer"

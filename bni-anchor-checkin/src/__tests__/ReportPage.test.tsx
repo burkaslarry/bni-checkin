@@ -1,16 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
-import { BrowserRouter } from "react-router-dom";
+import { render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import ReportPage from "../pages/ReportPage";
+import { ChapterProvider } from "../chapterContext";
 
 vi.mock("../api", () => ({
   ANCHOR_CHAPTER_ID: 1,
   CHAPTER_TAG_TO_ID: { anchor: 1, amax: 2, dynasty: 3 },
   setActiveApiChapter: vi.fn(),
-  getCurrentEvent: vi.fn().mockResolvedValue({ id: 1, name: "BNI Anchor Meeting", date: "2026-02-10" }),
+  clientLogin: vi.fn(),
+  clientLogout: vi.fn(),
+  fetchClientSession: vi.fn().mockResolvedValue({
+    chapter: { id: 2, tag: "amax", displayName: "BNI AMax" },
+  }),
+  getCurrentEvent: vi.fn().mockResolvedValue({ id: 1, name: "BNI AMax Meeting", date: "2026-02-10" }),
   getReportData: vi.fn().mockResolvedValue({
     eventId: 1,
-    eventName: "BNI Anchor Meeting",
+    eventName: "BNI AMax Meeting",
     eventDate: "2026-02-10",
     onTimeCutoff: "07:05",
     attendees: [{ memberName: "Alice", status: "on-time", checkInTime: "07:00", role: "MEMBER" }],
@@ -24,20 +30,45 @@ vi.mock("../api", () => ({
   getReportWebSocketUrl: vi.fn().mockReturnValue("ws://localhost:10000/ws/report"),
 }));
 
+function renderReport(path = "/report") {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <ChapterProvider>
+        <ReportPage />
+      </ChapterProvider>
+    </MemoryRouter>
+  );
+}
+
 describe("ReportPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
   });
 
   it("renders report with export button when data loaded", async () => {
-    render(
-      <BrowserRouter>
-        <ReportPage />
-      </BrowserRouter>
-    );
-    // Wait for async data
+    renderReport();
     await screen.findByText(/即時簽到狀態/i);
-    // Export button lives under the "📋 簽到記錄 CSV" tab
     expect(screen.getByText(/簽到記錄 CSV/i)).toBeInTheDocument();
+  });
+
+  it("scopes report APIs to amax when admin session is amax", async () => {
+    const { getCurrentEvent, getReportData } = await import("../api");
+    localStorage.setItem(
+      "eventxp_admin_session",
+      JSON.stringify({
+        token: "t",
+        chapter: { id: 2, tag: "amax", displayName: "BNI AMax" },
+        expiresAtEpochMs: Date.now() + 60_000,
+      })
+    );
+
+    renderReport("/report");
+
+    await screen.findByText(/chapter=amax/i);
+    await waitFor(() => {
+      expect(getCurrentEvent).toHaveBeenCalledWith("amax", 2);
+      expect(getReportData).toHaveBeenCalledWith(1, "amax", 2);
+    });
   });
 });

@@ -1,22 +1,21 @@
-import { useState, useEffect, useCallback, useRef, useMemo, useLayoutEffect } from "react";
-import { useNavigate, Link, useSearchParams } from "react-router-dom";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useNavigate, Link } from "react-router-dom";
 import {
   getReportData, getReportWebSocketUrl, exportRecords, getRecords, clearRecords, deleteRecord, markAttendanceAbsent, getCurrentEvent,
-  setActiveApiChapter, ANCHOR_CHAPTER_ID, CHAPTER_TAG_TO_ID,
+  setActiveApiChapter,
   ReportData, ReportAttendance, AttendeeRole, CheckInRecord
 } from "../api";
 import { buildAttendanceCsvBasename, buildAttendanceCsvFilename } from "../lib/attendanceExportFilename";
+import { useChapter } from "../chapterContext";
 
 type FilterType = "all" | "members" | "guests";
 type ViewTab = "report" | "records";
 
 export default function ReportPage() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const chapterTag = (searchParams.get("chapter") || "anchor").trim().toLowerCase() || "anchor";
-  const chapterId = CHAPTER_TAG_TO_ID[chapterTag] ?? ANCHOR_CHAPTER_ID;
+  const { chapterTag, chapterId, chapter, adminHref } = useChapter();
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     setActiveApiChapter({ id: chapterId, tag: chapterTag });
   }, [chapterTag, chapterId]);
 
@@ -39,9 +38,10 @@ export default function ReportPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  const chapterLabel = chapter?.displayName || (chapterTag === "anchor" ? "BNI Anchor" : `BNI ${chapterTag}`);
   const [filename, setFilename] = useState(() => {
     const today = new Date().toISOString().split("T")[0];
-    return `BNI_Anchor_${today}`;
+    return `BNI_${chapterTag}_${today}`;
   });
 
   useEffect(() => {
@@ -53,7 +53,7 @@ export default function ReportPage() {
   const fetchReportData = useCallback(async () => {
     try {
       const currentEvent = await getCurrentEvent(chapterTag, chapterId);
-      const data = await getReportData(currentEvent?.id);
+      const data = await getReportData(currentEvent?.id, chapterTag, chapterId);
       if (!data) {
         setNoEvent(true);
         setError(null);
@@ -85,14 +85,14 @@ export default function ReportPage() {
   const fetchRecords = useCallback(async () => {
     setRecordsLoading(true);
     try {
-      const data = await getRecords();
+      const data = await getRecords(chapterTag);
       setRecords(data.records);
     } catch {
       // silent
     } finally {
       setRecordsLoading(false);
     }
-  }, []);
+  }, [chapterTag]);
 
   // WebSocket connection
   useEffect(() => {
@@ -190,9 +190,9 @@ export default function ReportPage() {
   const handleExport = async () => {
     setExporting(true);
     try {
-      const currentEvent = await getCurrentEvent();
+      const currentEvent = await getCurrentEvent(chapterTag, chapterId);
       const exportEventId = reportData?.eventId ?? currentEvent?.id;
-      const blob = await exportRecords(exportEventId);
+      const blob = await exportRecords(exportEventId, chapterTag, chapterId);
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -310,13 +310,13 @@ export default function ReportPage() {
           <h2>尚未建立活動</h2>
           <p>請先在管理頁面建立今日活動</p>
           <div className="no-event-actions">
-            <button type="button" onClick={() => navigate("/admin?view=generate")} className="no-event-action-button">
+            <button type="button" onClick={() => navigate(adminHref("/admin?view=generate"))} className="no-event-action-button">
               🔧 前往管理頁面建立活動
             </button>
-            <Link to="/" className="no-event-action-button">
+            <Link to={chapterTag === "anchor" ? "/" : `/?chapter=${encodeURIComponent(chapterTag)}`} className="no-event-action-button">
               📱 返回簽到頁
             </Link>
-            <Link to="/admin" className="no-event-action-button">
+            <Link to={adminHref("/admin")} className="no-event-action-button">
               🛠️ 管理後台
             </Link>
           </div>
@@ -333,8 +333,8 @@ export default function ReportPage() {
           <p>{error}</p>
           <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", justifyContent: "center", marginTop: "1rem" }}>
             <button onClick={fetchReportData} className="retry-button">重試</button>
-            <Link to="/" className="ghost-button">📱 簽到頁</Link>
-            <Link to="/admin" className="ghost-button">🛠️ 管理後台</Link>
+            <Link to={chapterTag === "anchor" ? "/" : `/?chapter=${encodeURIComponent(chapterTag)}`} className="ghost-button">📱 簽到頁</Link>
+            <Link to={adminHref("/admin")} className="ghost-button">🛠️ 管理後台</Link>
           </div>
         </div>
       </div>
@@ -350,16 +350,17 @@ export default function ReportPage() {
       <header className="report-header">
         <div className="header-content">
           <div className="report-header-toolbar">
-            <h1 style={{ margin: 0 }}>📊 即時簽到狀態</h1>
+            <h1 style={{ margin: 0 }}>📊 即時簽到狀態 · {chapterLabel}</h1>
             <div className="report-quick-actions">
-              <Link to="/" className="ghost-button">
+              <Link to={chapterTag === "anchor" ? "/" : `/?chapter=${encodeURIComponent(chapterTag)}`} className="ghost-button">
                 📱 簽到頁
               </Link>
-              <Link to="/admin" className="ghost-button">
+              <Link to={adminHref("/admin")} className="ghost-button">
                 🛠️ 管理後台
               </Link>
             </div>
           </div>
+          <p className="hint" style={{ margin: "0.25rem 0 0" }}>chapter={chapterTag} · chapterId={chapterId}</p>
           {reportData && (
             <div className="event-info" style={{ marginTop: "0.5rem" }}>
               <span className="event-name">{reportData.eventName}</span>

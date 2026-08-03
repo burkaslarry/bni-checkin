@@ -124,7 +124,11 @@ export default function HomePage() {
           <span className={`connection-pill ${isOnline ? "online" : "offline"}`}>
             {isOnline ? "線上" : "離線"}
           </span>
-          <Link to="/report" className="ghost-button" style={{ textDecoration: "none" }}>
+          <Link
+            to={chapterTag === "anchor" ? "/report" : `/report?chapter=${encodeURIComponent(chapterTag)}`}
+            className="ghost-button"
+            style={{ textDecoration: "none" }}
+          >
             📊 即時報告
           </Link>
           {installPrompt && (

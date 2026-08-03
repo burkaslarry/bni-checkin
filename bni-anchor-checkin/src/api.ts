@@ -382,9 +382,11 @@ export async function getProfessionGroups(
   chapter?: string | null,
   chapterId?: number | null
 ): Promise<{ professionGroups: ProfessionGroupInfo[] }> {
-  const response = await fetch(
+  const response = await fetchWithRetry(
     withChapterQuery(`${API_BASE}/api/profession-groups`, chapter, chapterId),
-    { mode: "cors" }
+    { mode: "cors" },
+    12000,
+    3
   );
   return handleResponse(response);
 }
@@ -526,8 +528,8 @@ export async function checkIn(
  * @returns {Promise<{ records: CheckInRecord[] }>}
  * @throws {Error} On HTTP error
  */
-export async function getRecords(): Promise<{ records: CheckInRecord[] }> {
-  const response = await fetch(withChapterQuery(`${API_BASE}/api/records`), { mode: "cors" });
+export async function getRecords(chapter?: string | null): Promise<{ records: CheckInRecord[] }> {
+  const response = await fetch(withChapterQuery(`${API_BASE}/api/records`, chapter), { mode: "cors" });
   return handleResponse(response);
 }
 
@@ -581,10 +583,14 @@ export async function markAttendanceAbsent(
  * @returns {Promise<Blob>} CSV file blob
  * @throws {Error} "Failed to export records" when !response.ok
  */
-export async function exportRecords(eventId?: number | string | null): Promise<Blob> {
+export async function exportRecords(
+  eventId?: number | string | null,
+  chapter?: string | null,
+  chapterId?: number | null
+): Promise<Blob> {
   const id = normalizeApiEventId(eventId);
-  const q = id !== undefined ? `?eventId=${encodeURIComponent(String(id))}` : "";
-  const response = await fetch(`${API_BASE}/api/export${q}`, { mode: "cors" });
+  const base = id !== undefined ? `${API_BASE}/api/export?eventId=${encodeURIComponent(String(id))}` : `${API_BASE}/api/export`;
+  const response = await fetch(withChapterQuery(base, chapter, chapterId), { mode: "cors" });
   if (!response.ok) {
     throw new Error("Failed to export records");
   }
@@ -929,10 +935,16 @@ export type AIInsightResponse = {
  * @returns {Promise<ReportData | null>}
  * @throws {Error} On non-404 HTTP error
  */
-export async function getReportData(eventId?: number | string | null): Promise<ReportData | null> {
+export async function getReportData(
+  eventId?: number | string | null,
+  chapter?: string | null,
+  chapterId?: number | null
+): Promise<ReportData | null> {
   const id = normalizeApiEventId(eventId);
-  const q = id !== undefined ? `?eventId=${encodeURIComponent(String(id))}` : "";
-  const response = await fetch(withChapterQuery(`${API_BASE}/api/report${q}`), { mode: "cors" });
+  const base = id !== undefined
+    ? `${API_BASE}/api/report?eventId=${encodeURIComponent(String(id))}`
+    : `${API_BASE}/api/report`;
+  const response = await fetch(withChapterQuery(base, chapter, chapterId), { mode: "cors" });
   if (response.ok) {
     return handleResponse(response);
   }

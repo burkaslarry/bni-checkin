@@ -63,12 +63,12 @@ function MembersPageInner() {
         setNewProfessionCode((prev) =>
           next.some((c) => c.code === prev) ? prev : String(next[0].code)
         );
-      } else {
-        setCategories(MEMBER_CATEGORIES);
+        return;
       }
     } catch {
-      setCategories(MEMBER_CATEGORIES);
+      /* fall through to member-derived / default labels */
     }
+    // If profession-groups API fails (cold start), still prefer names already on members.
   };
 
   const fetchMembers = async () => {
@@ -76,6 +76,23 @@ function MembersPageInner() {
       setLoading(true);
       const data = await getMembers(chapterTag);
       setMembers(data.members);
+      // Recover chapter labels from member payload when category catalog is still the Anchor default.
+      setCategories((prev) => {
+        const looksLikeAnchorFallback =
+          prev.length > 0 &&
+          prev.some((c) => c.code === "A" && c.nameZh === "資訊及創新科技");
+        if (!looksLikeAnchorFallback) return prev;
+        const byCode = new Map<string, string>();
+        for (const m of data.members) {
+          const code = m.professionCode?.trim().toUpperCase();
+          const name = m.professionGroupName?.trim();
+          if (code && name) byCode.set(code, name);
+        }
+        if (byCode.size === 0) return prev;
+        return categoriesFromProfessionGroups(
+          [...byCode.entries()].map(([code, name]) => ({ code, name }))
+        );
+      });
     } catch (error) {
       showNotification("無法載入會員列表", "error");
     } finally {
@@ -317,7 +334,8 @@ function MembersPageInner() {
             className="ghost-button"
             onClick={() => {
               setLoading(true);
-              fetchMembers();
+              void loadCategories();
+              void fetchMembers();
             }}
             disabled={loading}
           >

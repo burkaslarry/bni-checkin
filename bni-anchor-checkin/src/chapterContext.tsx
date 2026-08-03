@@ -80,15 +80,18 @@ export function ChapterProvider({ children }: { children: ReactNode }) {
   const [searchParams] = useSearchParams();
   const location = useLocation();
   const isAdminRoute = location.pathname.startsWith("/admin");
+  /** Report page should also honor the logged-in admin chapter when ?chapter= is missing. */
+  const usesAdminSession = isAdminRoute || location.pathname.startsWith("/report");
 
   const [session, setSession] = useState<StoredSession | null>(() =>
-    isAdminRoute ? readStoredSession() : null
+    usesAdminSession ? readStoredSession() : null
   );
-  const [authReady, setAuthReady] = useState(!isAdminRoute);
+  const [authReady, setAuthReady] = useState(!usesAdminSession);
   const [loginError, setLoginError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isAdminRoute) {
+    if (!usesAdminSession) {
+      setSession(null);
       setAuthReady(true);
       return;
     }
@@ -112,8 +115,13 @@ export function ChapterProvider({ children }: { children: ReactNode }) {
         setSession(next);
       } catch {
         if (cancelled) return;
-        writeStoredSession(null);
-        setSession(null);
+        // Keep local session chapter for report deep-links even if token refresh fails.
+        if (location.pathname.startsWith("/report") && stored.chapter?.tag) {
+          setSession(stored);
+        } else {
+          writeStoredSession(null);
+          setSession(null);
+        }
       } finally {
         if (!cancelled) setAuthReady(true);
       }
@@ -121,7 +129,7 @@ export function ChapterProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [isAdminRoute]);
+  }, [usesAdminSession, location.pathname]);
 
   const login = useCallback(async (adminLogin: string, adminPassword: string) => {
     setLoginError(null);
@@ -161,7 +169,10 @@ export function ChapterProvider({ children }: { children: ReactNode }) {
       const tag = session?.chapter?.tag;
       if (!tag || tag === "anchor") return path;
       const url = new URL(path, "http://local");
-      url.searchParams.set("client", "true");
+      // Keep chapter on admin + report links so AMax/Dynasty never fall back to Anchor.
+      if (path.startsWith("/admin")) {
+        url.searchParams.set("client", "true");
+      }
       url.searchParams.set("chapter", tag);
       return `${url.pathname}${url.search}`;
     },
@@ -169,15 +180,18 @@ export function ChapterProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo<ChapterContextValue>(() => {
-    const tagFromSession = session?.chapter?.tag;
-    const tagFromQuery = searchParams.get("chapter")?.trim() || "";
-    const chapterTag =
-      tagFromSession ||
-      (isAdminRoute ? tagFromQuery || "anchor" : "anchor");
-    const chapterId =
-      session?.chapter?.id ??
-      CHAPTER_TAG_TO_ID[chapterTag] ??
-      ANCHOR_CHAPTER_ID;
+    const tagFromSession = session?.chapter?.tag?.trim().toLowerCase() || "";
+    const tagFromQuery = searchParams.get("chapter")?.trim().toLowerCase() || "";
+    // Admin: logged-in chapter wins. Report/public: explicit ?chapter= wins, then session.
+    const chapterTag = isAdminRoute
+      ? tagFromSession || tagFromQuery || "anchor"
+      : tagFromQuery || tagFromSession || "anchor";
+    const chapterId = isAdminRoute
+      ? session?.chapter?.id ?? CHAPTER_TAG_TO_ID[chapterTag] ?? ANCHOR_CHAPTER_ID
+      : (tagFromQuery ? CHAPTER_TAG_TO_ID[tagFromQuery] : undefined) ??
+        session?.chapter?.id ??
+        CHAPTER_TAG_TO_ID[chapterTag] ??
+        ANCHOR_CHAPTER_ID;
     const isAnchor = chapterTag === "anchor";
     return {
       isAdminRoute,
@@ -205,20 +219,22 @@ export function ChapterProvider({ children }: { children: ReactNode }) {
     adminHref
   ]);
 
-  // Keep module-level API scope in sync for both admin session and public `/?chapter=`.
-  // Previously non-admin routes always cleared the tag, which wiped HomePage's amax binding
-  // and caused check-in to load Anchor members/events.
+  // Keep module-level API scope in sync for admin, report, and public `/?chapter=`.
   useEffect(() => {
-    if (isAdminRoute) {
-      if (session?.chapter) {
-        setActiveApiChapter({ id: session.chapter.id, tag: session.chapter.tag });
-      } else {
-        const tagFromQuery = (searchParams.get("chapter") || "anchor").trim().toLowerCase() || "anchor";
+    if (isAdminRoute || location.pathname.startsWith("/report")) {
+      const tagFromQuery = (searchParams.get("chapter") || "").trim().toLowerCase();
+      if (tagFromQuery) {
         setActiveApiChapter({
           id: CHAPTER_TAG_TO_ID[tagFromQuery] ?? ANCHOR_CHAPTER_ID,
           tag: tagFromQuery
         });
+        return;
       }
+      if (session?.chapter) {
+        setActiveApiChapter({ id: session.chapter.id, tag: session.chapter.tag });
+        return;
+      }
+      setActiveApiChapter({ id: ANCHOR_CHAPTER_ID, tag: "anchor" });
       return;
     }
     const publicTag = (searchParams.get("chapter") || "anchor").trim().toLowerCase() || "anchor";
@@ -226,7 +242,7 @@ export function ChapterProvider({ children }: { children: ReactNode }) {
       id: CHAPTER_TAG_TO_ID[publicTag] ?? ANCHOR_CHAPTER_ID,
       tag: publicTag
     });
-  }, [isAdminRoute, session?.chapter, searchParams]);
+  }, [isAdminRoute, location.pathname, session?.chapter, searchParams]);
 
   return <ChapterContext.Provider value={value}>{children}</ChapterContext.Provider>;
 }
