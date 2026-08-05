@@ -731,10 +731,12 @@ export async function createEvent(
   startTime: string,
   endTime: string,
   registrationStartTime: string,
-  onTimeCutoff: string
+  onTimeCutoff: string,
+  chapter?: string | null,
+  chapterId?: number | null
 ): Promise<{ status: string; message: string; event?: unknown }> {
   try {
-    const response = await fetch(withChapterQuery(`${API_BASE}/api/events`), {
+    const response = await fetch(withChapterQuery(`${API_BASE}/api/events`, chapter, chapterId), {
       method: "POST",
       headers: jsonHeaders,
       body: JSON.stringify({
@@ -819,9 +821,11 @@ export async function getCurrentEvent(chapter?: string | null, chapterId?: numbe
  */
 export async function activateEvent(
   eventId: number,
-  exclusive = true
+  exclusive = true,
+  chapter?: string | null,
+  chapterId?: number | null
 ): Promise<{ status: string; exclusive?: boolean; event?: unknown; message?: string }> {
-  const response = await fetch(withChapterQuery(`${API_BASE}/api/events/${eventId}/activate`), {
+  const response = await fetch(withChapterQuery(`${API_BASE}/api/events/${eventId}/activate`, chapter, chapterId), {
     method: "POST",
     headers: jsonHeaders,
     body: JSON.stringify({ exclusive }),
@@ -985,11 +989,12 @@ export async function checkEventExists(date: string): Promise<boolean> {
  */
 export async function getEventForDate(
   date: string,
-  chapter?: string | null
+  chapter?: string | null,
+  chapterId?: number | null
 ): Promise<{ id: number; name: string } | null> {
   try {
     const response = await fetchWithRetry(
-      withChapterQuery(`${API_BASE}/api/events/for-date?date=${encodeURIComponent(date)}`, chapter),
+      withChapterQuery(`${API_BASE}/api/events/for-date?date=${encodeURIComponent(date)}`, chapter, chapterId),
       { mode: "cors" },
       10000,
       3
@@ -1261,13 +1266,14 @@ export type ImportResult = {
  */
 export async function bulkImport(
   request: BulkImportRequest,
-  chapter?: string | null
+  chapter?: string | null,
+  chapterId?: number | null
 ): Promise<ImportResult> {
   try {
     const endpoint =
       request.type === "member"
-        ? withChapterQuery(`${API_BASE}/api/bulk-import-members`, chapter)
-        : withChapterQuery(`${API_BASE}/api/bulk-import-guest`);
+        ? withChapterQuery(`${API_BASE}/api/bulk-import-members`, chapter, chapterId)
+        : withChapterQuery(`${API_BASE}/api/bulk-import-guest`, chapter, chapterId);
     const response = await fetchWithRetry(endpoint, {
       method: "POST",
       headers: jsonHeaders,

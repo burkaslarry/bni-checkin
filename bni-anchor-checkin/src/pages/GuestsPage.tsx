@@ -17,7 +17,7 @@ export default function GuestsPage({}: GuestsPageProps) {
 }
 
 function GuestsPageInner() {
-  const { adminHref, isClientMode, chapter } = useChapter();
+  const { adminHref, isClientMode, chapter, chapterTag } = useChapter();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [guests, setGuests] = useState<GuestInfo[]>([]);
@@ -67,7 +67,7 @@ function GuestsPageInner() {
 
   const fetchGuests = async () => {
     try {
-      const data = await getGuests();
+      const data = await getGuests(undefined, chapterTag);
       setGuests(data.guests || []);
       setLoadFailedRedirect(false);
     } catch (error) {

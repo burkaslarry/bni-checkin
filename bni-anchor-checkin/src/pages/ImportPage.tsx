@@ -1,8 +1,16 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { useDropzone } from "react-dropzone";
 import Papa from "papaparse";
-import { bulkImport, ImportRecord, getEventForDate, getCurrentEvent, createEvent } from "../api";
+import {
+  bulkImport,
+  ImportRecord,
+  getEventForDate,
+  getCurrentEvent,
+  createEvent,
+  activateEvent,
+  type EventData,
+} from "../api";
 import { AnchorOnlyNotice } from "../components/AnchorOnlyNotice";
 import { ClientAuthGate } from "../components/ClientAuthGate";
 import { useChapter } from "../chapterContext";
@@ -45,6 +53,36 @@ const pickValue = (row: Record<string, unknown>, aliases: string[]): string => {
   return "";
 };
 
+const eventTitleForChapter = (chapterLabel: string, date: string) =>
+  `BNI ${chapterLabel} Regular Meeting ${date}`;
+
+async function ensureEventForDate(
+  date: string,
+  chapterTag: string,
+  chapterId: number,
+  chapterLabel: string
+): Promise<{ id: number; name: string }> {
+  const normalized = normalizeEventDate(date);
+  let event = await getEventForDate(normalized, chapterTag, chapterId);
+  if (!event) {
+    await createEvent(
+      eventTitleForChapter(chapterLabel, normalized),
+      normalized,
+      "07:00",
+      "09:00",
+      "06:30",
+      "07:05",
+      chapterTag,
+      chapterId
+    );
+    event = await getEventForDate(normalized, chapterTag, chapterId);
+    if (!event) {
+      throw new Error(`無法建立活動 ${normalized}`);
+    }
+  }
+  return event;
+}
+
 export default function ImportPage() {
   return (
     <ClientAuthGate>
@@ -54,12 +92,50 @@ export default function ImportPage() {
 }
 
 function ImportPageInner() {
-  const { chapterTag, adminHref, isClientMode, chapter } = useChapter();
+  const { chapterTag, chapterId, adminHref, isClientMode, chapter } = useChapter();
+  const chapterLabel = chapter?.displayName?.replace(/^BNI\s+/i, "") || chapterTag || "Anchor";
   const [importType, setImportType] = useState<ImportType>("guest");
   const [importData, setImportData] = useState<ImportRow[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
   const [isImporting, setIsImporting] = useState(false);
+  const [targetEvent, setTargetEvent] = useState<EventData | null>(null);
+  const [eventLoading, setEventLoading] = useState(true);
   const [notification, setNotification] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
+
+  const preferredGuestEventDate =
+    targetEvent?.date || (chapterTag === "anchor" ? "2026-08-06" : "");
+
+  const refreshTargetEvent = useCallback(async () => {
+    setEventLoading(true);
+    try {
+      const anchorDefaultDate = chapterTag === "anchor" ? "2026-08-06" : null;
+      let current = await getCurrentEvent(chapterTag, chapterId);
+
+      if (anchorDefaultDate) {
+        const eventForDate = await ensureEventForDate(
+          anchorDefaultDate,
+          chapterTag,
+          chapterId,
+          chapterLabel
+        );
+        if (!current || current.date !== anchorDefaultDate) {
+          await activateEvent(eventForDate.id, true, chapterTag, chapterId);
+          current = await getCurrentEvent(chapterTag, chapterId);
+        }
+      }
+
+      setTargetEvent(current);
+    } catch (error) {
+      console.error("Failed to load target event:", error);
+      setTargetEvent(null);
+    } finally {
+      setEventLoading(false);
+    }
+  }, [chapterTag, chapterId, chapterLabel]);
+
+  useEffect(() => {
+    refreshTargetEvent();
+  }, [refreshTargetEvent]);
 
   const showNotification = (message: string, type: "success" | "error" | "info") => {
     setNotification({ message, type });
@@ -141,56 +217,39 @@ function ImportPageInner() {
     setIsImporting(true);
 
     try {
-      // For guest import: default empty eventDate to latest event (onsite support), then verify event exists
-      let guestEventDateDefault = "";
+      let guestEventDateDefault = preferredGuestEventDate;
       if (importType === "guest") {
-        const currentEvent = await getCurrentEvent();
-        if (currentEvent?.date) guestEventDateDefault = currentEvent.date;
+        if (!guestEventDateDefault) {
+          const currentEvent = await getCurrentEvent(chapterTag, chapterId);
+          if (currentEvent?.date) guestEventDateDefault = currentEvent.date;
+        }
+
         const eventDates = [
           ...new Set(
             importData
-              .map((r) => normalizeEventDate((r.eventDate || guestEventDateDefault).trim()))
+              .map((r) =>
+                normalizeEventDate((r.eventDate || guestEventDateDefault).trim())
+              )
               .filter(Boolean)
           ),
         ];
+
         for (const d of eventDates) {
-          if (!d) continue;
-          const normalized = normalizeEventDate(d);
-          let event = await getEventForDate(normalized);
-          if (!event) {
-            const autoCreate = window.confirm(
-              `活動日期 ${normalized} 尚未建立。\n\n是否自動建立活動「BNI Anchor ${normalized}」並繼續匯入嘉賓？\n\nAuto-create event for ${normalized} and continue import?`
-            );
-            if (!autoCreate) {
-              showNotification(`活動日期 ${normalized} 尚未建立活動，請先建立活動後再匯入嘉賓`, "error");
-              setIsImporting(false);
-              return;
-            }
-            await createEvent(
-              `BNI Anchor ${normalized}`,
-              normalized,
-              "07:00",
-              "09:00",
-              "06:30",
-              "07:05"
-            );
-            event = await getEventForDate(normalized);
-            if (!event) {
-              showNotification(`無法建立活動 ${normalized}，請稍後重試`, "error");
-              setIsImporting(false);
-              return;
-            }
-            showNotification(`已建立活動 ${normalized}`, "info");
+          const event = await ensureEventForDate(d, chapterTag, chapterId, chapterLabel);
+          if (d === guestEventDateDefault || d === preferredGuestEventDate) {
+            await activateEvent(event.id, true, chapterTag, chapterId);
           }
         }
       }
       const records: ImportRecord[] = importData.map((row) => {
-        const rawDate = (row.eventDate || "").trim() || (importType === "guest" ? guestEventDateDefault : "");
+        const rawDate =
+          (row.eventDate || "").trim() ||
+          (importType === "guest" ? guestEventDateDefault : "");
         const eventDate = rawDate ? normalizeEventDate(rawDate) : "";
         return {
           name: row.name,
           profession: row.profession || "",
-          chapter: (row.chapter || "").trim() || undefined,
+          chapter: (row.chapter || "").trim() || chapterTag || undefined,
           email: row.email || "",
           phoneNumber: row.phone || "",
           referrer: row.referrer || "",
@@ -207,11 +266,13 @@ function ImportPageInner() {
           type: importType,
           records
         },
-        importType === "member" ? chapterTag : undefined
+        chapterTag,
+        chapterId
       );
 
       setImportData([]);
       setErrors([]);
+      await refreshTargetEvent();
 
       if (result.failed === 0) {
         showNotification(
@@ -240,7 +301,7 @@ function ImportPageInner() {
       ? "name,profession,chapter"
       : "name,profession,phone,referrer,event_date";
     
-    const today = new Date().toISOString().split("T")[0];
+    const today = preferredGuestEventDate || new Date().toISOString().split("T")[0];
     const sampleRow = importType === "member"
       ? `\nJohn Doe,Software Development,${chapterTag || "anchor"}`
       : `\nJane Smith,Marketing Consultant,87654321,Larry Lo,${today}`;
@@ -279,8 +340,16 @@ function ImportPageInner() {
         <p className="hint">{isClientMode ? `EventXP · ${chapter?.displayName || chapterTag}` : "EventXP for BNI Anchor"}</p>
           <h1>📥 批量匯入會員或嘉賓資料</h1>
           <p className="hint">
-            Bulk Import · chapter={chapterTag}
-            {importType === "member" ? "（會員會寫入此 chapter）" : ""}
+            Bulk Import · chapter={chapterTag} (id={chapterId})
+            {importType === "member"
+              ? "（會員會寫入此 chapter）"
+              : eventLoading
+                ? " · 載入活動中…"
+                : targetEvent
+                  ? ` · 目標活動：${targetEvent.name} (${targetEvent.date})`
+                  : preferredGuestEventDate
+                    ? ` · 預設活動日期：${preferredGuestEventDate}`
+                    : ""}
           </p>
         </div>
         <div className="header-meta">
@@ -346,8 +415,9 @@ function ImportPageInner() {
               <li><strong>將步驟 2 的內容儲存為 CSV 格式</strong> Save work at step 2 as CSV format</li>
               <li><strong>上傳步驟 3 的 CSV 檔案</strong> Upload CSV from step 3</li>
             </ol>
-            <p className="hint" style={{ marginTop: "0.75rem", marginBottom: 0, color: "#b91c1c" }}>
-              ⚠️ 匯入前請先在管理頁面建立對應日期的活動
+            <p className="hint" style={{ marginTop: "0.75rem", marginBottom: 0, color: "var(--text-muted)" }}>
+              匯入時會自動對應 <strong>{chapterTag}</strong> chapter 的活動；空白 event_date 會使用目前活動日期
+              {preferredGuestEventDate ? `（${preferredGuestEventDate}）` : ""}。若該日活動不存在會自動建立並設為進行中。
             </p>
           </div>
         )}
@@ -448,7 +518,7 @@ function ImportPageInner() {
                       {importType === "guest" && (
                         <>
                           <td style={{ padding: "0.5rem" }}>{row.referrer || "-"}</td>
-                          <td style={{ padding: "0.5rem" }}>{row.eventDate || "-"}</td>
+                          <td style={{ padding: "0.5rem" }}>{row.eventDate || preferredGuestEventDate || "-"}</td>
                         </>
                       )}
                       {importType === "member" && (
