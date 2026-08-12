@@ -74,7 +74,7 @@ describe("splitSubstituteLine", () => {
 
 describe("formatMemberCheckinLabel", () => {
   it("formats planned substitute display", () => {
-    expect(formatMemberCheckinLabel("Zoe", "Wendy Cheung")).toBe("Wendy Cheung / Zoe");
+    expect(formatMemberCheckinLabel("Zoe Wu", "Wendy Cheung")).toBe("Zoe Wu (Wendy Cheung)");
     expect(formatMemberCheckinLabel("Zoe")).toBe("Zoe");
   });
 });

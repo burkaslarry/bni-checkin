@@ -100,7 +100,25 @@ class EventDbService(
     }
 
     private fun resolveMemberId(name: String, chapterId: Int): Int? {
-        return memberRepository.findByChapterIdAndNameIgnoreCase(chapterId, name).orElse(null)?.id?.toInt()
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return null
+        memberRepository.findByChapterIdAndNameIgnoreCase(chapterId, trimmed).orElse(null)?.id?.toInt()?.let { return it }
+        return resolveMemberIdByPartialName(trimmed, chapterId)
+    }
+
+    /** Match WhatsApp shorthand (e.g. "Zoe") to a unique full member name (e.g. "Zoe Wu"). */
+    internal fun resolveMemberIdByPartialName(query: String, chapterId: Int): Int? {
+        val q = query.trim().lowercase()
+        if (q.isEmpty()) return null
+        val members = memberRepository.findAllByChapterIdOrderByNameAsc(chapterId)
+        val matches = members.filter { member ->
+            val n = member.name.trim().lowercase()
+            n == q ||
+                n.startsWith("$q ") ||
+                n.endsWith(" $q") ||
+                n.split(Regex("\\s+")).any { token -> token == q || token.startsWith(q) }
+        }
+        return if (matches.size == 1) matches[0].id!!.toInt() else null
     }
 
     /** Create a new event in DB and seed [bni_anchor_attendances] with one absent row per member when members exist. */
@@ -365,7 +383,12 @@ class EventDbService(
             .filter { it.status == "absent" || !isReportCheckInVisible(it.checkInTime, eventDate) }
             .map { att ->
                 val memberName = memberIdToName[att.memberId] ?: "Unknown (ID=${att.memberId})"
-                AttendanceRecord(memberName = memberName, status = "absent", role = "MEMBER")
+                AttendanceRecord(
+                    memberName = memberName,
+                    status = "absent",
+                    role = "MEMBER",
+                    substituteFor = att.substituteFor?.trim()?.takeIf { it.isNotEmpty() }
+                )
             }
             .sortedBy { it.memberName }
 

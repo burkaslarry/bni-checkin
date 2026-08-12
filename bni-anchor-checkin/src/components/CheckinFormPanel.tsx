@@ -85,7 +85,7 @@ export function isSameCalendarDayAsEvent(eventDate: string, now: Date = new Date
 /** Display label for member with optional planned substitute (WhatsApp 替代人名單). */
 export function formatMemberCheckinLabel(memberName: string, substituteName?: string): string {
   const sub = substituteName?.trim();
-  return sub ? `${sub} / ${memberName}` : memberName;
+  return sub ? `${memberName} (${sub})` : memberName;
 }
 
 export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFormPanelProps) => {
@@ -369,6 +369,15 @@ export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFor
         checkinType === "observer" ? "present" : status,
         chapterTag
       );
+      if (checkinType === "member" && eventSnapshot.date) {
+        const sub =
+          substituteName.trim() ||
+          plannedByMember[selectedName.trim().toLowerCase()]?.trim() ||
+          "";
+        if (sub) {
+          await updateAttendanceSubstitute(eventSnapshot.date, selectedName, sub, chapterTag);
+        }
+      }
       setSuccessCheckInTime(now);
       setSubstituteName(
         checkinType === "member"

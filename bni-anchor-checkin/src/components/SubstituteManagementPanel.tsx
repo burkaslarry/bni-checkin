@@ -144,7 +144,7 @@ export function SubstituteManagementPanel({ onChanged }: SubstituteManagementPan
       <div className="section-header">
         <h2>🔄 替代人管理</h2>
         <p className="hint">
-          預先設定替代人名單（格式：替代人 / 會員）；簽到頁會顯示「Wendy Cheung / Zoe」等標籤。CSV 匯入請使用上方「匯入替代人」或 WhatsApp 訊息匯入。
+          預先設定替代人名單（格式：替代人 / 會員，會員可填簡稱如 Zoe）；簽到頁會顯示「Zoe Wu (Wendy Cheung)」。CSV 匯入請使用上方「匯入替代人」或 WhatsApp 訊息匯入。
         </p>
       </div>
 
@@ -253,7 +253,7 @@ export function SubstituteManagementPanel({ onChanged }: SubstituteManagementPan
                   <td style={{ padding: "1rem", fontWeight: 500 }}>{entry.substituteName}</td>
                   <td style={{ padding: "1rem" }}>{entry.memberName}</td>
                   <td style={{ padding: "1rem", color: "var(--text-muted)" }}>
-                    {entry.substituteName} / {entry.memberName}
+                    {entry.memberName} ({entry.substituteName})
                   </td>
                   <td style={{ padding: "1rem", textAlign: "center" }}>
                     <div style={{ display: "flex", gap: "0.5rem", justifyContent: "center" }}>

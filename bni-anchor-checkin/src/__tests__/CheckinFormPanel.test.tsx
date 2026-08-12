@@ -29,6 +29,8 @@ vi.mock("../api", () => ({
   }),
   getGuests: vi.fn().mockResolvedValue({ guests: [] }),
   getObservers: vi.fn().mockResolvedValue({ observers: [] }),
+  getPlannedSubstitutes: vi.fn().mockResolvedValue({ substitutes: [], eventDate: "2026-02-10" }),
+  updateAttendanceSubstitute: vi.fn().mockResolvedValue({ status: "success", message: "OK" }),
   logAttendance,
   getReportWebSocketUrl: vi.fn().mockReturnValue("ws://localhost/ws/report"),
 }));

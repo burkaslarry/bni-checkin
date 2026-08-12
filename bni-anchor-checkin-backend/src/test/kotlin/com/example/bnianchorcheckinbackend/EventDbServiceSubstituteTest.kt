@@ -87,4 +87,44 @@ class EventDbServiceSubstituteTest {
         org.mockito.Mockito.verify(attendanceRepository).save(captor.capture())
         assertEquals("Larry Lo", captor.value.substituteFor)
     }
+
+    @Test
+    fun `bulkSetPlannedSubstitutes resolves partial member name Zoe to Zoe Wu`() {
+        val eventDate = LocalDate.of(2026, 8, 13)
+        val event = Event(
+            id = 49L,
+            name = "BNI Anchor 2026-08-13",
+            createDate = eventDate,
+            eventDate = eventDate,
+            startTime = LocalTime.of(7, 0),
+            endTime = LocalTime.of(9, 0),
+            registrationStartTime = LocalTime.of(6, 30),
+            onTimeCutoffTime = LocalTime.of(7, 5),
+            lateCutoffTime = null,
+            status = "ACTIVE",
+            isActive = true
+        )
+        `when`(eventRepository.findByChapterIdAndEventDateAndDeletedAtIsNull(1, eventDate)).thenReturn(event)
+        `when`(memberRepository.findByChapterIdAndNameIgnoreCase(1, "Zoe")).thenReturn(Optional.empty())
+        `when`(memberRepository.findAllByChapterIdOrderByNameAsc(1)).thenReturn(
+            listOf(
+                Member(id = 5L, name = "Zoe Wu", profession = "Marketing"),
+                Member(id = 6L, name = "Vincent Chung", profession = "Finance")
+            )
+        )
+        `when`(attendanceRepository.findByEventIdAndMemberId(49, 5)).thenReturn(null)
+        `when`(attendanceRepository.save(any(Attendance::class.java))).thenAnswer { it.arguments[0] }
+
+        val result = eventDbService.bulkSetPlannedSubstitutes(
+            "2026-08-13",
+            listOf(PlannedSubstituteEntry(memberName = "Zoe", substituteName = "Wendy Cheung")),
+            null
+        )
+
+        assertEquals(1, result.updated)
+        assertEquals(0, result.failed)
+        val captor = ArgumentCaptor.forClass(Attendance::class.java)
+        org.mockito.Mockito.verify(attendanceRepository, org.mockito.Mockito.atLeastOnce()).save(captor.capture())
+        assertEquals("Wendy Cheung", captor.allValues.last().substituteFor)
+    }
 }

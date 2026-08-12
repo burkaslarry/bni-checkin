@@ -1224,8 +1224,10 @@ class AttendanceController(
 
             // Export all absent members (HARD RULE: include remaining absent members)
             for (absentee in reportData.absentees) {
+                if (absentee.role != "MEMBER") continue
                 val domain = (memberDomainMap[absentee.memberName] ?: "").replace(",", "，")
-                writer.println("${absentee.memberName},${domain},member,缺席,,")
+                val substitute = (absentee.substituteFor ?: "").replace(",", "，")
+                writer.println("${absentee.memberName},${domain},member,缺席,,${substitute}")
             }
 
             // Export guests with profession (prefer DB bni_anchor_guests, fallback to CSV/in-memory)

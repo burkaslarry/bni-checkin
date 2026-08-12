@@ -532,7 +532,7 @@ function ImportPageInner() {
             ) : (
             <ol style={{ margin: 0, paddingLeft: "1.5rem", lineHeight: 2, color: "var(--text-muted)", fontSize: "0.95rem" }}>
               <li><strong>下載 CSV 範本</strong> — 欄位：<code>substitute_name</code>, <code>member_name</code>, <code>event_date</code></li>
-              <li><strong>填寫替代人名單</strong> — 格式同 WhatsApp「替代人名單」（替代人 / 被替代會員）</li>
+              <li><strong>填寫替代人名單</strong> — 格式同 WhatsApp「替代人名單」（Wendy Cheung / Zoe）；會員可填簡稱，系統會對應全名如 Zoe Wu</li>
               <li><strong>儲存為 UTF-8 CSV</strong> 並上傳；簽到頁會顯示「Wendy Cheung / Zoe」</li>
             </ol>
             )}

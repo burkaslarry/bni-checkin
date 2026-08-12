@@ -290,7 +290,7 @@ export function WhatsAppMeetingImportPanel({
             <>
               <h3 style={{ fontSize: "1rem" }}>替代人預覽 ({parsed.substitutes.length})</h3>
               <p className="hint" style={{ marginBottom: "0.75rem" }}>
-                簽到頁會顯示 <strong>替代人 / 會員</strong>（例如 Wendy Cheung / Zoe）
+                簽到頁會顯示 <strong>會員 (替代人)</strong>（例如 Zoe Wu (Wendy Cheung)）
               </p>
               <table style={{ width: "100%", fontSize: "0.875rem", borderCollapse: "collapse" }}>
                 <thead>
