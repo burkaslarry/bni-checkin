@@ -308,6 +308,13 @@ class EventDbService(
     internal fun checkInOnEventDate(checkInTime: OffsetDateTime, eventDate: LocalDate): Boolean =
         checkInTime.atZoneSameInstant(hkt).toLocalDate() == eventDate
 
+    /** Live report only shows check-ins once the event calendar day has started (HKT). */
+    internal fun isReportCheckInVisible(
+        checkInTime: OffsetDateTime,
+        eventDate: LocalDate,
+        today: LocalDate = LocalDate.now(hkt)
+    ): Boolean = !today.isBefore(eventDate) && checkInOnEventDate(checkInTime, eventDate)
+
     fun getReportData(eventId: Int? = null, chapterTag: String? = null, chapterId: Int? = null): ReportData? {
         val chapterId = resolveChapterId(chapterTag, chapterId)
         val event = if (eventId != null) {
@@ -324,7 +331,7 @@ class EventDbService(
         val attendances = attendanceRepository.findByEventId(resolvedEventId)
 
         fun isValidMemberCheckIn(att: Attendance): Boolean =
-            att.status != "absent" && checkInOnEventDate(att.checkInTime, eventDate)
+            att.status != "absent" && isReportCheckInVisible(att.checkInTime, eventDate)
 
         // Treat "absent" rows as absentees (not checked-in). Ignore check-ins from other calendar days.
         val checkedInMemberIds = attendances.filter { isValidMemberCheckIn(it) }.map { it.memberId }.toSet()
@@ -355,7 +362,7 @@ class EventDbService(
         // If DB already has explicit absent rows, use them; otherwise derive absentees by missing checked-ins.
         // Rows marked checked-in on the wrong calendar day count as absent on the live report.
         val absentFromDb = attendances
-            .filter { it.status == "absent" || !checkInOnEventDate(it.checkInTime, eventDate) }
+            .filter { it.status == "absent" || !isReportCheckInVisible(it.checkInTime, eventDate) }
             .map { att ->
                 val memberName = memberIdToName[att.memberId] ?: "Unknown (ID=${att.memberId})"
                 AttendanceRecord(memberName = memberName, status = "absent", role = "MEMBER")
@@ -404,8 +411,9 @@ class EventDbService(
      */
     fun listGuestsCheckedInForReport(eventDateStr: String, chapterTag: String? = null): List<Guest> {
         val eventDate = try { LocalDate.parse(eventDateStr.trim()) } catch (_: Exception) { return emptyList() }
+        val today = LocalDate.now(hkt)
         return guestsCheckedInForEventCalendarDay(eventDateStr, resolveChapterId(chapterTag))
-            .filter { g -> g.checkInTime != null && checkInOnEventDate(g.checkInTime!!, eventDate) }
+            .filter { g -> g.checkInTime != null && isReportCheckInVisible(g.checkInTime!!, eventDate, today) }
     }
 
     private fun guestsCheckedInForEventCalendarDay(eventDateStr: String, chapterId: Int): List<Guest> {
@@ -426,10 +434,11 @@ class EventDbService(
     /** Pre-registered guests for [eventDateStr] with no valid same-day check-in → absent on report. */
     private fun loadGuestAbsentRecords(eventDateStr: String, chapterId: Int): List<AttendanceRecord> {
         val eventDate = try { LocalDate.parse(eventDateStr.trim()) } catch (_: Exception) { return emptyList() }
+        val today = LocalDate.now(hkt)
         return try {
             guestRepository.findGuestsByChapterIdAndEventDateTrimmed(chapterId, eventDateStr)
                 .filter { g ->
-                    g.checkInTime == null || !checkInOnEventDate(g.checkInTime!!, eventDate)
+                    g.checkInTime == null || !isReportCheckInVisible(g.checkInTime!!, eventDate, today)
                 }
                 .map { AttendanceRecord(memberName = it.name, status = "absent", role = "GUEST") }
                 .sortedBy { it.memberName }
@@ -441,10 +450,11 @@ class EventDbService(
     /** Guests registered for [eventDateStr] with `check_in_time` set → live-report attendee rows. */
     private fun loadGuestAttendanceRecords(eventDateStr: String, onTimeCutoff: LocalTime, chapterId: Int): List<AttendanceRecord> {
         val eventDate = try { LocalDate.parse(eventDateStr.trim()) } catch (_: Exception) { return emptyList() }
+        val today = LocalDate.now(hkt)
         val timeFmt = DateTimeFormatter.ofPattern("HH:mm:ss")
         return try {
             guestsCheckedInForEventCalendarDay(eventDateStr, chapterId)
-                .filter { g -> checkInOnEventDate(g.checkInTime!!, eventDate) }
+                .filter { g -> g.checkInTime != null && isReportCheckInVisible(g.checkInTime!!, eventDate, today) }
                 .map { g ->
                 val lt = g.checkInTime!!.atZoneSameInstant(hkt).toLocalTime()
                 val status =
@@ -596,7 +606,7 @@ class EventDbService(
         val eventId = event.id!!.toInt()
 
         val memberId = resolveMemberId(request.attendeeName, chapterId) ?: return
-        val checkInTime = parseCheckInTimeToOffset(request.checkedInAt, eventDate)
+        val checkInTime = parseCheckInTimeToOffset(request.checkedInAt, LocalDate.now(hkt))
             ?: OffsetDateTime.now(hkt)
 
         val normalized = normalizeStatus(request.status)
