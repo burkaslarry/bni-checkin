@@ -1294,11 +1294,13 @@ export async function bulkImport(
  * Bulk import observers. POST /api/bulk-import-observers.
  */
 export async function bulkImportObservers(
-  records: ImportRecord[]
+  records: ImportRecord[],
+  chapter?: string | null,
+  chapterId?: number | null
 ): Promise<ImportResult> {
   try {
     const response = await fetchWithRetry(
-      withChapterQuery(`${API_BASE}/api/bulk-import-observers`),
+      withChapterQuery(`${API_BASE}/api/bulk-import-observers`, chapter, chapterId),
       {
         method: "POST",
         headers: jsonHeaders,

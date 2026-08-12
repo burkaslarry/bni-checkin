@@ -54,7 +54,7 @@ export default function ObserversPage() {
 }
 
 function ObserversPageInner() {
-  const { adminHref, isClientMode, chapter } = useChapter();
+  const { adminHref, isClientMode, chapter, chapterTag, chapterId } = useChapter();
   const [observers, setObservers] = useState<ObserverInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedEventDate, setSelectedEventDate] = useState<string>("all");
@@ -179,7 +179,7 @@ function ObserversPageInner() {
         profession: row.profession,
         eventDate: row.eventDate,
       }));
-      const result = await bulkImportObservers(records);
+      const result = await bulkImportObservers(records, chapterTag, chapterId);
       showNotification(
         `匯入完成：新增 ${result.inserted}、更新 ${result.updated}、失敗 ${result.failed}`,
         result.failed > 0 ? "error" : "success"

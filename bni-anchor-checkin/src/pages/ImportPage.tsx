@@ -5,15 +5,15 @@ import Papa from "papaparse";
 import {
   bulkImport,
   ImportRecord,
-  getEventForDate,
   getCurrentEvent,
-  createEvent,
   activateEvent,
   type EventData,
 } from "../api";
 import { AnchorOnlyNotice } from "../components/AnchorOnlyNotice";
 import { ClientAuthGate } from "../components/ClientAuthGate";
+import { WhatsAppMeetingImportPanel } from "../components/WhatsAppMeetingImportPanel";
 import { useChapter } from "../chapterContext";
+import { ensureEventForDate } from "../lib/meetingEventImport";
 
 type ImportType = "member" | "guest";
 
@@ -53,36 +53,6 @@ const pickValue = (row: Record<string, unknown>, aliases: string[]): string => {
   return "";
 };
 
-const eventTitleForChapter = (chapterLabel: string, date: string) =>
-  `BNI ${chapterLabel} Regular Meeting ${date}`;
-
-async function ensureEventForDate(
-  date: string,
-  chapterTag: string,
-  chapterId: number,
-  chapterLabel: string
-): Promise<{ id: number; name: string }> {
-  const normalized = normalizeEventDate(date);
-  let event = await getEventForDate(normalized, chapterTag, chapterId);
-  if (!event) {
-    await createEvent(
-      eventTitleForChapter(chapterLabel, normalized),
-      normalized,
-      "07:00",
-      "09:00",
-      "06:30",
-      "07:05",
-      chapterTag,
-      chapterId
-    );
-    event = await getEventForDate(normalized, chapterTag, chapterId);
-    if (!event) {
-      throw new Error(`無法建立活動 ${normalized}`);
-    }
-  }
-  return event;
-}
-
 export default function ImportPage() {
   return (
     <ClientAuthGate>
@@ -102,28 +72,12 @@ function ImportPageInner() {
   const [eventLoading, setEventLoading] = useState(true);
   const [notification, setNotification] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
 
-  const preferredGuestEventDate =
-    targetEvent?.date || (chapterTag === "anchor" ? "2026-08-06" : "");
+  const preferredGuestEventDate = targetEvent?.date || "";
 
   const refreshTargetEvent = useCallback(async () => {
     setEventLoading(true);
     try {
-      const anchorDefaultDate = chapterTag === "anchor" ? "2026-08-06" : null;
       let current = await getCurrentEvent(chapterTag, chapterId);
-
-      if (anchorDefaultDate) {
-        const eventForDate = await ensureEventForDate(
-          anchorDefaultDate,
-          chapterTag,
-          chapterId,
-          chapterLabel
-        );
-        if (!current || current.date !== anchorDefaultDate) {
-          await activateEvent(eventForDate.id, true, chapterTag, chapterId);
-          current = await getCurrentEvent(chapterTag, chapterId);
-        }
-      }
-
       setTargetEvent(current);
     } catch (error) {
       console.error("Failed to load target event:", error);
@@ -235,7 +189,12 @@ function ImportPageInner() {
         ];
 
         for (const d of eventDates) {
-          const event = await ensureEventForDate(d, chapterTag, chapterId, chapterLabel);
+          const event = await ensureEventForDate(
+            normalizeEventDate(d),
+            chapterTag,
+            chapterId,
+            chapterLabel
+          );
           if (d === guestEventDateDefault || d === preferredGuestEventDate) {
             await activateEvent(event.id, true, chapterTag, chapterId);
           }
@@ -551,6 +510,13 @@ function ImportPageInner() {
           </div>
         )}
       </section>
+
+      <WhatsAppMeetingImportPanel
+        chapterTag={chapterTag}
+        chapterId={chapterId}
+        chapterLabel={chapterLabel}
+        onImported={() => void refreshTargetEvent()}
+      />
 
       <footer className="site-footer">
         <p>
