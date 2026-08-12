@@ -1,6 +1,8 @@
 # Fix Render: Login + Auto-Deploy
 
-Steps to fix **Render CLI login** (expired token) and **auto-deploy not triggering** when you push to GitHub.
+Steps to fix **Render CLI login** (expired token) and configure **deploy behavior** when you push to GitHub.
+
+> **Current policy (BNI Anchor backend):** Render `autoDeployTrigger` is **off**. GitHub CI (`.github/workflows/ci.yml`) runs tests only and does **not** deploy. Production backend deploys use `./scripts/deploy-render-production.sh` after SRAA gate.
 
 ---
 

@@ -1,5 +1,9 @@
 name: CI
 
+# Tests only — does NOT deploy to Render or Vercel.
+# Backend production deploy: ./scripts/deploy-render-production.sh (manual, after SRAA gate).
+# Frontend production deploy: ./scripts/deploy-vercel-production.sh
+
 on:
   pull_request:
   push:
