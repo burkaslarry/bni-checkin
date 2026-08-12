@@ -5,6 +5,7 @@ import Papa from "papaparse";
 import {
   bulkImport,
   bulkImportObservers,
+  bulkSetPlannedSubstitutes,
   ImportRecord,
   getCurrentEvent,
   activateEvent,
@@ -14,10 +15,11 @@ import { AnchorOnlyNotice } from "../components/AnchorOnlyNotice";
 import { ClientAuthGate } from "../components/ClientAuthGate";
 import { WhatsAppMeetingImportPanel } from "../components/WhatsAppMeetingImportPanel";
 import { ObserverManagementPanel } from "../components/ObserverManagementPanel";
+import { SubstituteManagementPanel } from "../components/SubstituteManagementPanel";
 import { useChapter } from "../chapterContext";
 import { ensureEventForDate } from "../lib/meetingEventImport";
 
-type ImportType = "member" | "guest" | "observer";
+type ImportType = "member" | "guest" | "observer" | "substitute";
 
 type ImportRow = {
   name: string;
@@ -31,6 +33,8 @@ type ImportRow = {
   membershipId?: string;
   professionCode?: string;
   position?: string;
+  substituteName?: string;
+  substituteMemberName?: string;
 };
 
 const normalizeHeader = (key: string): string =>
@@ -69,7 +73,7 @@ function ImportPageInner() {
   const chapterLabel = chapter?.displayName?.replace(/^BNI\s+/i, "") || chapterTag || "Anchor";
   const initialType = searchParams.get("type");
   const [importType, setImportType] = useState<ImportType>(
-    initialType === "member" || initialType === "guest" || initialType === "observer"
+    initialType === "member" || initialType === "guest" || initialType === "observer" || initialType === "substitute"
       ? initialType
       : "guest"
   );
@@ -79,6 +83,7 @@ function ImportPageInner() {
   const [targetEvent, setTargetEvent] = useState<EventData | null>(null);
   const [eventLoading, setEventLoading] = useState(true);
   const [observerPanelKey, setObserverPanelKey] = useState(0);
+  const [substitutePanelKey, setSubstitutePanelKey] = useState(0);
   const [notification, setNotification] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
 
   const preferredGuestEventDate = targetEvent?.date || "";
@@ -103,6 +108,10 @@ function ImportPageInner() {
   useEffect(() => {
     if (initialType === "observer") {
       const el = document.getElementById("observer-management");
+      el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    if (initialType === "substitute") {
+      const el = document.getElementById("substitute-management");
       el?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }, [initialType]);
@@ -131,10 +140,25 @@ function ImportPageInner() {
             membershipId: pickValue(row, ["membership_id", "membershipid", "id"]),
             professionCode: pickValue(row, ["profession_code", "professioncode", "code"]),
             position: pickValue(row, ["position", "title"]),
+            substituteName: pickValue(row, ["substitute_name", "substitutename", "substitute"]),
+            substituteMemberName: pickValue(row, ["member_name", "membername", "member"]),
           }));
           const validationErrors: string[] = [];
 
           data.forEach((row, index) => {
+            if (importType === "substitute") {
+              if (!row.substituteName) {
+                validationErrors.push(`第 ${index + 1} 行：缺少替代人姓名 (substitute_name)`);
+              }
+              if (!row.substituteMemberName) {
+                validationErrors.push(`第 ${index + 1} 行：缺少會員姓名 (member_name)`);
+              }
+              const ed = normalizeEventDate((row.eventDate || "").trim());
+              if (!ed && !preferredGuestEventDate) {
+                validationErrors.push(`第 ${index + 1} 行：缺少活動日期 (event_date)`);
+              }
+              return;
+            }
             if (!row.name) {
               validationErrors.push(`第 ${index + 1} 行：缺少姓名 (Name)`);
             }
@@ -199,12 +223,12 @@ function ImportPageInner() {
 
     try {
       let eventDateDefault = preferredGuestEventDate;
-      if ((importType === "guest" || importType === "observer") && !eventDateDefault) {
+      if ((importType === "guest" || importType === "observer" || importType === "substitute") && !eventDateDefault) {
         const currentEvent = await getCurrentEvent(chapterTag, chapterId);
         if (currentEvent?.date) eventDateDefault = currentEvent.date;
       }
 
-      if (importType === "guest" || importType === "observer") {
+      if (importType === "guest" || importType === "observer" || importType === "substitute") {
         const eventDates = [
           ...new Set(
             importData
@@ -226,6 +250,39 @@ function ImportPageInner() {
             await activateEvent(event.id, true, chapterTag, chapterId);
           }
         }
+      }
+
+      if (importType === "substitute") {
+        const byDate = new Map<string, { substituteName: string; memberName: string }[]>();
+        for (const row of importData) {
+          const eventDate = normalizeEventDate((row.eventDate || eventDateDefault).trim());
+          if (!eventDate) continue;
+          const list = byDate.get(eventDate) ?? [];
+          list.push({
+            substituteName: (row.substituteName || "").trim(),
+            memberName: (row.substituteMemberName || "").trim(),
+          });
+          byDate.set(eventDate, list);
+        }
+        let totalUpdated = 0;
+        let totalFailed = 0;
+        for (const [eventDate, entries] of byDate) {
+          await ensureEventForDate(eventDate, chapterTag, chapterId, chapterLabel);
+          const result = await bulkSetPlannedSubstitutes(eventDate, entries, chapterTag, chapterId);
+          totalUpdated += result.updated;
+          totalFailed += result.failed;
+        }
+        setImportData([]);
+        setErrors([]);
+        setSubstitutePanelKey((k) => k + 1);
+        await refreshTargetEvent();
+        showNotification(
+          totalFailed === 0
+            ? `✅ 替代人匯入：設定 ${totalUpdated} 對`
+            : `⚠️ 替代人匯入：設定 ${totalUpdated} 對、失敗 ${totalFailed}`,
+          totalFailed === 0 ? "success" : "info"
+        );
+        return;
       }
 
       if (importType === "observer") {
@@ -318,6 +375,10 @@ function ImportPageInner() {
       headers = "name,profession,event_date";
       sampleRow = `\nDr. Amy Chan,Education Consultant,${today}`;
       label = "觀察員";
+    } else if (importType === "substitute") {
+      headers = "substitute_name,member_name,event_date";
+      sampleRow = `\nWendy Cheung,Zoe,${today}`;
+      label = "替代人";
     } else {
       headers = "name,profession,phone,referrer,event_date";
       sampleRow = `\nJane Smith,Marketing Consultant,87654321,Larry Lo,${today}`;
@@ -423,10 +484,22 @@ function ImportPageInner() {
               />
               <span className="radio-label">匯入觀察員 👁️</span>
             </label>
+            <label className="radio-button">
+              <input
+                type="radio"
+                checked={importType === "substitute"}
+                onChange={() => {
+                  setImportType("substitute");
+                  setImportData([]);
+                  setErrors([]);
+                }}
+              />
+              <span className="radio-label">匯入替代人 🔄</span>
+            </label>
           </div>
         </div>
 
-        {(importType === "guest" || importType === "observer") && (
+        {(importType === "guest" || importType === "observer" || importType === "substitute") && (
           <div
             style={{
               marginBottom: "2rem",
@@ -437,7 +510,11 @@ function ImportPageInner() {
             }}
           >
             <h3 style={{ margin: "0 0 1rem 0", fontSize: "1rem", color: "var(--text)" }}>
-              {importType === "guest" ? "📋 嘉賓匯入步驟 Reminder" : "📋 觀察員 CSV 匯入步驟"}
+              {importType === "guest"
+                ? "📋 嘉賓匯入步驟 Reminder"
+                : importType === "observer"
+                  ? "📋 觀察員 CSV 匯入步驟"
+                  : "📋 替代人 CSV 匯入步驟"}
             </h3>
             {importType === "guest" ? (
             <ol style={{ margin: 0, paddingLeft: "1.5rem", lineHeight: 2, color: "var(--text-muted)", fontSize: "0.95rem" }}>
@@ -446,11 +523,17 @@ function ImportPageInner() {
               <li><strong>將步驟 2 的內容儲存為 CSV 格式</strong> Save work at step 2 as CSV format</li>
               <li><strong>上傳步驟 3 的 CSV 檔案</strong> Upload CSV from step 3</li>
             </ol>
-            ) : (
+            ) : importType === "observer" ? (
             <ol style={{ margin: 0, paddingLeft: "1.5rem", lineHeight: 2, color: "var(--text-muted)", fontSize: "0.95rem" }}>
               <li><strong>下載 CSV 範本</strong> — 欄位：<code>name</code>, <code>profession</code>, <code>event_date</code></li>
               <li><strong>填寫觀察員名單</strong> — 同名同日期會更新專業領域（不會重置出席狀態）</li>
               <li><strong>儲存為 UTF-8 CSV</strong> 並上傳</li>
+            </ol>
+            ) : (
+            <ol style={{ margin: 0, paddingLeft: "1.5rem", lineHeight: 2, color: "var(--text-muted)", fontSize: "0.95rem" }}>
+              <li><strong>下載 CSV 範本</strong> — 欄位：<code>substitute_name</code>, <code>member_name</code>, <code>event_date</code></li>
+              <li><strong>填寫替代人名單</strong> — 格式同 WhatsApp「替代人名單」（替代人 / 被替代會員）</li>
+              <li><strong>儲存為 UTF-8 CSV</strong> 並上傳；簽到頁會顯示「Wendy Cheung / Zoe」</li>
             </ol>
             )}
             <p className="hint" style={{ marginTop: "0.75rem", marginBottom: 0, color: "var(--text-muted)" }}>
@@ -469,7 +552,9 @@ function ImportPageInner() {
               ? "會員範本：name, profession, chapter（chapter 可留空，預設為目前登入 chapter）"
               : importType === "observer"
                 ? "觀察員範本：name, profession, event_date"
-                : "嘉賓範本：name, profession, phone, referrer, event_date"}
+                : importType === "substitute"
+                  ? "替代人範本：substitute_name, member_name, event_date"
+                  : "嘉賓範本：name, profession, phone, referrer, event_date"}
           </p>
         </div>
 
@@ -605,7 +690,13 @@ function ImportPageInner() {
         onImported={() => {
           void refreshTargetEvent();
           setObserverPanelKey((k) => k + 1);
+          setSubstitutePanelKey((k) => k + 1);
         }}
+      />
+
+      <SubstituteManagementPanel
+        key={substitutePanelKey}
+        onChanged={() => setSubstitutePanelKey((k) => k + 1)}
       />
 
       <ObserverManagementPanel

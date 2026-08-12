@@ -489,6 +489,7 @@ class AttendanceController(
                     ?: return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body(mapOf("status" to "error", "message" to "尚未設定當前活動"))
                 val eventDate = activeEvent.date
+                rejectIfNotEventDay(eventDate)?.let { return it }
                 val type = request.type.lowercase()
 
                 if (type in listOf("guest", "vip", "speaker")) {
@@ -975,6 +976,8 @@ class AttendanceController(
 
         val isGuestType = request.attendeeType.lowercase() in listOf("guest", "vip", "speaker")
 
+        rejectIfNotEventDay(request.eventDate)?.let { return it }
+
         if (isGuestType) {
             if (eventDbService == null || guestRepository == null) {
                 return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
@@ -1331,6 +1334,18 @@ class AttendanceController(
                 if (m != null) java.time.LocalTime.parse(m.groupValues[1]) else null
             }
         }
+    }
+
+    /** Reject check-in when today (HKT) is not the event calendar day. */
+    private fun rejectIfNotEventDay(eventDate: String): ResponseEntity<Map<String, String>>? {
+        val hkt = java.time.ZoneId.of("Asia/Hong_Kong")
+        val today = java.time.LocalDate.now(hkt)
+        val target = try { java.time.LocalDate.parse(eventDate.trim()) } catch (_: Exception) { return null }
+        if (today != target) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(mapOf("status" to "error", "message" to "簽到僅限活動當日 ($eventDate)"))
+        }
+        return null
     }
 
     /** Check if a timestamp belongs to eventDate in HKT. */
