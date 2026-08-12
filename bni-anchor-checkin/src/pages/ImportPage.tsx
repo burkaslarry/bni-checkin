@@ -83,7 +83,6 @@ function ImportPageInner() {
   const [targetEvent, setTargetEvent] = useState<EventData | null>(null);
   const [eventLoading, setEventLoading] = useState(true);
   const [observerPanelKey, setObserverPanelKey] = useState(0);
-  const [substitutePanelKey, setSubstitutePanelKey] = useState(0);
   const [notification, setNotification] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
 
   const preferredGuestEventDate = targetEvent?.date || "";
@@ -274,7 +273,6 @@ function ImportPageInner() {
         }
         setImportData([]);
         setErrors([]);
-        setSubstitutePanelKey((k) => k + 1);
         await refreshTargetEvent();
         showNotification(
           totalFailed === 0
@@ -690,19 +688,19 @@ function ImportPageInner() {
         onImported={() => {
           void refreshTargetEvent();
           setObserverPanelKey((k) => k + 1);
-          setSubstitutePanelKey((k) => k + 1);
         }}
       />
 
-      <SubstituteManagementPanel
-        key={substitutePanelKey}
-        onChanged={() => setSubstitutePanelKey((k) => k + 1)}
-      />
+      {importType === "substitute" && (
+        <SubstituteManagementPanel onChanged={() => void refreshTargetEvent()} />
+      )}
 
-      <ObserverManagementPanel
-        key={observerPanelKey}
-        onChanged={() => setObserverPanelKey((k) => k + 1)}
-      />
+      {importType === "observer" && (
+        <ObserverManagementPanel
+          key={observerPanelKey}
+          onChanged={() => setObserverPanelKey((k) => k + 1)}
+        />
+      )}
 
       <footer className="site-footer">
         <p>
