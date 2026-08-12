@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useDropzone } from "react-dropzone";
 import Papa from "papaparse";
 import {
   bulkImport,
+  bulkImportObservers,
   ImportRecord,
   getCurrentEvent,
   activateEvent,
@@ -12,10 +13,11 @@ import {
 import { AnchorOnlyNotice } from "../components/AnchorOnlyNotice";
 import { ClientAuthGate } from "../components/ClientAuthGate";
 import { WhatsAppMeetingImportPanel } from "../components/WhatsAppMeetingImportPanel";
+import { ObserverManagementPanel } from "../components/ObserverManagementPanel";
 import { useChapter } from "../chapterContext";
 import { ensureEventForDate } from "../lib/meetingEventImport";
 
-type ImportType = "member" | "guest";
+type ImportType = "member" | "guest" | "observer";
 
 type ImportRow = {
   name: string;
@@ -63,13 +65,20 @@ export default function ImportPage() {
 
 function ImportPageInner() {
   const { chapterTag, chapterId, adminHref, isClientMode, chapter } = useChapter();
+  const [searchParams] = useSearchParams();
   const chapterLabel = chapter?.displayName?.replace(/^BNI\s+/i, "") || chapterTag || "Anchor";
-  const [importType, setImportType] = useState<ImportType>("guest");
+  const initialType = searchParams.get("type");
+  const [importType, setImportType] = useState<ImportType>(
+    initialType === "member" || initialType === "guest" || initialType === "observer"
+      ? initialType
+      : "guest"
+  );
   const [importData, setImportData] = useState<ImportRow[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
   const [isImporting, setIsImporting] = useState(false);
   const [targetEvent, setTargetEvent] = useState<EventData | null>(null);
   const [eventLoading, setEventLoading] = useState(true);
+  const [observerPanelKey, setObserverPanelKey] = useState(0);
   const [notification, setNotification] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
 
   const preferredGuestEventDate = targetEvent?.date || "";
@@ -91,66 +100,84 @@ function ImportPageInner() {
     refreshTargetEvent();
   }, [refreshTargetEvent]);
 
+  useEffect(() => {
+    if (initialType === "observer") {
+      const el = document.getElementById("observer-management");
+      el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [initialType]);
+
   const showNotification = (message: string, type: "success" | "error" | "info") => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 5000);
   };
 
+  const parseCsvFile = useCallback(
+    (file: File) => {
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          const rawData = results.data as Record<string, unknown>[];
+          const data: ImportRow[] = rawData.map((row) => ({
+            name: pickValue(row, ["name"]),
+            profession: pickValue(row, ["profession", "category"]),
+            chapter: pickValue(row, ["chapter"]) || "",
+            email: pickValue(row, ["email"]) || "",
+            phone: pickValue(row, ["phone", "phone_number", "phonenumber"]) || "",
+            referrer: pickValue(row, ["referrer"]),
+            standing: pickValue(row, ["standing"]),
+            eventDate: pickValue(row, ["event_date", "eventdate"]),
+            membershipId: pickValue(row, ["membership_id", "membershipid", "id"]),
+            professionCode: pickValue(row, ["profession_code", "professioncode", "code"]),
+            position: pickValue(row, ["position", "title"]),
+          }));
+          const validationErrors: string[] = [];
+
+          data.forEach((row, index) => {
+            if (!row.name) {
+              validationErrors.push(`第 ${index + 1} 行：缺少姓名 (Name)`);
+            }
+            if (!row.profession) {
+              validationErrors.push(`第 ${index + 1} 行：缺少專業領域 (profession)`);
+            }
+            if (importType === "member") {
+              if (row.chapter && !/^[a-z][a-z0-9_-]*$/i.test(row.chapter.trim())) {
+                validationErrors.push(`第 ${index + 1} 行：無效的 chapter（例如 anchor、amax）`);
+              }
+              if (row.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) {
+                validationErrors.push(`第 ${index + 1} 行：無效的電郵格式`);
+              }
+            }
+            if (importType === "observer") {
+              const ed = normalizeEventDate((row.eventDate || "").trim());
+              if (!ed && !preferredGuestEventDate) {
+                validationErrors.push(`第 ${index + 1} 行：缺少活動日期 (event_date)`);
+              }
+            }
+          });
+
+          setErrors(validationErrors);
+          setImportData(data);
+
+          if (validationErrors.length > 0) {
+            showNotification(`發現 ${validationErrors.length} 個格式錯誤`, "error");
+          } else {
+            showNotification(`成功讀取 ${data.length} 筆資料`, "success");
+          }
+        },
+        error: (error) => {
+          showNotification(`讀取失敗: ${error.message}`, "error");
+        },
+      });
+    },
+    [importType, preferredGuestEventDate]
+  );
+
   const onDrop = (acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
     if (!file) return;
-
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        const rawData = results.data as Record<string, unknown>[];
-        const data: ImportRow[] = rawData.map((row) => ({
-          name: pickValue(row, ["name"]),
-          profession: pickValue(row, ["profession", "category"]),
-          chapter: pickValue(row, ["chapter"]) || "",
-          email: pickValue(row, ["email"]) || "",
-          phone: pickValue(row, ["phone", "phone_number", "phonenumber"]) || "",
-          referrer: pickValue(row, ["referrer"]),
-          standing: pickValue(row, ["standing"]),
-          eventDate: pickValue(row, ["event_date", "eventdate"]),
-          membershipId: pickValue(row, ["membership_id", "membershipid", "id"]),
-          professionCode: pickValue(row, ["profession_code", "professioncode", "code"]),
-          position: pickValue(row, ["position", "title"])
-        }));
-        const validationErrors: string[] = [];
-
-        // Validate data
-        data.forEach((row, index) => {
-          if (!row.name) {
-            validationErrors.push(`第 ${index + 1} 行：缺少姓名 (Name)`);
-          }
-          if (!row.profession) {
-            validationErrors.push(`第 ${index + 1} 行：缺少專業領域 (profession)`);
-          }
-          if (row.chapter && !/^[a-z][a-z0-9_-]*$/i.test(row.chapter.trim())) {
-            validationErrors.push(`第 ${index + 1} 行：無效的 chapter（例如 anchor、amax）`);
-          }
-          
-          // Validate email format if provided
-          if (row.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) {
-            validationErrors.push(`第 ${index + 1} 行：無效的電郵格式`);
-          }
-        });
-
-        setErrors(validationErrors);
-        setImportData(data);
-
-        if (validationErrors.length > 0) {
-          showNotification(`發現 ${validationErrors.length} 個格式錯誤`, "error");
-        } else {
-          showNotification(`成功讀取 ${data.length} 筆資料`, "success");
-        }
-      },
-      error: (error) => {
-        showNotification(`讀取失敗: ${error.message}`, "error");
-      }
-    });
+    parseCsvFile(file);
   };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -171,18 +198,18 @@ function ImportPageInner() {
     setIsImporting(true);
 
     try {
-      let guestEventDateDefault = preferredGuestEventDate;
-      if (importType === "guest") {
-        if (!guestEventDateDefault) {
-          const currentEvent = await getCurrentEvent(chapterTag, chapterId);
-          if (currentEvent?.date) guestEventDateDefault = currentEvent.date;
-        }
+      let eventDateDefault = preferredGuestEventDate;
+      if ((importType === "guest" || importType === "observer") && !eventDateDefault) {
+        const currentEvent = await getCurrentEvent(chapterTag, chapterId);
+        if (currentEvent?.date) eventDateDefault = currentEvent.date;
+      }
 
+      if (importType === "guest" || importType === "observer") {
         const eventDates = [
           ...new Set(
             importData
               .map((r) =>
-                normalizeEventDate((r.eventDate || guestEventDateDefault).trim())
+                normalizeEventDate((r.eventDate || eventDateDefault).trim())
               )
               .filter(Boolean)
           ),
@@ -195,11 +222,33 @@ function ImportPageInner() {
             chapterId,
             chapterLabel
           );
-          if (d === guestEventDateDefault || d === preferredGuestEventDate) {
+          if (d === eventDateDefault || d === preferredGuestEventDate) {
             await activateEvent(event.id, true, chapterTag, chapterId);
           }
         }
       }
+
+      if (importType === "observer") {
+        const records: ImportRecord[] = importData.map((row) => ({
+          name: row.name,
+          profession: row.profession || "",
+          eventDate: normalizeEventDate((row.eventDate || eventDateDefault).trim()),
+        }));
+        const result = await bulkImportObservers(records, chapterTag, chapterId);
+        setImportData([]);
+        setErrors([]);
+        setObserverPanelKey((k) => k + 1);
+        await refreshTargetEvent();
+        showNotification(
+          result.failed === 0
+            ? `✅ 觀察員匯入：新增 ${result.inserted}、更新 ${result.updated}`
+            : `⚠️ 觀察員匯入：新增 ${result.inserted}、更新 ${result.updated}、失敗 ${result.failed}`,
+          result.failed === 0 ? "success" : "info"
+        );
+        return;
+      }
+
+      let guestEventDateDefault = eventDateDefault;
       const records: ImportRecord[] = importData.map((row) => {
         const rawDate =
           (row.eventDate || "").trim() ||
@@ -256,15 +305,25 @@ function ImportPageInner() {
   };
 
   const downloadTemplate = () => {
-    const headers = importType === "member"
-      ? "name,profession,chapter"
-      : "name,profession,phone,referrer,event_date";
-    
     const today = preferredGuestEventDate || new Date().toISOString().split("T")[0];
-    const sampleRow = importType === "member"
-      ? `\nJohn Doe,Software Development,${chapterTag || "anchor"}`
-      : `\nJane Smith,Marketing Consultant,87654321,Larry Lo,${today}`;
-    
+    let headers: string;
+    let sampleRow: string;
+    let label: string;
+
+    if (importType === "member") {
+      headers = "name,profession,chapter";
+      sampleRow = `\nJohn Doe,Software Development,${chapterTag || "anchor"}`;
+      label = "會員";
+    } else if (importType === "observer") {
+      headers = "name,profession,event_date";
+      sampleRow = `\nDr. Amy Chan,Education Consultant,${today}`;
+      label = "觀察員";
+    } else {
+      headers = "name,profession,phone,referrer,event_date";
+      sampleRow = `\nJane Smith,Marketing Consultant,87654321,Larry Lo,${today}`;
+      label = "嘉賓";
+    }
+
     const csvContent = headers + sampleRow;
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = window.URL.createObjectURL(blob);
@@ -273,7 +332,7 @@ function ImportPageInner() {
     link.download = `${importType}_template.csv`;
     link.click();
     window.URL.revokeObjectURL(url);
-    showNotification(`已下載 ${importType === "member" ? "會員" : "嘉賓"} 範本`, "success");
+    showNotification(`已下載${label}範本`, "success");
   };
 
   return (
@@ -297,9 +356,9 @@ function ImportPageInner() {
       <header className="site-header">
         <div>
         <p className="hint">{isClientMode ? `EventXP · ${chapter?.displayName || chapterTag}` : "EventXP for BNI Anchor"}</p>
-          <h1>📥 批量匯入會員或嘉賓資料</h1>
+          <h1>📥 批量匯入</h1>
           <p className="hint">
-            Bulk Import · chapter={chapterTag} (id={chapterId})
+            CSV 匯入會員、嘉賓、觀察員 · chapter={chapterTag} (id={chapterId})
             {importType === "member"
               ? "（會員會寫入此 chapter）"
               : eventLoading
@@ -323,7 +382,7 @@ function ImportPageInner() {
       <section className="section">
         <div className="section-header">
           <h2>CSV 批量匯入</h2>
-          <p className="hint">上傳 CSV 檔案以批量新增會員或嘉賓</p>
+          <p className="hint">上傳 CSV 檔案以批量新增會員、嘉賓或觀察員</p>
         </div>
 
         <div className="import-type-selector" style={{ marginBottom: "2rem" }}>
@@ -352,10 +411,22 @@ function ImportPageInner() {
               />
               <span className="radio-label">匯入嘉賓 🎫</span>
             </label>
+            <label className="radio-button">
+              <input
+                type="radio"
+                checked={importType === "observer"}
+                onChange={() => {
+                  setImportType("observer");
+                  setImportData([]);
+                  setErrors([]);
+                }}
+              />
+              <span className="radio-label">匯入觀察員 👁️</span>
+            </label>
           </div>
         </div>
 
-        {importType === "guest" && (
+        {(importType === "guest" || importType === "observer") && (
           <div
             style={{
               marginBottom: "2rem",
@@ -366,14 +437,22 @@ function ImportPageInner() {
             }}
           >
             <h3 style={{ margin: "0 0 1rem 0", fontSize: "1rem", color: "var(--text)" }}>
-              📋 嘉賓匯入步驟 Reminder
+              {importType === "guest" ? "📋 嘉賓匯入步驟 Reminder" : "📋 觀察員 CSV 匯入步驟"}
             </h3>
+            {importType === "guest" ? (
             <ol style={{ margin: 0, paddingLeft: "1.5rem", lineHeight: 2, color: "var(--text-muted)", fontSize: "0.95rem" }}>
               <li><strong>下載 CSV 範本</strong> Download CSV Template</li>
               <li><strong>編輯嘉賓名單與活動日期</strong> Edit guest list and EventDate（須與目標活動開始日期一致 match target event start date）</li>
               <li><strong>將步驟 2 的內容儲存為 CSV 格式</strong> Save work at step 2 as CSV format</li>
               <li><strong>上傳步驟 3 的 CSV 檔案</strong> Upload CSV from step 3</li>
             </ol>
+            ) : (
+            <ol style={{ margin: 0, paddingLeft: "1.5rem", lineHeight: 2, color: "var(--text-muted)", fontSize: "0.95rem" }}>
+              <li><strong>下載 CSV 範本</strong> — 欄位：<code>name</code>, <code>profession</code>, <code>event_date</code></li>
+              <li><strong>填寫觀察員名單</strong> — 同名同日期會更新專業領域（不會重置出席狀態）</li>
+              <li><strong>儲存為 UTF-8 CSV</strong> 並上傳</li>
+            </ol>
+            )}
             <p className="hint" style={{ marginTop: "0.75rem", marginBottom: 0, color: "var(--text-muted)" }}>
               匯入時會自動對應 <strong>{chapterTag}</strong> chapter 的活動；空白 event_date 會使用目前活動日期
               {preferredGuestEventDate ? `（${preferredGuestEventDate}）` : ""}。若該日活動不存在會自動建立並設為進行中。
@@ -386,9 +465,11 @@ function ImportPageInner() {
             📥 下載 CSV 範本
           </button>
           <p className="hint" style={{ textAlign: "center" }}>
-            {importType === "member" 
-              ? "會員範本：name, profession, chapter（chapter 可留空，預設為目前登入 chapter）" 
-              : "嘉賓範本包含：name, profession, phone, referrer, event_date"}
+            {importType === "member"
+              ? "會員範本：name, profession, chapter（chapter 可留空，預設為目前登入 chapter）"
+              : importType === "observer"
+                ? "觀察員範本：name, profession, event_date"
+                : "嘉賓範本：name, profession, phone, referrer, event_date"}
           </p>
         </div>
 
@@ -460,6 +541,9 @@ function ImportPageInner() {
                         <th style={{ padding: "0.5rem", textAlign: "left" }}>活動日期</th>
                       </>
                     )}
+                    {importType === "observer" && (
+                      <th style={{ padding: "0.5rem", textAlign: "left" }}>活動日期</th>
+                    )}
                     {importType === "member" && (
                       <>
                         <th style={{ padding: "0.5rem", textAlign: "left" }}>Chapter</th>
@@ -480,6 +564,9 @@ function ImportPageInner() {
                           <td style={{ padding: "0.5rem" }}>{row.eventDate || preferredGuestEventDate || "-"}</td>
                         </>
                       )}
+                      {importType === "observer" && (
+                        <td style={{ padding: "0.5rem" }}>{row.eventDate || preferredGuestEventDate || "-"}</td>
+                      )}
                       {importType === "member" && (
                         <>
                           <td style={{ padding: "0.5rem" }}>{row.chapter || chapterTag || "anchor"}</td>
@@ -490,7 +577,7 @@ function ImportPageInner() {
                   ))}
                   {importData.length > 10 && (
                     <tr>
-                      <td colSpan={importType === "guest" ? 6 : 6} style={{ padding: "0.5rem", textAlign: "center", fontStyle: "italic" }}>
+                      <td colSpan={6} style={{ padding: "0.5rem", textAlign: "center", fontStyle: "italic" }}>
                         ... 還有 {importData.length - 10} 筆資料
                       </td>
                     </tr>
@@ -515,7 +602,15 @@ function ImportPageInner() {
         chapterTag={chapterTag}
         chapterId={chapterId}
         chapterLabel={chapterLabel}
-        onImported={() => void refreshTargetEvent()}
+        onImported={() => {
+          void refreshTargetEvent();
+          setObserverPanelKey((k) => k + 1);
+        }}
+      />
+
+      <ObserverManagementPanel
+        key={observerPanelKey}
+        onChanged={() => setObserverPanelKey((k) => k + 1)}
       />
 
       <footer className="site-footer">

@@ -9,7 +9,7 @@ export function AnchorOnlyNotice() {
     <aside className="anchor-only-notice" role="note">
       <strong>此管理後台只應付 BNI Anchor</strong>
       <p>
-        你已以 <strong>BNI Anchor</strong> 登入：會員、嘉賓、活動簽到、報表與匯入皆以 Anchor 資料為準（
+        你已以 <strong>BNI Anchor</strong> 登入：CSV 匯入會員、嘉賓、觀察員、活動簽到、報表與匯入皆以 Anchor 資料為準（
         <code>chapter=anchor</code>）。
       </p>
       <p>

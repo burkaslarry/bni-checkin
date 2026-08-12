@@ -28,7 +28,7 @@ export function ClientAuthGate({ children }: { children: ReactNode }) {
           <div>
             <p className="hint">EventXP Admin</p>
             <h1>管理後台登入</h1>
-            <p className="hint">BNI Anchor 及其他 chapter 請由此登入</p>
+            <p className="hint">BNI Anchor 及其他 chapter 請由此登入；CSV 匯入會員、嘉賓、觀察員</p>
           </div>
         </header>
         <ClientAdminLoginPanel />

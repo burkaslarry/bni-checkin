@@ -279,16 +279,10 @@ export default function AdminPage() {
               <span className="hint">管理嘉賓資料</span>
             </Link>
 
-            <Link to={adminHref("/admin/observers")} className="nav-card" style={{ textDecoration: "none" }}>
-              <span className="nav-icon">👁️</span>
-              <strong className="nav-title">觀察員管理</strong>
-              <span className="hint">維護觀察員名單及匯出出席</span>
-            </Link>
-            
             <Link to={adminHref("/admin/import")} className="nav-card" style={{ textDecoration: "none" }}>
               <span className="nav-icon">📥</span>
               <strong className="nav-title">批量匯入</strong>
-              <span className="hint">CSV 批量新增會員/嘉賓</span>
+              <span className="hint">CSV 匯入會員、嘉賓、觀察員</span>
             </Link>
 
             <Link to={adminHref("/admin/public-guest")} className="nav-card" style={{ textDecoration: "none" }}>

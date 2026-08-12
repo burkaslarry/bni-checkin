@@ -229,7 +229,7 @@ function GuestsPageInner() {
             <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>⚠️</div>
             <h3 style={{ margin: "0 0 0.5rem 0", color: "#b91c1c" }}>無法載入嘉賓列表</h3>
             <p style={{ margin: "0 0 0.5rem 0", color: "#991b1b" }}>
-              請前往 <strong>📥 批量匯入</strong> 頁面，選擇 <strong>嘉賓</strong> 後上傳 CSV 匯入嘉賓資料。
+              請前往 <strong>📥 批量匯入</strong> 頁面，選擇 <strong>嘉賓</strong> 或貼上 WhatsApp 訊息匯入嘉賓資料。
             </p>
             <p style={{ margin: 0, fontSize: "0.9rem", color: "#7f1d1d" }}>
               Redirecting to import page in {redirectCountdown} seconds...
