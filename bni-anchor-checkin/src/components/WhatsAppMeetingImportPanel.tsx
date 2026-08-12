@@ -3,6 +3,7 @@ import {
   bulkImport,
   bulkImportObservers,
   activateEvent,
+  bulkSetPlannedSubstitutes,
   type ImportRecord,
 } from "../api";
 import { ensureEventForDate } from "../lib/meetingEventImport";
@@ -10,6 +11,7 @@ import {
   parseWhatsAppMeetingMessage,
   guestListToCsv,
   observerListToCsv,
+  substituteListToCsv,
   downloadCsv,
   type ParsedMeetingMessage,
 } from "../lib/parseWhatsAppMeetingMessage";
@@ -40,11 +42,11 @@ export function WhatsAppMeetingImportPanel({
   const handleExtract = () => {
     const result = parseWhatsAppMeetingMessage(message);
     setParsed(result);
-    if (result.errors.length > 0 && result.guests.length === 0 && result.observers.length === 0) {
+    if (result.errors.length > 0 && result.guests.length === 0 && result.observers.length === 0 && result.substitutes.length === 0) {
       showNotice(result.errors[0] ?? "解析失敗");
     } else {
       showNotice(
-        `已解析：嘉賓 ${result.guests.length} 位、觀察員 ${result.observers.length} 位` +
+        `已解析：嘉賓 ${result.guests.length} 位、觀察員 ${result.observers.length} 位、替代 ${result.substitutes.length} 對` +
           (result.eventDate ? `（${result.eventDate}）` : "")
       );
     }
@@ -63,13 +65,21 @@ export function WhatsAppMeetingImportPanel({
     );
   };
 
+  const handleDownloadSubstituteCsv = () => {
+    if (!parsed?.substitutes.length) return;
+    downloadCsv(
+      `substitute_list_${parsed.eventDate || "export"}.csv`,
+      substituteListToCsv(parsed.substitutes)
+    );
+  };
+
   const handleImportAll = async () => {
     if (!parsed?.eventDate) {
       showNotice("缺少活動日期，無法匯入");
       return;
     }
-    if (parsed.guests.length === 0 && parsed.observers.length === 0) {
-      showNotice("沒有可匯入的嘉賓或觀察員");
+    if (parsed.guests.length === 0 && parsed.observers.length === 0 && parsed.substitutes.length === 0) {
+      showNotice("沒有可匯入的嘉賓、觀察員或替代人");
       return;
     }
 
@@ -112,7 +122,23 @@ export function WhatsAppMeetingImportPanel({
         observerSummary = `觀察員 新增 ${observerResult.inserted}、更新 ${observerResult.updated}`;
       }
 
-      showNotice(`✅ 已匯入 ${parsed.eventDate}：${[guestSummary, observerSummary].filter(Boolean).join("；")}`);
+      let substituteSummary = "";
+      if (parsed.substitutes.length > 0) {
+        const subResult = await bulkSetPlannedSubstitutes(
+          parsed.eventDate,
+          parsed.substitutes.map((s) => ({
+            memberName: s.memberName,
+            substituteName: s.substituteName,
+          })),
+          chapterTag,
+          chapterId
+        );
+        substituteSummary = `替代人 設定 ${subResult.updated} 對`;
+      }
+
+      showNotice(
+        `✅ 已匯入 ${parsed.eventDate}：${[guestSummary, observerSummary, substituteSummary].filter(Boolean).join("；")}`
+      );
       setMessage("");
       setParsed(null);
       onImported?.();
@@ -169,14 +195,19 @@ export function WhatsAppMeetingImportPanel({
             📥 下載觀察員 CSV
           </button>
         )}
-        {parsed && (parsed.guests.length > 0 || parsed.observers.length > 0) && (
+        {parsed && parsed.substitutes.length > 0 && (
+          <button type="button" className="ghost-button" onClick={handleDownloadSubstituteCsv}>
+            📥 下載替代人 CSV
+          </button>
+        )}
+        {parsed && (parsed.guests.length > 0 || parsed.observers.length > 0 || parsed.substitutes.length > 0) && (
           <button
             type="button"
             className="button submit-button"
             onClick={() => void handleImportAll()}
             disabled={isWorking || !parsed.eventDate}
           >
-            {isWorking ? "⏳ 匯入中…" : "🚀 匯入資料庫（嘉賓 + 觀察員）"}
+            {isWorking ? "⏳ 匯入中…" : "🚀 匯入資料庫（嘉賓 + 觀察員 + 替代人）"}
           </button>
         )}
       </div>
@@ -236,7 +267,7 @@ export function WhatsAppMeetingImportPanel({
           {parsed.observers.length > 0 && (
             <>
               <h3 style={{ fontSize: "1rem" }}>觀察員預覽 ({parsed.observers.length})</h3>
-              <table style={{ width: "100%", fontSize: "0.875rem", borderCollapse: "collapse" }}>
+              <table style={{ width: "100%", fontSize: "0.875rem", borderCollapse: "collapse", marginBottom: "1.5rem" }}>
                 <thead>
                   <tr style={{ borderBottom: "2px solid var(--border-color)" }}>
                     <th style={{ padding: "0.5rem", textAlign: "left" }}>姓名</th>
@@ -248,6 +279,31 @@ export function WhatsAppMeetingImportPanel({
                     <tr key={o.name} style={{ borderBottom: "1px solid var(--border-color)" }}>
                       <td style={{ padding: "0.5rem" }}>{o.name}</td>
                       <td style={{ padding: "0.5rem" }}>{o.profession}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+
+          {parsed.substitutes.length > 0 && (
+            <>
+              <h3 style={{ fontSize: "1rem" }}>替代人預覽 ({parsed.substitutes.length})</h3>
+              <p className="hint" style={{ marginBottom: "0.75rem" }}>
+                簽到頁會顯示 <strong>替代人 / 會員</strong>（例如 Wendy Cheung / Zoe）
+              </p>
+              <table style={{ width: "100%", fontSize: "0.875rem", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ borderBottom: "2px solid var(--border-color)" }}>
+                    <th style={{ padding: "0.5rem", textAlign: "left" }}>替代人</th>
+                    <th style={{ padding: "0.5rem", textAlign: "left" }}>會員</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {parsed.substitutes.map((s) => (
+                    <tr key={`${s.substituteName}-${s.memberName}`} style={{ borderBottom: "1px solid var(--border-color)" }}>
+                      <td style={{ padding: "0.5rem" }}>{s.substituteName}</td>
+                      <td style={{ padding: "0.5rem" }}>{s.memberName}</td>
                     </tr>
                   ))}
                 </tbody>

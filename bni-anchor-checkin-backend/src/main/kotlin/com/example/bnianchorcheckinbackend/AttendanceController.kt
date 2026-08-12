@@ -1029,6 +1029,67 @@ class AttendanceController(
         }
     }
 
+    @GetMapping("/api/attendance/planned-substitutes")
+    @Operation(summary = "List pre-planned substitute pairs for an event date")
+    fun getPlannedSubstitutes(
+        @RequestParam eventDate: String,
+        @RequestParam(required = false) chapter: String?
+    ): ResponseEntity<Map<String, Any>> {
+        if (eventDbService == null) {
+            return ResponseEntity.ok(mapOf("substitutes" to emptyList<Any>()))
+        }
+        val list = try {
+            withDbRetry("getPlannedSubstitutes") {
+                eventDbService.getPlannedSubstitutes(eventDate, chapter)
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+        return ResponseEntity.ok(mapOf("substitutes" to list, "eventDate" to eventDate.trim()))
+    }
+
+    @PostMapping("/api/attendance/planned-substitutes")
+    @Operation(summary = "Bulk-set planned substitutes for an event date (WhatsApp 替代人名單)")
+    fun bulkSetPlannedSubstitutes(
+        @RequestBody entries: List<PlannedSubstituteEntry>,
+        @RequestParam(required = false) chapter: String?,
+        @RequestParam(required = false) eventDate: String?
+    ): ResponseEntity<ImportResult> {
+        if (eventDbService == null) {
+            return ResponseEntity.ok(
+                ImportResult(
+                    total = entries.size, inserted = 0, updated = 0, failed = entries.size,
+                    errors = listOf("需要資料庫連線")
+                )
+            )
+        }
+        val date = eventDate?.trim()?.takeIf { it.isNotEmpty() }
+            ?: entries.firstOrNull()?.eventDate?.trim()?.takeIf { it.isNotEmpty() }
+        if (date.isNullOrBlank()) {
+            return ResponseEntity.badRequest().body(
+                ImportResult(
+                    total = entries.size, inserted = 0, updated = 0, failed = entries.size,
+                    errors = listOf("eventDate is required")
+                )
+            )
+        }
+        return try {
+            val result = withDbRetry("bulkSetPlannedSubstitutes") {
+                eventDbService.bulkSetPlannedSubstitutes(date, entries, chapter)
+            }
+            attendanceWebSocketHandler?.broadcast(mapOf("type" to "attendance_updated"))
+            ResponseEntity.ok(result)
+        } catch (e: Exception) {
+            log.error("bulkSetPlannedSubstitutes failed", e)
+            ResponseEntity.ok(
+                ImportResult(
+                    total = entries.size, inserted = 0, updated = 0, failed = entries.size,
+                    errors = listOf(e.message ?: "Failed to save planned substitutes")
+                )
+            )
+        }
+    }
+
     @PostMapping("/api/attendance/substitute-for")
     @Operation(summary = "Set or clear substitute attendee name on a member attendance row")
     fun updateAttendanceSubstitute(

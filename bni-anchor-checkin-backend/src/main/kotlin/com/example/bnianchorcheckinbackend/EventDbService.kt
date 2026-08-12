@@ -574,7 +574,7 @@ class EventDbService(
     fun logAttendance(request: AttendanceLogRequest, chapterTag: String? = null, chapterId: Int? = null) {
         val chapterId = resolveChapterId(chapterTag, chapterId)
         val eventDate = try { LocalDate.parse(request.eventDate) } catch (_: Exception) { return }
-        val event = eventRepository.findByChapterIdAndEventDate(chapterId, eventDate) ?: return
+        val event = eventRepository.findByChapterIdAndEventDateAndDeletedAtIsNull(chapterId, eventDate) ?: return
         val eventId = event.id!!.toInt()
 
         val memberId = resolveMemberId(request.attendeeName, chapterId) ?: return
@@ -611,10 +611,100 @@ class EventDbService(
         val event = eventRepository.findByChapterIdAndEventDateAndDeletedAtIsNull(chapterId, eventDate) ?: return false
         val eventId = event.id!!.toInt()
         val memberId = resolveMemberId(memberName.trim(), chapterId) ?: return false
-        val existing = attendanceRepository.findByEventIdAndMemberId(eventId, memberId) ?: return false
+        val existing = ensureAttendanceRow(event, eventId, memberId, chapterId)
         existing.substituteFor = substituteName?.trim()?.takeIf { it.isNotEmpty() }
         attendanceRepository.save(existing)
         return true
+    }
+
+    /** Planned substitutes for an event (member slot → substitute name). */
+    fun getPlannedSubstitutes(eventDateStr: String, chapterTag: String? = null): List<Map<String, String>> {
+        val chapterId = resolveChapterId(chapterTag)
+        val eventDate = try { LocalDate.parse(eventDateStr.trim()) } catch (_: Exception) { return emptyList() }
+        val event = eventRepository.findByChapterIdAndEventDateAndDeletedAtIsNull(chapterId, eventDate) ?: return emptyList()
+        val eventId = event.id!!.toInt()
+        val membersById = memberRepository.findAllByChapterIdOrderByNameAsc(chapterId)
+            .associate { it.id!!.toInt() to it.name }
+        return attendanceRepository.findByEventId(eventId).mapNotNull { att ->
+            val sub = att.substituteFor?.trim()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+            val memberName = membersById[att.memberId] ?: return@mapNotNull null
+            mapOf("memberName" to memberName, "substituteName" to sub)
+        }
+    }
+
+    /** Bulk-set planned substitutes before check-in (WhatsApp 替代人名單). */
+    @Transactional
+    fun bulkSetPlannedSubstitutes(
+        eventDateStr: String,
+        entries: List<PlannedSubstituteEntry>,
+        chapterTag: String? = null
+    ): ImportResult {
+        val chapterId = resolveChapterId(chapterTag)
+        val eventDate = try { LocalDate.parse(eventDateStr.trim()) } catch (_: Exception) {
+            return ImportResult(
+                total = entries.size, inserted = 0, updated = 0, failed = entries.size,
+                errors = listOf("Invalid event date: $eventDateStr")
+            )
+        }
+        val event = eventRepository.findByChapterIdAndEventDateAndDeletedAtIsNull(chapterId, eventDate)
+            ?: return ImportResult(
+                total = entries.size, inserted = 0, updated = 0, failed = entries.size,
+                errors = listOf("No event for date $eventDateStr")
+            )
+        val eventId = event.id!!.toInt()
+        var updated = 0
+        var failed = 0
+        val errors = mutableListOf<String>()
+        for (entry in entries) {
+            try {
+                val memberName = entry.memberName.trim()
+                val substituteName = entry.substituteName.trim()
+                if (memberName.isBlank() || substituteName.isBlank()) {
+                    failed++
+                    errors.add("Missing member or substitute name")
+                    continue
+                }
+                val memberId = resolveMemberId(memberName, chapterId)
+                if (memberId == null) {
+                    failed++
+                    errors.add("Member not found: $memberName")
+                    continue
+                }
+                val row = ensureAttendanceRow(event, eventId, memberId, chapterId)
+                row.substituteFor = substituteName
+                attendanceRepository.save(row)
+                updated++
+            } catch (e: Exception) {
+                failed++
+                errors.add("Failed ${entry.memberName}: ${e.message}")
+            }
+        }
+        return ImportResult(
+            total = entries.size,
+            inserted = 0,
+            updated = updated,
+            failed = failed,
+            errors = errors
+        )
+    }
+
+    private fun ensureAttendanceRow(event: Event, eventId: Int, memberId: Int, chapterId: Int): Attendance {
+        val existing = attendanceRepository.findByEventIdAndMemberId(eventId, memberId)
+        if (existing != null) return existing
+        val defaultAbsentTs = OffsetDateTime.of(
+            event.eventDate,
+            event.startTime,
+            hkt.rules.getOffset(Instant.now())
+        )
+        return attendanceRepository.save(
+            Attendance(
+                chapterId = chapterId,
+                memberId = memberId,
+                eventId = eventId,
+                checkInTime = defaultAbsentTs,
+                status = "absent"
+            )
+        )
     }
 
     @Transactional

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { getEventForDate, getMembers, getGuests, getObservers, getCurrentEvent, logAttendance, getReportWebSocketUrl, updateAttendanceSubstitute } from "../api";
+import { getEventForDate, getMembers, getGuests, getObservers, getCurrentEvent, logAttendance, getReportWebSocketUrl, updateAttendanceSubstitute, getPlannedSubstitutes } from "../api";
 
 type CheckinType = "member" | "guest" | "observer";
 
@@ -82,6 +82,12 @@ export function isSameCalendarDayAsEvent(eventDate: string, now: Date = new Date
   return getHktDateString(now) === normalizedEvent;
 }
 
+/** Display label for member with optional planned substitute (WhatsApp 替代人名單). */
+export function formatMemberCheckinLabel(memberName: string, substituteName?: string): string {
+  const sub = substituteName?.trim();
+  return sub ? `${sub} / ${memberName}` : memberName;
+}
+
 export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFormPanelProps) => {
   const [checkinType, setCheckinType] = useState<CheckinType>("member");
   const [members, setMembers] = useState<Member[]>([]);
@@ -95,6 +101,7 @@ export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFor
   const [checkInSuccess, setCheckInSuccess] = useState(false);
   const [successCheckInTime, setSuccessCheckInTime] = useState<Date | null>(null);
   const [substituteName, setSubstituteName] = useState("");
+  const [plannedByMember, setPlannedByMember] = useState<Record<string, string>>({});
   const [alreadyCheckedIn, setAlreadyCheckedIn] = useState(false);
   const [noEventForDate, setNoEventForDate] = useState(false);
   const [eventSnapshot, setEventSnapshot] = useState<EventSnapshot | null>(null);
@@ -107,6 +114,7 @@ export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFor
   const fetchMembersRef = useRef<() => Promise<void>>(async () => {});
   const fetchGuestsForDateRef = useRef<(d: string) => Promise<void>>(async () => {});
   const fetchObserversForDateRef = useRef<(d: string) => Promise<void>>(async () => {});
+  const fetchPlannedSubstitutesRef = useRef<(d: string) => Promise<void>>(async () => {});
 
   const eventContextKey = eventSnapshot ? `${eventSnapshot.id}:${eventSnapshot.date}` : "";
 
@@ -171,9 +179,23 @@ export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFor
     [onNotify, chapterTag]
   );
 
+  const fetchPlannedSubstitutes = useCallback(async (forDate: string) => {
+    try {
+      const result = await getPlannedSubstitutes(forDate, chapterTag);
+      const map: Record<string, string> = {};
+      for (const s of result.substitutes ?? []) {
+        map[s.memberName.trim().toLowerCase()] = s.substituteName.trim();
+      }
+      setPlannedByMember(map);
+    } catch {
+      setPlannedByMember({});
+    }
+  }, [chapterTag]);
+
   fetchMembersRef.current = () => fetchMembers();
   fetchGuestsForDateRef.current = (d: string) => fetchGuestsForDate(d);
   fetchObserversForDateRef.current = (d: string) => fetchObserversForDate(d);
+  fetchPlannedSubstitutesRef.current = (d: string) => fetchPlannedSubstitutes(d);
 
   const applyResolvedSnapshot = useCallback((snap: EventSnapshot | null) => {
     setEventSnapshot((prev) => {
@@ -208,6 +230,7 @@ export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFor
   // When current event changes (id/date) or tab switches member/guest: reset selection and reload lists
   useEffect(() => {
     if (hydrating || !eventSnapshot) return;
+    void fetchPlannedSubstitutes(eventSnapshot.date);
     if (checkinType === "member") {
       void fetchMembers();
     } else if (checkinType === "guest") {
@@ -220,7 +243,7 @@ export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFor
     setSearchQuery("");
     setCheckInSuccess(false);
     setAlreadyCheckedIn(false);
-  }, [checkinType, eventContextKey, hydrating, eventSnapshot, fetchMembers, fetchGuestsForDate, fetchObserversForDate]);
+  }, [checkinType, eventContextKey, hydrating, eventSnapshot, fetchMembers, fetchGuestsForDate, fetchObserversForDate, fetchPlannedSubstitutes]);
 
   const runPushRefresh = useCallback(async () => {
     try {
@@ -230,6 +253,7 @@ export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFor
       if (ct === "member") void fetchMembersRef.current();
       else if (ct === "guest" && snap?.date) void fetchGuestsForDateRef.current(snap.date);
       else if (ct === "observer" && snap?.date) void fetchObserversForDateRef.current(snap.date);
+      if (snap?.date) void fetchPlannedSubstitutesRef.current(snap.date);
     } catch {
       applyResolvedSnapshot(null);
     }
@@ -269,11 +293,14 @@ export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFor
   const filteredList = useMemo(() => {
     const q = searchQuery.toLowerCase();
     if (checkinType === "member") {
-      return members.filter(
-        (m) =>
+      return members.filter((m) => {
+        const sub = plannedByMember[m.name.trim().toLowerCase()];
+        return (
           m.name.toLowerCase().includes(q) ||
-          m.profession.toLowerCase().includes(q)
-      );
+          m.profession.toLowerCase().includes(q) ||
+          (sub?.toLowerCase().includes(q) ?? false)
+        );
+      });
     }
     if (checkinType === "guest") {
       return guests.filter(
@@ -287,14 +314,18 @@ export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFor
         o.name.toLowerCase().includes(q) ||
         o.profession.toLowerCase().includes(q)
     );
-  }, [checkinType, members, guests, observers, searchQuery]);
+  }, [checkinType, members, guests, observers, searchQuery, plannedByMember]);
 
   const handleSelect = (id: number, name: string) => {
     setSelectedId(id);
     setSelectedName(name);
     setCheckInSuccess(false);
     setSuccessCheckInTime(null);
-    setSubstituteName("");
+    setSubstituteName(
+      checkinType === "member"
+        ? plannedByMember[name.trim().toLowerCase()] ?? ""
+        : ""
+    );
     setAlreadyCheckedIn(false);
   };
 
@@ -339,7 +370,11 @@ export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFor
         chapterTag
       );
       setSuccessCheckInTime(now);
-      setSubstituteName("");
+      setSubstituteName(
+        checkinType === "member"
+          ? plannedByMember[selectedName.trim().toLowerCase()] ?? ""
+          : ""
+      );
       setCheckInSuccess(true);
     } catch (error) {
       if (error instanceof Error && error.message.includes("已經簽到")) {
@@ -674,6 +709,15 @@ export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFor
           {filteredList.map((item, idx) => {
             const isSelected = selectedId === item.id;
             const standing = (item as Member).standing;
+            const plannedSub =
+              checkinType === "member"
+                ? plannedByMember[(item as Member).name.trim().toLowerCase()]
+                : undefined;
+            const displayName =
+              checkinType === "member"
+                ? formatMemberCheckinLabel((item as Member).name, plannedSub)
+                : item.name;
+            const avatarLetter = (plannedSub || item.name).charAt(0).toUpperCase();
             return (
               <button
                 key={item.id}
@@ -725,7 +769,7 @@ export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFor
                     flexShrink: 0,
                   }}
                 >
-                  {item.name.charAt(0).toUpperCase()}
+                  {avatarLetter}
                 </div>
 
                 {/* Info */}
@@ -742,7 +786,7 @@ export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFor
                       textOverflow: "ellipsis",
                     }}
                   >
-                    {item.name}
+                    {displayName}
                   </div>
                   <div
                     style={{
@@ -753,7 +797,14 @@ export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFor
                       textOverflow: "ellipsis",
                     }}
                   >
-                    {item.profession}
+                    {checkinType === "member" && plannedSub ? (
+                      <>
+                        會員 {item.name}
+                        {item.profession ? ` · ${item.profession}` : ""}
+                      </>
+                    ) : (
+                      item.profession
+                    )}
                     {checkinType === "guest" && (item as Guest).referrer && (
                       <span style={{ marginLeft: "0.5rem", opacity: 0.8 }}>
                         · 邀請人: {(item as Guest).referrer}

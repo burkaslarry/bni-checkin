@@ -1091,6 +1091,58 @@ export async function updateAttendanceSubstitute(
   return handleResponse(response);
 }
 
+export type PlannedSubstitute = {
+  memberName: string;
+  substituteName: string;
+};
+
+/** Pre-planned substitute pairs for an event date. GET /api/attendance/planned-substitutes */
+export async function getPlannedSubstitutes(
+  eventDate: string,
+  chapter?: string | null,
+  chapterId?: number | null
+): Promise<{ substitutes: PlannedSubstitute[]; eventDate: string }> {
+  const url = withChapterQuery(
+    `${API_BASE}/api/attendance/planned-substitutes?eventDate=${encodeURIComponent(eventDate)}`,
+    chapter,
+    chapterId
+  );
+  const response = await fetch(url, { mode: "cors" });
+  return handleResponse(response);
+}
+
+/** Bulk-set planned substitutes from WhatsApp 替代人名單. POST /api/attendance/planned-substitutes */
+export async function bulkSetPlannedSubstitutes(
+  eventDate: string,
+  entries: PlannedSubstitute[],
+  chapter?: string | null,
+  chapterId?: number | null
+): Promise<ImportResult> {
+  const url = withChapterQuery(
+    `${API_BASE}/api/attendance/planned-substitutes?eventDate=${encodeURIComponent(eventDate)}`,
+    chapter,
+    chapterId
+  );
+  const response = await fetchWithRetry(
+    url,
+    {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify(
+        entries.map((e) => ({
+          memberName: e.memberName,
+          substituteName: e.substituteName,
+          eventDate,
+        }))
+      ),
+      mode: "cors",
+    },
+    15000,
+    3
+  );
+  return handleResponse(response);
+}
+
 /**
  * Get WebSocket URL for report live updates (derived from API_BASE). No side effects.
  * @returns {string} e.g. ws://localhost:10000/ws/report

@@ -3,9 +3,12 @@ import {
   parseWhatsAppMeetingMessage,
   guestListToCsv,
   observerListToCsv,
+  substituteListToCsv,
   splitPersonLine,
+  splitSubstituteLine,
   parseMeetingEventDate,
 } from "../lib/parseWhatsAppMeetingMessage";
+import { formatMemberCheckinLabel } from "../components/CheckinFormPanel";
 
 const SAMPLE_MESSAGE = `⚓️Anchor 正式會議 ⚓️
 🗓️日期：2026年8月13日 (星期四)
@@ -60,6 +63,22 @@ describe("splitPersonLine", () => {
   });
 });
 
+describe("splitSubstituteLine", () => {
+  it("splits substitute / member pair", () => {
+    expect(splitSubstituteLine("1. Wendy Cheung / Zoe")).toEqual({
+      substituteName: "Wendy Cheung",
+      memberName: "Zoe",
+    });
+  });
+});
+
+describe("formatMemberCheckinLabel", () => {
+  it("formats planned substitute display", () => {
+    expect(formatMemberCheckinLabel("Zoe", "Wendy Cheung")).toBe("Wendy Cheung / Zoe");
+    expect(formatMemberCheckinLabel("Zoe")).toBe("Zoe");
+  });
+});
+
 describe("parseWhatsAppMeetingMessage", () => {
   it("extracts guests and observers matching expected CSV rows", () => {
     const result = parseWhatsAppMeetingMessage(SAMPLE_MESSAGE);
@@ -67,6 +86,12 @@ describe("parseWhatsAppMeetingMessage", () => {
     expect(result.eventDate).toBe("2026-08-13");
     expect(result.guests).toHaveLength(5);
     expect(result.observers).toHaveLength(2);
+    expect(result.substitutes).toHaveLength(1);
+    expect(result.substitutes[0]).toMatchObject({
+      substituteName: "Wendy Cheung",
+      memberName: "Zoe",
+      eventDate: "2026-08-13",
+    });
 
     expect(result.guests[0]).toMatchObject({
       name: "Yuri Lo",

@@ -13,10 +13,17 @@ export type ParsedObserver = {
   eventDate: string;
 };
 
+export type ParsedSubstitute = {
+  substituteName: string;
+  memberName: string;
+  eventDate: string;
+};
+
 export type ParsedMeetingMessage = {
   eventDate: string;
   guests: ParsedGuest[];
   observers: ParsedObserver[];
+  substitutes: ParsedSubstitute[];
   errors: string[];
 };
 
@@ -66,6 +73,18 @@ export function splitPersonLine(line: string): { name: string; profession: strin
   };
 }
 
+/** Split "Substitute Name / Member Name" (替代人名單). */
+export function splitSubstituteLine(line: string): { substituteName: string; memberName: string } | null {
+  const cleaned = cleanMeetingLine(line);
+  if (!cleaned) return null;
+  const slash = cleaned.search(/[/／]/);
+  if (slash < 0) return null;
+  const substituteName = cleaned.slice(0, slash).trim();
+  const memberName = cleaned.slice(slash + 1).trim();
+  if (!substituteName || !memberName) return null;
+  return { substituteName, memberName };
+}
+
 function extractSectionLines(text: string, startPattern: RegExp, endPattern: RegExp): string[] {
   const startMatch = text.match(startPattern);
   if (!startMatch || startMatch.index == null) return [];
@@ -75,6 +94,16 @@ function extractSectionLines(text: string, startPattern: RegExp, endPattern: Reg
   const endMatch = rest.match(endPattern);
   const block = endMatch && endMatch.index != null ? rest.slice(0, endMatch.index) : rest;
 
+  return block
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => /^\d+\./.test(line.replace(INVISIBLE_CHARS, "")));
+}
+
+function extractSectionLinesToEnd(text: string, startPattern: RegExp): string[] {
+  const startMatch = text.match(startPattern);
+  if (!startMatch || startMatch.index == null) return [];
+  const block = text.slice(startMatch.index + startMatch[0].length);
   return block
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -104,6 +133,7 @@ export function parseWhatsAppMeetingMessage(text: string): ParsedMeetingMessage 
     /觀察員[^\n]*/i,
     /替代人/i
   );
+  const substituteLines = extractSectionLinesToEnd(normalized, /替代人[^\n]*/i);
 
   const guests: ParsedGuest[] = [];
   for (const line of guestLines) {
@@ -134,11 +164,25 @@ export function parseWhatsAppMeetingMessage(text: string): ParsedMeetingMessage 
     });
   }
 
-  if (guestLines.length === 0 && observerLines.length === 0) {
-    errors.push("找不到嘉賓名單或觀察員段落（請確認已貼上完整會議訊息）");
+  const substitutes: ParsedSubstitute[] = [];
+  for (const line of substituteLines) {
+    const parts = splitSubstituteLine(line);
+    if (!parts) {
+      errors.push(`無法解析替代人行：${cleanMeetingLine(line)}`);
+      continue;
+    }
+    substitutes.push({
+      substituteName: parts.substituteName,
+      memberName: parts.memberName,
+      eventDate: eventDate || "",
+    });
   }
 
-  return { eventDate: eventDate || "", guests, observers, errors };
+  if (guestLines.length === 0 && observerLines.length === 0 && substituteLines.length === 0) {
+    errors.push("找不到嘉賓名單、觀察員或替代人段落（請確認已貼上完整會議訊息）");
+  }
+
+  return { eventDate: eventDate || "", guests, observers, substitutes, errors };
 }
 
 export function guestListToCsv(guests: ParsedGuest[]): string {
@@ -162,6 +206,17 @@ export function observerListToCsv(observers: ParsedObserver[]): string {
       event_date: o.eventDate,
     })),
     { columns: ["name", "profession", "event_date"] }
+  );
+}
+
+export function substituteListToCsv(substitutes: ParsedSubstitute[]): string {
+  return Papa.unparse(
+    substitutes.map((s) => ({
+      substitute_name: s.substituteName,
+      member_name: s.memberName,
+      event_date: s.eventDate,
+    })),
+    { columns: ["substitute_name", "member_name", "event_date"] }
   );
 }
 

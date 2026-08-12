@@ -110,6 +110,13 @@ data class AttendanceSubstituteRequest(
     val substituteName: String? = null
 )
 
+/** Pre-planned substitute pair from WhatsApp / bulk import (substitute attends for member). */
+data class PlannedSubstituteEntry(
+    val memberName: String,
+    val substituteName: String,
+    val eventDate: String? = null
+)
+
 data class ReportData(
     val eventId: Int,
     val eventName: String,
