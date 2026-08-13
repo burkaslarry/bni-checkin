@@ -1,11 +1,13 @@
 package com.example.bnianchorcheckinbackend
 
+import com.example.bnianchorcheckinbackend.entities.Event
 import com.example.bnianchorcheckinbackend.repositories.EventRepository
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.LocalTime
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -31,14 +33,17 @@ class EventAttendanceEmailService(
     private val eventRepository: EventRepository,
     private val csvExportService: AttendanceCsvExportService,
     private val resendEmailService: ResendEmailService,
-    @Value("\${attendance.email.from:EventXP <info@innovatexp.co>}") private val fromAddress: String,
-    @Value("\${attendance.email.to:lo.wailun5@gmail.com}") private val toAddress: String,
-    @Value("\${attendance.email.grace-minutes:5}") private val graceMinutes: Long,
+    private val eventDbService: EventDbService,
+    private val chapterService: ChapterService,
+    @Value("\${attendance.email.from:EventXP <info@innovatexp.co>}") private val fromAddress: String = "EventXP <info@innovatexp.co>",
+    @Value("\${attendance.email.to:lo.wailun5@gmail.com}") private val toAddress: String = "lo.wailun5@gmail.com",
+    @Value("\${attendance.email.grace-minutes:5}") private val graceMinutes: Long = 5,
     /** Only auto-email events that ended within this lookback window (avoids flooding old history). */
-    @Value("\${attendance.email.lookback-hours:12}") private val lookbackHours: Long
+    @Value("\${attendance.email.lookback-hours:12}") private val lookbackHours: Long = 12
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
     private val hkt: ZoneId = ZoneId.of("Asia/Hong_Kong")
+    private val hhmm: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
     fun isReady(): Boolean = resendEmailService.isConfigured()
 
@@ -177,11 +182,63 @@ class EventAttendanceEmailService(
             val id = event.id?.toInt() ?: continue
             try {
                 val result = sendAttendanceEmail(eventId = id, force = false, markSent = true)
-                if (result.status == "success") sent++
+                if (result.status == "success") {
+                    sent++
+                    try {
+                        val next = createAndActivateNextMeeting(event)
+                        if (next != null) {
+                            log.info(
+                                "Next meeting current after attendance email: id={} date={} name={}",
+                                next.id, next.date, next.name
+                            )
+                        }
+                    } catch (e: Exception) {
+                        log.error("Failed to create next meeting after eventId={}: {}", id, e.message)
+                    }
+                }
             } catch (e: Exception) {
                 log.error("Failed to email attendance for eventId={}: {}", id, e.message)
             }
         }
         return sent
+    }
+
+    /**
+     * After a finished event is emailed, create the chapter's next weekly meeting
+     * (or reuse one already on that date) and set it as the exclusive current event.
+     */
+    fun createAndActivateNextMeeting(finished: Event): EventData? {
+        val chapter = chapterService.findInfoById(finished.chapterId) ?: run {
+            log.warn("Skip next meeting create — unknown chapterId={}", finished.chapterId)
+            return null
+        }
+        val nextDate = NextMeetingPlanner.nextDateAfter(finished.eventDate, chapter.meetingWeekday)
+        val dateStr = nextDate.toString()
+        val existing = eventDbService.getEventForDate(dateStr, chapter.tag)
+        val event = if (existing != null) {
+            log.info(
+                "Next meeting already exists for chapter={} date={} id={} — activating as current",
+                chapter.tag, dateStr, existing.id
+            )
+            existing
+        } else {
+            val created = eventDbService.createEvent(
+                EventRequest(
+                    name = NextMeetingPlanner.defaultMeetingName(chapter.displayName, nextDate),
+                    date = dateStr,
+                    startTime = finished.startTime.format(hhmm),
+                    endTime = (finished.endTime ?: LocalTime.of(9, 0)).format(hhmm),
+                    registrationStartTime = finished.registrationStartTime.format(hhmm),
+                    onTimeCutoff = finished.onTimeCutoffTime.format(hhmm)
+                ),
+                chapter.tag
+            )
+            log.info(
+                "Created next meeting id={} date={} name={} for chapter={}",
+                created.id, created.date, created.name, chapter.tag
+            )
+            created
+        }
+        return eventDbService.setEventActive(event.id, exclusive = true, chapter.tag)
     }
 }

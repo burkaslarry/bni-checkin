@@ -83,6 +83,9 @@ class ChapterService(
             meetingWeekday = chapter.meetingWeekday.coerceIn(0, 6)
         )
 
+    fun findInfoById(chapterId: Int): ChapterInfo? =
+        chapterRepository.findById(chapterId.toLong()).orElse(null)?.let { toInfo(it) }
+
     fun listActiveChapters(): List<ChapterInfo> =
         chapterRepository.findAllByStatusOrderByTagAsc("active").map { toInfo(it) }
 

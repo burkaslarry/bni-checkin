@@ -7,7 +7,8 @@ import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 
 /**
- * Background poller: after an event end time (+ grace), silently email attendance CSV via Resend.
+ * Background poller: after an event end time (+ grace), silently email attendance CSV via Resend,
+ * then create the chapter's next weekly meeting and set it as the current event.
  */
 @Component
 @ConditionalOnProperty(name = ["spring.datasource.url"])
