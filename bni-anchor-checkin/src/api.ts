@@ -54,6 +54,8 @@ export type MemberInfo = {
   membershipId?: string;
   position?: string;
   chapterId?: number;
+  email?: string;
+  phoneNumber?: string;
 };
 
 export type ChapterInfo = {
@@ -1611,4 +1613,83 @@ export async function exportObservers(eventDate: string): Promise<Blob> {
     throw new Error("Failed to export observer attendance");
   }
   return response.blob();
+}
+
+export type TrafficLightRow = {
+  name: string;
+  present: number;
+  absent: number;
+  late: number;
+  medical: number;
+  substitute: number;
+  referralsGiven: number;
+  referralsReceived: number;
+  visitors: number;
+  oneToOnes: number;
+  training: number;
+  bizGive: number;
+  plsPct: number;
+  totalPts: number;
+  light: MemberStanding;
+};
+
+export type TrafficLightReport = {
+  id: number;
+  chapterId: number;
+  periodLabel: string;
+  periodStart: string | null;
+  periodEnd: string | null;
+  greenGoal: number;
+  yellowGoal: number;
+  filename: string | null;
+  createdAt: string | null;
+  rows: TrafficLightRow[];
+};
+
+export type TrafficLightReminder = {
+  name: string;
+  light: MemberStanding;
+  totalPts: number;
+  emailSubject: string;
+  emailBody: string;
+  whatsappText: string;
+  source: string;
+};
+
+export async function uploadTrafficLightExcel(
+  file: File,
+  chapter?: string | null
+): Promise<{ status: string; message: string; report: TrafficLightReport }> {
+  const body = new FormData();
+  body.append("file", file);
+  const response = await fetch(withChapterQuery(`${API_BASE}/api/traffic-light/upload`, chapter), {
+    method: "POST",
+    body,
+    mode: "cors",
+  });
+  return handleResponse(response);
+}
+
+export async function getLatestTrafficLight(
+  chapter?: string | null
+): Promise<TrafficLightReport | null> {
+  const response = await fetch(withChapterQuery(`${API_BASE}/api/traffic-light/latest`, chapter), {
+    mode: "cors",
+  });
+  if (response.status === 404) return null;
+  return handleResponse(response);
+}
+
+export async function generateTrafficLightReminder(
+  name: string,
+  chapter?: string | null,
+  periodLabel?: string
+): Promise<TrafficLightReminder> {
+  const response = await fetch(withChapterQuery(`${API_BASE}/api/traffic-light/reminder`, chapter), {
+    method: "POST",
+    headers: jsonHeaders,
+    body: JSON.stringify({ name, periodLabel }),
+    mode: "cors",
+  });
+  return handleResponse(response);
 }

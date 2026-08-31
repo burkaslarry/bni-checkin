@@ -39,7 +39,9 @@ class DatabaseMemberService(
                 "professionGroupName" to (groupByCode[code] ?: ""),
                 "membershipId" to (member.membershipId ?: ""),
                 "position" to member.position,
-                "chapterId" to member.chapterId
+                "chapterId" to member.chapterId,
+                "email" to (member.email ?: ""),
+                "phoneNumber" to (member.phoneNumber ?: "")
             )
         }
     }

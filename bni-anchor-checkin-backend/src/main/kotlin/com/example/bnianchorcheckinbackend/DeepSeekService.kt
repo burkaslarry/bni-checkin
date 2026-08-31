@@ -165,6 +165,73 @@ class DeepSeekService(
         }
     }
 
+    data class TrafficLightAiCopy(
+        val emailSubject: String,
+        val emailBody: String,
+        val whatsappText: String
+    )
+
+    /**
+     * Draft a Cantonese reminder for one member. Returns null when the key is missing or the API fails
+     * so callers can fall back to the template.
+     */
+    fun generateTrafficLightReminder(
+        name: String,
+        light: String,
+        totalPts: Int,
+        periodLabel: String,
+        summary: String
+    ): TrafficLightAiCopy? {
+        if (apiKey.isBlank()) return null
+        return try {
+            val request = DeepSeekRequest(
+                messages = listOf(
+                    Message(
+                        role = "system",
+                        content = """
+                            You write short BNI chapter membership reminders in Hong Kong Cantonese (written 粵語).
+                            Return JSON only: {"emailSubject":"...","emailBody":"...","whatsappText":"..."}.
+                            Tone: warm, specific, not shaming. WhatsApp under 500 characters. Keep numbers from the user summary.
+                        """.trimIndent()
+                    ),
+                    Message(
+                        role = "user",
+                        content = """
+                            Member: $name
+                            Light: $light
+                            Points: $totalPts
+                            Period: $periodLabel
+                            Facts:
+                            $summary
+                        """.trimIndent()
+                    )
+                ),
+                response_format = ResponseFormat("json_object"),
+                temperature = 0.5,
+                max_tokens = 1200
+            )
+            val httpRequest = HttpRequest.newBuilder()
+                .uri(URI.create(apiUrl))
+                .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer $apiKey")
+                .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(request)))
+                .build()
+            val response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString())
+            if (response.statusCode() != 200) return null
+            val content = objectMapper.readValue(response.body(), DeepSeekResponse::class.java)
+                .choices.firstOrNull()?.message?.content ?: return null
+            val json = content.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
+            val node = objectMapper.readTree(json)
+            TrafficLightAiCopy(
+                emailSubject = node.path("emailSubject").asText(""),
+                emailBody = node.path("emailBody").asText(""),
+                whatsappText = node.path("whatsappText").asText("")
+            ).takeIf { it.emailBody.isNotBlank() || it.whatsappText.isNotBlank() }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     fun analyzeGuestMatch(
         guestName: String,
         guestProfession: String,

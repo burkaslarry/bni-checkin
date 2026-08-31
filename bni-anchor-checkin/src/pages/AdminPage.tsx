@@ -7,13 +7,14 @@ import { AdminManualEntryPanel } from "../components/AdminManualEntryPanel";
 import { EventManagementPanel } from "../components/EventManagementPanel";
 import { StrategicPlanningPanel } from "../components/StrategicPlanningPanel";
 import { ChapterPasswordPanel } from "../components/ChapterPasswordPanel";
+import { TrafficLightPanel } from "../components/TrafficLightPanel";
 import { AppVersionFooter } from "../components/AppVersionFooter";
 import { AnchorOnlyNotice } from "../components/AnchorOnlyNotice";
 import { ClientAdminLoginPanel } from "../components/ClientAdminLoginPanel";
 import { useChapter } from "../chapterContext";
 import { getCurrentEvent, type EventData } from "../api";
 
-type AdminView = "home" | "generate" | "manual" | "event" | "strategic" | "chapter-password";
+type AdminView = "home" | "generate" | "manual" | "event" | "strategic" | "chapter-password" | "traffic-light";
 
 const navTargets: { id: AdminView; title: string; description: string; icon: string }[] = [
   {
@@ -77,7 +78,7 @@ export default function AdminPage() {
   // Handle URL parameter for direct navigation (keep client=true / chapter)
   useEffect(() => {
     const viewParam = searchParams.get("view");
-    if (viewParam && ["generate", "manual", "event", "strategic", "chapter-password"].includes(viewParam)) {
+    if (viewParam && ["generate", "manual", "event", "strategic", "chapter-password", "traffic-light"].includes(viewParam)) {
       setActiveView(viewParam as AdminView);
       const next = new URLSearchParams();
       if (searchParams.get("client") === "true" || searchParams.get("client") === "1") {
@@ -129,6 +130,8 @@ export default function AdminPage() {
         return <AdminManualEntryPanel onNotify={handlePanelNotification} />;
       case "chapter-password":
         return <ChapterPasswordPanel onNotify={handlePanelNotification} />;
+      case "traffic-light":
+        return <TrafficLightPanel onNotify={handlePanelNotification} />;
       default:
         return null;
     }
@@ -290,6 +293,18 @@ export default function AdminPage() {
               <strong className="nav-title">公開嘉賓登記連結</strong>
               <span className="hint">教你點樣 share /public/guest 俾人填</span>
             </Link>
+
+            {isAnchorMode && (
+              <button
+                type="button"
+                className="nav-card nav-card--action"
+                onClick={() => setActiveView("traffic-light")}
+              >
+                <span className="nav-icon">🚦</span>
+                <strong className="nav-title">會員紅綠燈</strong>
+                <span className="hint">上傳 Traffic Light Excel · WhatsApp / Email 提醒</span>
+              </button>
+            )}
 
             {isAnchorMode && (
               <button
