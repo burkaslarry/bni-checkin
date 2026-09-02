@@ -8,6 +8,7 @@ vi.mock("../api", () => ({
   ANCHOR_CHAPTER_ID: 1,
   CHAPTER_TAG_TO_ID: { anchor: 1, amax: 2, dynasty: 3 },
   setActiveApiChapter: vi.fn(),
+  setClientAuthToken: vi.fn(),
   clientLogin: vi.fn(),
   clientLogout: vi.fn(),
   fetchClientSession: vi.fn().mockResolvedValue({
@@ -46,7 +47,20 @@ describe("ReportPage", () => {
     localStorage.clear();
   });
 
+  it("requires login before showing attendance data", async () => {
+    renderReport();
+    expect(await screen.findByText(/管理後台登入/i)).toBeInTheDocument();
+  });
+
   it("renders report with export button when data loaded", async () => {
+    localStorage.setItem(
+      "eventxp_admin_session",
+      JSON.stringify({
+        token: "t",
+        chapter: { id: 1, tag: "anchor", displayName: "BNI Anchor" },
+        expiresAtEpochMs: Date.now() + 60_000,
+      })
+    );
     renderReport();
     await screen.findByText(/即時簽到狀態/i);
     expect(screen.getByText(/簽到記錄 CSV/i)).toBeInTheDocument();

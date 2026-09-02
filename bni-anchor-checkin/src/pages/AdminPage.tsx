@@ -14,6 +14,7 @@ import { ClientAdminLoginPanel } from "../components/ClientAdminLoginPanel";
 import { useChapter } from "../chapterContext";
 import { getCurrentEvent, type EventData } from "../api";
 
+/** Admin home + nested panels. `traffic-light` is Anchor-only (card hidden unless `isAnchorMode`). */
 type AdminView = "home" | "generate" | "manual" | "event" | "strategic" | "chapter-password" | "traffic-light";
 
 const navTargets: { id: AdminView; title: string; description: string; icon: string }[] = [
@@ -294,6 +295,7 @@ export default function AdminPage() {
               <span className="hint">教你點樣 share /public/guest 俾人填</span>
             </Link>
 
+            {/* Anchor-only: Member Traffic Light upload + reminders (prod/6.5.0). */}
             {isAnchorMode && (
               <button
                 type="button"

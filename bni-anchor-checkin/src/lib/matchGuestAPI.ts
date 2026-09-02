@@ -3,6 +3,7 @@
  */
 
 import type { Guest, Member, MatchResult } from "../types/seating";
+import { getClientAuthToken } from "../api";
 
 /** Request body for match-guest API. */
 export type MatchGuestRequest = {
@@ -29,11 +30,14 @@ export async function callMatchGuestAPI(
   members: Member[]
 ): Promise<MatchGuestResponse> {
   try {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    const token = getClientAuthToken();
+    if (token) headers["X-Client-Token"] = token;
     const response = await fetch(`${API_BASE}/api/match-guest`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers,
       body: JSON.stringify({ guest, members } as MatchGuestRequest),
     });
 

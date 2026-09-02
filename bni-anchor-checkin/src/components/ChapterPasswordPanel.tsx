@@ -68,8 +68,12 @@ export function ChapterPasswordPanel({ onNotify }: ChapterPasswordPanelProps) {
       onNotify("請選擇 chapter", "error");
       return;
     }
-    if (password.length < 8) {
-      onNotify("密碼至少 8 個字元", "error");
+    if (password.length < 12) {
+      onNotify("密碼至少 12 個字元", "error");
+      return;
+    }
+    if (password.toLowerCase() === "root1234") {
+      onNotify("密碼過於常見，請另選一組", "error");
       return;
     }
     if (password !== confirm) {
@@ -129,8 +133,8 @@ export function ChapterPasswordPanel({ onNotify }: ChapterPasswordPanelProps) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="new-password"
-              placeholder="至少 8 個字元"
-              minLength={8}
+              placeholder="至少 12 個字元"
+              minLength={12}
               required
             />
           </label>
@@ -143,7 +147,7 @@ export function ChapterPasswordPanel({ onNotify }: ChapterPasswordPanelProps) {
               onChange={(e) => setConfirm(e.target.value)}
               autoComplete="new-password"
               placeholder="再輸入一次"
-              minLength={8}
+              minLength={12}
               required
             />
           </label>

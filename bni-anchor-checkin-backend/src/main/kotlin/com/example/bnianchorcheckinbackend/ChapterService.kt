@@ -3,6 +3,7 @@ package com.example.bnianchorcheckinbackend
 import com.example.bnianchorcheckinbackend.entities.Chapter
 import com.example.bnianchorcheckinbackend.repositories.ChapterRepository
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 import org.springframework.stereotype.Service
 import java.math.BigInteger
 import java.security.MessageDigest
@@ -34,6 +35,8 @@ class ChapterService(
 ) {
     private val sessions = ConcurrentHashMap<String, Session>()
     private val secureRandom = SecureRandom()
+    private val bcrypt = BCryptPasswordEncoder()
+    private val log = org.slf4j.LoggerFactory.getLogger(javaClass)
 
     private data class Session(
         val chapterId: Long,
@@ -83,6 +86,7 @@ class ChapterService(
             meetingWeekday = chapter.meetingWeekday.coerceIn(0, 6)
         )
 
+    /** Chapter by numeric id, or null — used after attendance email to plan the next meeting. */
     fun findInfoById(chapterId: Int): ChapterInfo? =
         chapterRepository.findById(chapterId.toLong()).orElse(null)?.let { toInfo(it) }
 
@@ -100,19 +104,40 @@ class ChapterService(
             throw IllegalArgumentException("AdminLogin and AdminPassword are required")
         }
         val chapter = chapterRepository.findByAdminLoginIgnoreCase(login).orElse(null)
-            ?: throw IllegalArgumentException("Invalid login")
+            ?: throw IllegalArgumentException("Invalid login or password")
         if (!chapter.status.equals("active", ignoreCase = true)) {
-            throw IllegalArgumentException("Chapter is not active")
-        }
-        val hash = md5Hex(password)
-        if (!hash.equals(chapter.adminPasswordMd5, ignoreCase = true)) {
             throw IllegalArgumentException("Invalid login or password")
+        }
+        if (!passwordMatches(password, chapter.adminPasswordMd5)) {
+            log.warn("Login failed for adminLogin={}", login)
+            throw IllegalArgumentException("Invalid login or password")
+        }
+        if (isLegacyMd5Hash(chapter.adminPasswordMd5)) {
+            chapter.adminPasswordMd5 = hashPassword(password)
+            chapterRepository.save(chapter)
+            log.info("Rehashed legacy MD5 password for chapter={}", chapter.tag)
         }
         val token = UUID.randomUUID().toString().replace("-", "") +
             secureRandom.nextInt(0x100000).toString(16)
         val expires = Instant.now().toEpochMilli() + 12L * 60L * 60L * 1000L
         sessions[token] = Session(chapter.id!!, chapter.tag, expires)
+        log.info("Login success chapter={}", chapter.tag)
         return ClientLoginResult(token = token, chapter = toInfo(chapter), expiresAtEpochMs = expires)
+    }
+
+    fun passwordMatches(raw: String, stored: String): Boolean {
+        val s = stored.trim()
+        if (s.length >= 4 && s[0] == '$' && s[1] == '2') {
+            return bcrypt.matches(raw, s)
+        }
+        return md5Hex(raw).equals(s, ignoreCase = true)
+    }
+
+    fun hashPassword(raw: String): String = bcrypt.encode(raw)
+
+    fun isLegacyMd5Hash(stored: String): Boolean {
+        val s = stored.trim()
+        return s.length == 32 && s.all { it in "0123456789abcdefABCDEF" }
     }
 
     fun resolveChapterFromSession(token: String?): Chapter? {
@@ -140,7 +165,7 @@ class ChapterService(
     }
 
     /**
-     * Anchor-only: set AdminPassword for a non-anchor chapter (stored as MD5).
+     * Anchor-only: set AdminPassword for a non-anchor chapter (stored as bcrypt).
      * @throws IllegalArgumentException on validation / unknown chapter
      */
     fun updateChapterAdminPassword(targetTagRaw: String?, newPassword: String): ChapterInfo {
@@ -150,12 +175,12 @@ class ChapterService(
         }
         validateNewAdminPassword(newPassword)
         val chapter = requireChapter(targetTag)
-        chapter.adminPasswordMd5 = md5Hex(newPassword)
+        chapter.adminPasswordMd5 = hashPassword(newPassword)
         return toInfo(chapterRepository.save(chapter))
     }
 
     companion object {
-        const val MIN_ADMIN_PASSWORD_LENGTH = 8
+        const val MIN_ADMIN_PASSWORD_LENGTH = 12
 
         fun validateNewAdminPassword(password: String) {
             if (password.isBlank()) {
@@ -165,6 +190,9 @@ class ChapterService(
                 throw IllegalArgumentException(
                     "AdminPassword must be at least $MIN_ADMIN_PASSWORD_LENGTH characters"
                 )
+            }
+            if (password.equals("root1234", ignoreCase = true)) {
+                throw IllegalArgumentException("AdminPassword is too common")
             }
         }
     }

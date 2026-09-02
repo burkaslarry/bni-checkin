@@ -5,13 +5,13 @@ import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
 /**
- * REST controller for guest–member matching via DeepSeek AI. No auth. Members from DB or CSV fallback.
+ * REST controller for guest–member matching via DeepSeek AI.
+ * POST /api/matching/quick is public (kiosk). Full match and batch require [AdminAuthFilter].
  * Endpoints: POST /api/matching/members (full match), POST /api/matching/quick, POST /api/matching/batch, GET /api/matching/health.
  * Side effects: external DeepSeek API calls; no DB write.
  */
 @RestController
 @RequestMapping("/api/matching")
-@CrossOrigin(origins = ["*"])
 class MatchingController(
     private val deepSeekService: DeepSeekService,
     private val csvService: CsvService,

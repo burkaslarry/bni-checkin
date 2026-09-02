@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { listEvents } from "../api";
+import { ClientAuthGate } from "../components/ClientAuthGate";
 
 type Props = {};
 
@@ -68,6 +69,7 @@ export default function AdminPublicGuestLinkPage({}: Props) {
   };
 
   return (
+    <ClientAuthGate>
     <div className="app-shell">
       <header className="site-header">
         <div>
@@ -148,6 +150,7 @@ export default function AdminPublicGuestLinkPage({}: Props) {
         </p>
       </footer>
     </div>
+    </ClientAuthGate>
   );
 }
 

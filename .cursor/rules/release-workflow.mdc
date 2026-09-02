@@ -82,10 +82,12 @@ Never force-push `master`. Never skip hooks unless user explicitly asks.
 
 **DB migrations**: Render Postgres only (`render psql dpg-d6iok5q4d50c738643c0-a`). Do NOT use Supabase.
 
-**Backend → Render** (SRAA gate — **required before every production deploy**):
+**Backend → Render** (SRAA gate — **required before every production deploy**; **push to GitHub does not auto-deploy**):
 
 Security Risk Assessment (SRA): OWASP Dependency-Check SCA; fail on High/Critical (CVSS ≥ 7.0).  
 Security Audit (SA): `./gradlew test` + `bootJar` must pass before deploy.
+
+Render service `autoDeployTrigger` is **off** — only `./scripts/deploy-render-production.sh` (or Dashboard Manual Deploy) publishes to production.
 
 ```bash
 # Preferred (audit log → docs/security/)

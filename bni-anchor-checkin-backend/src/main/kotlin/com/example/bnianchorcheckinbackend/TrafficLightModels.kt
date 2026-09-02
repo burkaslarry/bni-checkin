@@ -1,5 +1,10 @@
 package com.example.bnianchorcheckinbackend
 
+/**
+ * One member row from the Traffic Light Report sheet (or JSON import).
+ * Column mapping matches BNI Anchor Excel: P/A/L/M/S, G, R, V, 1-2-1, T, Biz Give, PLS %, Total PTs.
+ * [light] is `GREEN` | `YELLOW` | `RED` | `BLACK` (Excel fill, else [TrafficLightScoring.lightFromPts]).
+ */
 data class TrafficLightRowDto(
     val name: String,
     val present: Int = 0,
@@ -18,6 +23,11 @@ data class TrafficLightRowDto(
     val light: String
 )
 
+/**
+ * POST `/api/traffic-light/import` body (also parser output).
+ * [greenGoal]/[yellowGoal] are chapter KPI banners from Excel (e.g. “Green Goal: 60”), not row cutoffs.
+ * Row cutoffs live in [TrafficLightScoring] (green ≥ 70).
+ */
 data class TrafficLightImportRequest(
     val periodLabel: String,
     val periodStart: String? = null,
@@ -29,6 +39,7 @@ data class TrafficLightImportRequest(
     val rows: List<TrafficLightRowDto>
 )
 
+/** Latest or just-imported snapshot returned to the admin UI. */
 data class TrafficLightReportDto(
     val id: Int,
     val chapterId: Int,
@@ -42,11 +53,35 @@ data class TrafficLightReportDto(
     val rows: List<TrafficLightRowDto>
 )
 
-data class TrafficLightReminderRequest(
-    val name: String,
-    val periodLabel: String? = null
+/**
+ * One upload in the history list (no member rows).
+ * Light counts are of that snapshot only — re-upload does not add to older rows.
+ */
+data class TrafficLightHistoryItemDto(
+    val id: Int,
+    val periodLabel: String,
+    val periodStart: String?,
+    val periodEnd: String?,
+    val filename: String?,
+    val createdAt: String?,
+    val rowCount: Int,
+    val green: Int,
+    val yellow: Int,
+    val red: Int,
+    val black: Int
 )
 
+/** POST reminder — [name] matches a row; [reportId] selects a snapshot (default: latest). */
+data class TrafficLightReminderRequest(
+    val name: String,
+    val periodLabel: String? = null,
+    val reportId: Int? = null
+)
+
+/**
+ * Email + WhatsApp copy for one member.
+ * [source] is `deepseek` when AI succeeded, otherwise `template`.
+ */
 data class TrafficLightReminderDto(
     val name: String,
     val light: String,

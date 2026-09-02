@@ -27,7 +27,7 @@ class AttendanceEmailController(
     @Operation(summary = "Email attendance CSV for an event (admin test / manual send)")
     fun sendAttendanceEmail(
         @PathVariable eventId: Int,
-        @RequestParam(name = "force", defaultValue = "true") force: Boolean
+        @RequestParam(name = "force", defaultValue = "false") force: Boolean
     ): ResponseEntity<Map<String, Any?>> {
         return try {
             val result = eventAttendanceEmailService.sendAttendanceEmail(

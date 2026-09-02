@@ -10,6 +10,7 @@ import {
   scoreBizGive,
   scoreReferralsPerWeek,
   toWhatsAppPhone,
+  buildChapterLtStats,
 } from "../lib/trafficLight";
 
 describe("trafficLight scoring", () => {
@@ -69,5 +70,45 @@ describe("trafficLight scoring", () => {
     expect(toWhatsAppPhone("9310 3031")).toBe("85293103031");
     expect(toWhatsAppPhone("+852 93103031")).toBe("85293103031");
     expect(toWhatsAppPhone("12")).toBeNull();
+  });
+
+  it("builds LT chapter stats without double-counting a previous snapshot", () => {
+    const yellow = {
+      name: "Ada",
+      present: 20,
+      absent: 2,
+      late: 0,
+      medical: 0,
+      substitute: 0,
+      referralsGiven: 10,
+      referralsReceived: 20,
+      visitors: 4,
+      oneToOnes: 20,
+      training: 2,
+      bizGive: 100_000,
+      plsPct: 90,
+      totalPts: 50,
+      light: "YELLOW" as const,
+    };
+    const red = {
+      ...yellow,
+      name: "Ben",
+      light: "RED" as const,
+      totalPts: 32,
+      training: 0,
+      referralsGiven: 1,
+      referralsReceived: 20,
+    };
+    const prev = [{ ...yellow, light: "GREEN" as const, totalPts: 80 }];
+    const stats = buildChapterLtStats([yellow, red], ["Ada", "Ben", "Cara"], prev);
+    expect(stats.memberCount).toBe(2);
+    expect(stats.counts.YELLOW).toBe(1);
+    expect(stats.counts.RED).toBe(1);
+    expect(stats.pct.YELLOW).toBe(50);
+    expect(stats.atRisk.map((a) => a.name)).toEqual(["Ben"]);
+    expect(stats.unmatchedRoster).toEqual(["Cara"]);
+    expect(stats.referralImbalance[0]?.name).toBe("Ben");
+    expect(stats.vsPrev?.worsened).toBe(1);
+    expect(stats.trainingPct).toBe(50);
   });
 });

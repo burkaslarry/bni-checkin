@@ -165,6 +165,7 @@ class DeepSeekService(
         }
     }
 
+    /** JSON object DeepSeek must return for traffic-light reminders. */
     data class TrafficLightAiCopy(
         val emailSubject: String,
         val emailBody: String,
@@ -172,8 +173,16 @@ class DeepSeekService(
     )
 
     /**
-     * Draft a Cantonese reminder for one member. Returns null when the key is missing or the API fails
-     * so callers can fall back to the template.
+     * Draft a Cantonese reminder for one member.
+     *
+     * @param name member display name from the Excel row
+     * @param light `GREEN` | `YELLOW` | `RED` | `BLACK`
+     * @param totalPts Excel total points
+     * @param periodLabel e.g. `2026-02-01 - 2026-07-31 (6 Months)`
+     * @param summary template facts the model must keep (numbers, gaps)
+     * @return parsed copy, or null when the key is blank / HTTP fails (caller uses template)
+     *
+     * Side effects: HTTP POST to DeepSeek chat completions; no DB.
      */
     fun generateTrafficLightReminder(
         name: String,

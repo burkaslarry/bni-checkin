@@ -18,6 +18,10 @@ class EventAttendanceEmailScheduler(
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
+    /**
+     * Poll every `attendance.email.poll-ms` (default 5 min).
+     * After a successful send, the email service also creates next week's meeting.
+     */
     @Scheduled(fixedDelayString = "\${attendance.email.poll-ms:300000}", initialDelayString = "60000")
     fun pollFinishedEvents() {
         if (!enabled) return

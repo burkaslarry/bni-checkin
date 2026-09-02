@@ -4,7 +4,8 @@ services:
     env: docker
     dockerfilePath: ./Dockerfile
     plan: free
-    healthCheckPath: /api/members
+    autoDeploy: false
+    healthCheckPath: /health
     envVars:
       - key: JAVA_OPTS
         value: -Xmx256m -Xms128m

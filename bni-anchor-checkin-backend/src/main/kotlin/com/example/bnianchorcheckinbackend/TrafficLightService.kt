@@ -11,6 +11,13 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDate
 
+/**
+ * Persist Anchor Traffic Light Excel snapshots and draft per-member reminders.
+ *
+ * Transactional: [importXlsx] / [importReport] write one `bni_traffic_light_reports` row
+ * then sync matching members' [com.example.bnianchorcheckinbackend.entities.Member.standing].
+ * Reminder generation is read-only except DeepSeek HTTP.
+ */
 @Service
 @ConditionalOnProperty(name = ["spring.datasource.url"])
 class TrafficLightService(
@@ -20,6 +27,12 @@ class TrafficLightService(
     private val objectMapper: ObjectMapper,
     private val deepSeekService: DeepSeekService
 ) {
+    /**
+     * Resolve chapter and reject non-Anchor callers.
+     * @param chapterTag tag or null (default chapter)
+     * @return Anchor `chapter_id`
+     * @throws IllegalArgumentException when the chapter is not `anchor`
+     */
     fun requireAnchor(chapterTag: String?): Int {
         val chapter = chapterService.requireChapter(chapterTag)
         if (!chapter.tag.equals("anchor", ignoreCase = true)) {
@@ -28,12 +41,21 @@ class TrafficLightService(
         return chapter.id!!.toInt()
     }
 
+    /**
+     * Parse `.xlsx` bytes then [importReport].
+     * @param bytes OOXML zip; must contain a Traffic Light Report sheet
+     * @param filename stored on the snapshot for admin display
+     */
     @Transactional
     fun importXlsx(bytes: ByteArray, filename: String, chapterTag: String?): TrafficLightReportDto {
         val parsed = TrafficLightXlsxParser.parse(bytes).copy(filename = filename)
         return importReport(parsed, chapterTag)
     }
 
+    /**
+     * Insert a report snapshot and overlay standing on members whose names match.
+     * Unmatched names are skipped (no insert).
+     */
     @Transactional
     fun importReport(request: TrafficLightImportRequest, chapterTag: String?): TrafficLightReportDto {
         val chapterId = requireAnchor(chapterTag)
@@ -54,17 +76,48 @@ class TrafficLightService(
         return toDto(saved)
     }
 
+    /** Newest report for Anchor, or null if none uploaded. */
     fun latest(chapterTag: String?): TrafficLightReportDto? {
         val chapterId = requireAnchor(chapterTag)
         val report = reportRepository.findTopByChapterIdOrderByIdDesc(chapterId) ?: return null
         return toDto(report)
     }
 
+    /**
+     * Upload history for the LT dashboard (newest first). Caps at [HISTORY_LIMIT] rows.
+     * Side effect: reads `rows_json` to count lights; no write.
+     */
+    fun listHistory(chapterTag: String?): List<TrafficLightHistoryItemDto> {
+        val chapterId = requireAnchor(chapterTag)
+        return reportRepository.findAllByChapterIdOrderByIdDesc(chapterId)
+            .take(HISTORY_LIMIT)
+            .map { toHistoryItem(it) }
+    }
+
+    /**
+     * One snapshot by id for the selected history row.
+     * @throws IllegalArgumentException when missing or not Anchor
+     */
+    fun getById(reportId: Int, chapterTag: String?): TrafficLightReportDto {
+        val chapterId = requireAnchor(chapterTag)
+        val report = reportRepository.findByIdAndChapterId(reportId.toLong(), chapterId)
+            ?: throw IllegalArgumentException("搵唔到呢份 Traffic Light 報告")
+        return toDto(report)
+    }
+
+    /**
+     * DeepSeek draft with template fallback.
+     * Side effects: outbound DeepSeek HTTP when `deepseek.api.key` is set; no DB write.
+     */
     fun reminder(request: TrafficLightReminderRequest, chapterTag: String?): TrafficLightReminderDto {
-        val latest = latest(chapterTag) ?: throw IllegalArgumentException("尚未上傳 Traffic Light Excel")
-        val row = latest.rows.firstOrNull { it.name.equals(request.name.trim(), ignoreCase = true) }
+        val snapshot = if (request.reportId != null) {
+            getById(request.reportId, chapterTag)
+        } else {
+            latest(chapterTag) ?: throw IllegalArgumentException("尚未上傳 Traffic Light Excel")
+        }
+        val row = snapshot.rows.firstOrNull { it.name.equals(request.name.trim(), ignoreCase = true) }
             ?: throw IllegalArgumentException("Report 搵唔到會員：${request.name}")
-        val period = request.periodLabel?.trim()?.ifEmpty { null } ?: latest.periodLabel
+        val period = request.periodLabel?.trim()?.ifEmpty { null } ?: snapshot.periodLabel
         val weeks = meetingWeeks(row)
         val fallback = templateReminder(row, period, weeks)
         val ai = deepSeekService.generateTrafficLightReminder(
@@ -84,6 +137,7 @@ class TrafficLightService(
         } else fallback
     }
 
+    /** Overlay [MemberStanding] from light color; skip unknown names / invalid lights. */
     private fun syncMemberStanding(chapterId: Int, rows: List<TrafficLightRowDto>) {
         for (row in rows) {
             val member = memberRepository.findByChapterIdAndNameIgnoreCase(chapterId, row.name).orElse(null)
@@ -98,11 +152,33 @@ class TrafficLightService(
         }
     }
 
-    private fun toDto(report: TrafficLightReport): TrafficLightReportDto {
-        val rows: List<TrafficLightRowDto> = objectMapper.readValue(
+    private fun parseRows(report: TrafficLightReport): List<TrafficLightRowDto> =
+        objectMapper.readValue(
             report.rowsJson,
             object : TypeReference<List<TrafficLightRowDto>>() {}
         )
+
+    private fun toHistoryItem(report: TrafficLightReport): TrafficLightHistoryItemDto {
+        val rows = parseRows(report)
+        val lights = rows.groupingBy { it.light.uppercase() }.eachCount()
+        return TrafficLightHistoryItemDto(
+            id = report.id!!.toInt(),
+            periodLabel = report.periodLabel,
+            periodStart = report.periodStart?.toString(),
+            periodEnd = report.periodEnd?.toString(),
+            filename = report.filename,
+            createdAt = report.createdAt?.toString(),
+            rowCount = rows.size,
+            green = lights["GREEN"] ?: 0,
+            yellow = lights["YELLOW"] ?: 0,
+            red = lights["RED"] ?: 0,
+            black = lights["BLACK"] ?: 0
+        )
+    }
+
+    /** Deserialize [TrafficLightReport.rowsJson] into the admin DTO. */
+    private fun toDto(report: TrafficLightReport): TrafficLightReportDto {
+        val rows = parseRows(report)
         return TrafficLightReportDto(
             id = report.id!!.toInt(),
             chapterId = report.chapterId,
@@ -117,11 +193,13 @@ class TrafficLightService(
         )
     }
 
+    /** Weeks used for per-week rates: attendance-ish columns, at least 1. */
     private fun meetingWeeks(row: TrafficLightRowDto): Int {
         val n = row.present + row.absent + row.late + row.medical + row.substitute
         return n.coerceAtLeast(1)
     }
 
+    /** Cantonese email/WhatsApp copy when DeepSeek is unavailable. */
     private fun templateReminder(row: TrafficLightRowDto, period: String, weeks: Int): TrafficLightReminderDto {
         val lightZh = TrafficLightScoring.lightLabelZh(row.light)
         val short = (TrafficLightScoring.GREEN_PTS - row.totalPts).coerceAtLeast(0)
@@ -167,5 +245,10 @@ class TrafficLightService(
             whatsappText = wa.trim(),
             source = "template"
         )
+    }
+
+    companion object {
+        /** Cap history API so listing does not load unbounded Excel snapshots. */
+        const val HISTORY_LIMIT = 24
     }
 }

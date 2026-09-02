@@ -26,6 +26,8 @@ data class AttendanceEmailResult(
 
 /**
  * Builds attendance CSV and emails it via Resend after an event ends (or on admin test).
+ * After a successful poller send, [createAndActivateNextMeeting] creates/reuses next week's
+ * meeting and sets it current (`exclusive=true`). Failures there are logged and do not undo the email.
  */
 @Service
 @ConditionalOnProperty(name = ["spring.datasource.url"])
@@ -206,6 +208,11 @@ class EventAttendanceEmailService(
     /**
      * After a finished event is emailed, create the chapter's next weekly meeting
      * (or reuse one already on that date) and set it as the exclusive current event.
+     *
+     * @param finished the event whose attendance email just succeeded
+     * @return the next [EventData], or null if the chapter cannot be resolved
+     *
+     * Side effects: may INSERT `bni_events` then [EventDbService.setEventActive] exclusive.
      */
     fun createAndActivateNextMeeting(finished: Event): EventData? {
         val chapter = chapterService.findInfoById(finished.chapterId) ?: run {

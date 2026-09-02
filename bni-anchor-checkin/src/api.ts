@@ -77,6 +77,17 @@ const jsonHeaders = {
   "Content-Type": "application/json"
 };
 
+/** Admin session token attached as `X-Client-Token` on API calls. */
+let clientAuthToken: string | null = null;
+
+export function setClientAuthToken(token: string | null | undefined) {
+  clientAuthToken = token?.trim() ? token : null;
+}
+
+export function getClientAuthToken(): string | null {
+  return clientAuthToken;
+}
+
 /** Default public chapter: Anchor (id=1). */
 export const ANCHOR_CHAPTER_ID = 1;
 export const ANCHOR_CHAPTER_TAG = "anchor";
@@ -158,7 +169,11 @@ export function normalizeApiEventId(eventId?: number | string | null): number | 
 function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = FETCH_TIMEOUT_MS): Promise<Response> {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
-  return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(id));
+  const headers = new Headers(options.headers);
+  if (clientAuthToken) {
+    headers.set("X-Client-Token", clientAuthToken);
+  }
+  return globalThis.fetch(url, { ...options, headers, signal: options.signal ?? controller.signal }).finally(() => clearTimeout(id));
 }
 
 const RETRY_DELAYS_MS = [0, 1000, 3000];
@@ -253,7 +268,7 @@ async function handleResponse<T>(response: Response): Promise<T> {
 export async function recordAttendance(
   qrPayload: string
 ): Promise<{ message: string }> {
-  const response = await fetch(`${API_BASE}/api/attendance/scan`, {
+  const response = await fetchWithTimeout(`${API_BASE}/api/attendance/scan`, {
     method: "POST",
     headers: jsonHeaders,
     body: JSON.stringify({ qrPayload }),
@@ -274,7 +289,7 @@ export async function searchMemberAttendance(
   name: string,
   signal?: AbortSignal
 ): Promise<MemberAttendance[]> {
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${API_BASE}/api/attendance/member?name=${encodeURIComponent(name)}`,
     { signal, mode: "cors" }
   );
@@ -293,7 +308,7 @@ export async function searchEventAttendance(
   date: string,
   signal?: AbortSignal
 ): Promise<EventAttendance[]> {
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${API_BASE}/api/attendance/event?date=${encodeURIComponent(date)}`,
     { signal, mode: "cors" }
   );
@@ -327,7 +342,7 @@ export async function clientLogin(
   adminLogin: string,
   adminPassword: string
 ): Promise<{ token: string; chapter: ChapterInfo; expiresAtEpochMs: number }> {
-  const response = await fetch(`${API_BASE}/api/client/login`, {
+  const response = await fetchWithTimeout(`${API_BASE}/api/client/login`, {
     method: "POST",
     headers: jsonHeaders,
     body: JSON.stringify({ AdminLogin: adminLogin, AdminPassword: adminPassword }),
@@ -351,7 +366,7 @@ export async function clientLogin(
 }
 
 export async function clientLogout(token: string): Promise<void> {
-  await fetch(`${API_BASE}/api/client/logout`, {
+  await fetchWithTimeout(`${API_BASE}/api/client/logout`, {
     method: "POST",
     headers: { ...jsonHeaders, "X-Client-Token": token },
     mode: "cors"
@@ -361,7 +376,7 @@ export async function clientLogout(token: string): Promise<void> {
 export async function fetchClientSession(
   token: string
 ): Promise<{ chapter: ChapterInfo }> {
-  const response = await fetch(`${API_BASE}/api/client/session`, {
+  const response = await fetchWithTimeout(`${API_BASE}/api/client/session`, {
     headers: { "X-Client-Token": token },
     mode: "cors"
   });
@@ -369,7 +384,7 @@ export async function fetchClientSession(
 }
 
 export async function listChapters(): Promise<{ chapters: ChapterInfo[] }> {
-  const response = await fetch(`${API_BASE}/api/chapters`, { mode: "cors" });
+  const response = await fetchWithTimeout(`${API_BASE}/api/chapters`, { mode: "cors" });
   return handleResponse(response);
 }
 
@@ -399,7 +414,7 @@ export async function updateChapterAdminPassword(
   tag: string,
   adminPassword: string
 ): Promise<{ status: string; chapter: { tag: string; displayName: string } }> {
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${API_BASE}/api/chapters/${encodeURIComponent(tag)}/admin-password`,
     {
       method: "PUT",
@@ -478,7 +493,7 @@ export type PublicGuestCreateRequest = {
 
 /** Issue a server-signed CAPTCHA challenge for public forms. GET /api/public/captcha. */
 export async function getPublicCaptcha(): Promise<PublicCaptchaChallenge> {
-  const response = await fetch(`${API_BASE}/api/public/captcha`, { mode: "cors" });
+  const response = await fetchWithTimeout(`${API_BASE}/api/public/captcha`, { mode: "cors" });
   return handleResponse(response);
 }
 
@@ -491,7 +506,7 @@ export async function createPublicGuest(request: PublicGuestCreateRequest): Prom
   status: string;
   guest: { id?: number; name: string };
 }> {
-  const response = await fetch(`${API_BASE}/api/public/guests`, {
+  const response = await fetchWithTimeout(`${API_BASE}/api/public/guests`, {
     method: "POST",
     headers: jsonHeaders,
     body: JSON.stringify(request),
@@ -502,7 +517,7 @@ export async function createPublicGuest(request: PublicGuestCreateRequest): Prom
 
 /** Get one event by id. GET /api/events/{id}. Side effect: network. */
 export async function getEventById(eventId: number): Promise<EventData> {
-  const response = await fetch(withChapterQuery(`${API_BASE}/api/events/${encodeURIComponent(String(eventId))}`), { mode: "cors" });
+  const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/events/${encodeURIComponent(String(eventId))}`), { mode: "cors" });
   return handleResponse(response);
 }
 
@@ -515,7 +530,7 @@ export async function getEventById(eventId: number): Promise<EventData> {
 export async function checkIn(
   request: CheckInRequest
 ): Promise<{ status: string; message: string }> {
-  const response = await fetch(withChapterQuery(`${API_BASE}/api/checkin`), {
+  const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/checkin`), {
     method: "POST",
     headers: jsonHeaders,
     body: JSON.stringify(request),
@@ -531,7 +546,7 @@ export async function checkIn(
  * @throws {Error} On HTTP error
  */
 export async function getRecords(chapter?: string | null): Promise<{ records: CheckInRecord[] }> {
-  const response = await fetch(withChapterQuery(`${API_BASE}/api/records`, chapter), { mode: "cors" });
+  const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/records`, chapter), { mode: "cors" });
   return handleResponse(response);
 }
 
@@ -541,7 +556,7 @@ export async function getRecords(chapter?: string | null): Promise<{ records: Ch
  * @throws {Error} On HTTP error
  */
 export async function clearRecords(): Promise<{ status: string; message: string }> {
-  const response = await fetch(withChapterQuery(`${API_BASE}/api/records`), {
+  const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/records`), {
     method: "DELETE",
     mode: "cors"
   });
@@ -555,7 +570,7 @@ export async function clearRecords(): Promise<{ status: string; message: string 
  * @throws {Error} On HTTP error or 404
  */
 export async function deleteRecord(index: number): Promise<{ status: string; message: string }> {
-  const response = await fetch(`${API_BASE}/api/records/${index}`, {
+  const response = await fetchWithTimeout(`${API_BASE}/api/records/${index}`, {
     method: "DELETE",
     mode: "cors"
   });
@@ -567,7 +582,7 @@ export async function markAttendanceAbsent(
   eventDate: string,
   name: string
 ): Promise<{ status: string; removed?: number; warnings?: string[] }> {
-  const response = await fetch(withChapterQuery(`${API_BASE}/api/events/attendance-corrections`), {
+  const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/events/attendance-corrections`), {
     method: "POST",
     headers: jsonHeaders,
     body: JSON.stringify({
@@ -592,7 +607,7 @@ export async function exportRecords(
 ): Promise<Blob> {
   const id = normalizeApiEventId(eventId);
   const base = id !== undefined ? `${API_BASE}/api/export?eventId=${encodeURIComponent(String(id))}` : `${API_BASE}/api/export`;
-  const response = await fetch(withChapterQuery(base, chapter, chapterId), { mode: "cors" });
+  const response = await fetchWithTimeout(withChapterQuery(base, chapter, chapterId), { mode: "cors" });
   if (!response.ok) {
     throw new Error("Failed to export records");
   }
@@ -623,7 +638,7 @@ export async function sendAttendanceEmail(
   if (id === undefined) {
     throw new Error("Invalid event id");
   }
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     withChapterQuery(`${API_BASE}/api/events/${encodeURIComponent(String(id))}/send-attendance-email?force=${force ? "true" : "false"}`),
     {
       method: "POST",
@@ -645,7 +660,7 @@ export async function resetAttendanceEmail(
   if (id === undefined) {
     throw new Error("Invalid event id");
   }
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     withChapterQuery(`${API_BASE}/api/events/${encodeURIComponent(String(id))}/attendance-email`),
     {
       method: "DELETE",
@@ -677,7 +692,7 @@ export async function importAttendanceCsv(eventDate: string, file: File): Promis
   form.append("file", file);
   let response: Response;
   try {
-    response = await fetch(withChapterQuery(`${API_BASE}/api/events/import-attendance-csv`), {
+    response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/events/import-attendance-csv`), {
       method: "POST",
       body: form,
       mode: "cors"
@@ -738,7 +753,7 @@ export async function createEvent(
   chapterId?: number | null
 ): Promise<{ status: string; message: string; event?: unknown }> {
   try {
-    const response = await fetch(withChapterQuery(`${API_BASE}/api/events`, chapter, chapterId), {
+    const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/events`, chapter, chapterId), {
       method: "POST",
       headers: jsonHeaders,
       body: JSON.stringify({
@@ -770,7 +785,7 @@ export async function createEvent(
  * @throws {Error} On HTTP error
  */
 export async function clearAllEventsAndAttendance(): Promise<{ status: string; message: string }> {
-  const response = await fetch(withChapterQuery(`${API_BASE}/api/events/clear-all`), {
+  const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/events/clear-all`), {
     method: "DELETE",
     mode: "cors"
   });
@@ -797,7 +812,7 @@ export type EventData = {
 
 /** List all events (latest first). GET /api/events. Side effect: network. */
 export async function listEvents(): Promise<EventData[]> {
-  const response = await fetch(withChapterQuery(`${API_BASE}/api/events`), { mode: "cors" });
+  const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/events`), { mode: "cors" });
   return handleResponse(response);
 }
 
@@ -808,7 +823,7 @@ export async function listEvents(): Promise<EventData[]> {
  */
 export async function getCurrentEvent(chapter?: string | null, chapterId?: number | null): Promise<EventData | null> {
   try {
-    const response = await fetch(withChapterQuery(`${API_BASE}/api/events/current`, chapter, chapterId), { mode: "cors" });
+    const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/events/current`, chapter, chapterId), { mode: "cors" });
     if (response.status === 404) {
       return null;
     }
@@ -827,7 +842,7 @@ export async function activateEvent(
   chapter?: string | null,
   chapterId?: number | null
 ): Promise<{ status: string; exclusive?: boolean; event?: unknown; message?: string }> {
-  const response = await fetch(withChapterQuery(`${API_BASE}/api/events/${eventId}/activate`, chapter, chapterId), {
+  const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/events/${eventId}/activate`, chapter, chapterId), {
     method: "POST",
     headers: jsonHeaders,
     body: JSON.stringify({ exclusive }),
@@ -844,7 +859,7 @@ export async function deleteEvent(
   force = false
 ): Promise<{ status: string; message?: string }> {
   const q = force ? "?force=true" : "?force=false";
-  const response = await fetch(withChapterQuery(`${API_BASE}/api/events/${eventId}${q}`), {
+  const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/events/${eventId}${q}`), {
     method: "DELETE",
     mode: "cors"
   });
@@ -856,7 +871,7 @@ export async function updateEvent(
   eventId: number,
   patch: { name?: string; startTime?: string; endTime?: string }
 ): Promise<EventData> {
-  const response = await fetch(withChapterQuery(`${API_BASE}/api/events/${eventId}`), {
+  const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/events/${eventId}`), {
     method: "PUT",
     headers: jsonHeaders,
     body: JSON.stringify(patch),
@@ -950,7 +965,7 @@ export async function getReportData(
   const base = id !== undefined
     ? `${API_BASE}/api/report?eventId=${encodeURIComponent(String(id))}`
     : `${API_BASE}/api/report`;
-  const response = await fetch(withChapterQuery(base, chapter, chapterId), { mode: "cors" });
+  const response = await fetchWithTimeout(withChapterQuery(base, chapter, chapterId), { mode: "cors" });
   if (response.ok) {
     return handleResponse(response);
   }
@@ -975,7 +990,7 @@ export async function getReportData(
  * @returns {Promise<boolean>}
  */
 export async function checkEventExists(date: string): Promise<boolean> {
-  const response = await fetch(withChapterQuery(`${API_BASE}/api/events/check?date=${encodeURIComponent(date)}`), { mode: "cors" });
+  const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/events/check?date=${encodeURIComponent(date)}`), { mode: "cors" });
   if (response.ok) {
     const data = await response.json();
     return !!data?.exists;
@@ -1020,7 +1035,7 @@ export async function getEventForDate(
  */
 export async function checkEventThisWeek(): Promise<boolean> {
   try {
-    const response = await fetch(withChapterQuery(`${API_BASE}/api/events/check-this-week`), { mode: "cors" });
+    const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/events/check-this-week`), { mode: "cors" });
     if (response.ok) {
       const data = await response.json();
       return !!data?.exists;
@@ -1054,7 +1069,7 @@ export async function logAttendance(
   status: string,
   chapter?: string | null
 ): Promise<{ status: string; message: string }> {
-  const response = await fetch(withChapterQuery(`${API_BASE}/api/attendance/log`, chapter), {
+  const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/attendance/log`, chapter), {
     method: "POST",
     headers: jsonHeaders,
     body: JSON.stringify({
@@ -1080,7 +1095,7 @@ export async function updateAttendanceSubstitute(
   substituteName?: string,
   chapter?: string | null
 ): Promise<{ status: string; message: string }> {
-  const response = await fetch(withChapterQuery(`${API_BASE}/api/attendance/substitute-for`, chapter), {
+  const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/attendance/substitute-for`, chapter), {
     method: "POST",
     headers: jsonHeaders,
     body: JSON.stringify({
@@ -1109,7 +1124,7 @@ export async function getPlannedSubstitutes(
     chapter,
     chapterId
   );
-  const response = await fetch(url, { mode: "cors" });
+  const response = await fetchWithTimeout(url, { mode: "cors" });
   return handleResponse(response);
 }
 
@@ -1165,7 +1180,7 @@ export function getReportWebSocketUrl(): string {
 export async function generateAIInsights(
   request: AIInsightRequest
 ): Promise<AIInsightResponse> {
-  const response = await fetch(`${API_BASE}/api/insights/generate`, {
+  const response = await fetchWithTimeout(`${API_BASE}/api/insights/generate`, {
     method: "POST",
     headers: jsonHeaders,
     body: JSON.stringify(request),
@@ -1183,7 +1198,7 @@ export async function generateAIInsights(
 export async function getEventInsights(
   eventId: number
 ): Promise<AIInsightResponse[]> {
-  const response = await fetch(`${API_BASE}/api/insights/${eventId}`, {
+  const response = await fetchWithTimeout(`${API_BASE}/api/insights/${eventId}`, {
     mode: "cors"
   });
   return handleResponse(response);
@@ -1198,7 +1213,7 @@ export async function getEventInsights(
 export async function exportAIReadyData(
   eventId: number
 ): Promise<Record<string, unknown>> {
-  const response = await fetch(`${API_BASE}/api/insights/data-export/${eventId}`, {
+  const response = await fetchWithTimeout(`${API_BASE}/api/insights/data-export/${eventId}`, {
     mode: "cors"
   });
   return handleResponse(response);
@@ -1223,7 +1238,7 @@ export async function quickMatch(
   guestName: string,
   guestProfession: string
 ): Promise<QuickMatchResult> {
-  const response = await fetch(`${API_BASE}/api/matching/quick`, {
+  const response = await fetchWithTimeout(`${API_BASE}/api/matching/quick`, {
     method: "POST",
     headers: jsonHeaders,
     body: JSON.stringify({ guestName, guestProfession }),
@@ -1269,7 +1284,7 @@ export type BatchMatchResponse = {
 export async function batchMatch(
   guests: BatchGuestInfo[]
 ): Promise<BatchMatchResponse> {
-  const response = await fetch(`${API_BASE}/api/matching/batch`, {
+  const response = await fetchWithTimeout(`${API_BASE}/api/matching/batch`, {
     method: "POST",
     headers: jsonHeaders,
     body: JSON.stringify({ guests }),
@@ -1400,7 +1415,7 @@ export async function createMember(
   request: CreateMemberRequest,
   chapter?: string | null
 ): Promise<{ status: string; message: string; member?: MemberInfo }> {
-  const response = await fetch(withChapterQuery(`${API_BASE}/api/members`, chapter), {
+  const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/members`, chapter), {
     method: "POST",
     headers: jsonHeaders,
     body: JSON.stringify(request),
@@ -1425,7 +1440,7 @@ export async function updateMember(
 ): Promise<{ status: string; message: string }> {
   const body = JSON.stringify(request);
   const putMember = (params: URLSearchParams) =>
-    fetch(`${API_BASE}/api/members?${params.toString()}`, {
+    fetchWithTimeout(`${API_BASE}/api/members?${params.toString()}`, {
       method: "PUT",
       headers: jsonHeaders,
       body,
@@ -1476,7 +1491,7 @@ export async function updateGuest(
   if (currentEventDate?.trim()) {
     params.set("currentEventDate", currentEventDate.trim());
   }
-  const response = await fetch(withChapterQuery(`${API_BASE}/api/guests?${params.toString()}`), {
+  const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/guests?${params.toString()}`), {
     method: "PUT",
     headers: jsonHeaders,
     body: JSON.stringify(request),
@@ -1492,7 +1507,7 @@ export async function updateGuest(
 export async function createGuest(
   request: CreateGuestRequest
 ): Promise<{ status: string; message: string; guest?: GuestInfo }> {
-  const response = await fetch(withChapterQuery(`${API_BASE}/api/guests`), {
+  const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/guests`), {
     method: "POST",
     headers: jsonHeaders,
     body: JSON.stringify(request),
@@ -1509,7 +1524,7 @@ export async function deleteMember(
   memberId?: number
 ): Promise<{ status: string; message: string }> {
   const deleteMemberRequest = (params: URLSearchParams) =>
-    fetch(`${API_BASE}/api/members?${params.toString()}`, {
+    fetchWithTimeout(`${API_BASE}/api/members?${params.toString()}`, {
       method: "DELETE",
       mode: "cors"
     });
@@ -1534,7 +1549,7 @@ export async function deleteMember(
 export async function deleteGuest(
   name: string
 ): Promise<{ status: string; message: string }> {
-  const response = await fetch(withChapterQuery(`${API_BASE}/api/guests/${encodeURIComponent(name)}`), {
+  const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/guests/${encodeURIComponent(name)}`), {
     method: "DELETE",
     mode: "cors"
   });
@@ -1565,14 +1580,14 @@ export async function getObservers(
   chapter?: string | null
 ): Promise<{ observers: ObserverInfo[] }> {
   const q = eventDate ? `?eventDate=${encodeURIComponent(eventDate)}` : "";
-  const response = await fetch(withChapterQuery(`${API_BASE}/api/observers${q}`, chapter), { mode: "cors" });
+  const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/observers${q}`, chapter), { mode: "cors" });
   return handleResponse(response);
 }
 
 export async function createObserver(
   request: CreateObserverRequest
 ): Promise<{ status: string; message: string; observer?: ObserverInfo }> {
-  const response = await fetch(withChapterQuery(`${API_BASE}/api/observers`), {
+  const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/observers`), {
     method: "POST",
     headers: jsonHeaders,
     body: JSON.stringify(request),
@@ -1585,7 +1600,7 @@ export async function updateObserver(
   name: string,
   request: UpdateObserverRequest
 ): Promise<{ status: string; message: string }> {
-  const response = await fetch(withChapterQuery(`${API_BASE}/api/observers/${encodeURIComponent(name)}`), {
+  const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/observers/${encodeURIComponent(name)}`), {
     method: "PUT",
     headers: jsonHeaders,
     body: JSON.stringify(request),
@@ -1597,7 +1612,7 @@ export async function updateObserver(
 export async function deleteObserver(
   name: string
 ): Promise<{ status: string; message: string }> {
-  const response = await fetch(withChapterQuery(`${API_BASE}/api/observers/${encodeURIComponent(name)}`), {
+  const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/observers/${encodeURIComponent(name)}`), {
     method: "DELETE",
     mode: "cors"
   });
@@ -1605,7 +1620,7 @@ export async function deleteObserver(
 }
 
 export async function exportObservers(eventDate: string): Promise<Blob> {
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     withChapterQuery(`${API_BASE}/api/observers/export?eventDate=${encodeURIComponent(eventDate)}`),
     { mode: "cors" }
   );
@@ -1615,6 +1630,10 @@ export async function exportObservers(eventDate: string): Promise<Blob> {
   return response.blob();
 }
 
+/**
+ * One member row from GET `/api/traffic-light/latest` (Excel snapshot).
+ * `light` matches [MemberStanding].
+ */
 export type TrafficLightRow = {
   name: string;
   present: number;
@@ -1633,6 +1652,7 @@ export type TrafficLightRow = {
   light: MemberStanding;
 };
 
+/** Latest uploaded Traffic Light report (Anchor only). */
 export type TrafficLightReport = {
   id: number;
   chapterId: number;
@@ -1646,6 +1666,22 @@ export type TrafficLightReport = {
   rows: TrafficLightRow[];
 };
 
+/** One upload in GET `/api/traffic-light/reports` (no member rows). */
+export type TrafficLightHistoryItem = {
+  id: number;
+  periodLabel: string;
+  periodStart: string | null;
+  periodEnd: string | null;
+  filename: string | null;
+  createdAt: string | null;
+  rowCount: number;
+  green: number;
+  yellow: number;
+  red: number;
+  black: number;
+};
+
+/** POST `/api/traffic-light/reminder` — `source` is `deepseek` or `template`. */
 export type TrafficLightReminder = {
   name: string;
   light: MemberStanding;
@@ -1656,13 +1692,19 @@ export type TrafficLightReminder = {
   source: string;
 };
 
+/**
+ * POST `/api/traffic-light/upload` — multipart Excel. Anchor-only on the server.
+ * @param file `.xlsx` (BNI Member Traffic Light)
+ * @param chapter optional tag (`anchor`)
+ * @returns saved report; throws on 4xx/5xx via [handleResponse]
+ */
 export async function uploadTrafficLightExcel(
   file: File,
   chapter?: string | null
 ): Promise<{ status: string; message: string; report: TrafficLightReport }> {
   const body = new FormData();
   body.append("file", file);
-  const response = await fetch(withChapterQuery(`${API_BASE}/api/traffic-light/upload`, chapter), {
+  const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/traffic-light/upload`, chapter), {
     method: "POST",
     body,
     mode: "cors",
@@ -1670,26 +1712,62 @@ export async function uploadTrafficLightExcel(
   return handleResponse(response);
 }
 
+/**
+ * GET `/api/traffic-light/latest`.
+ * @returns report or `null` when none uploaded (HTTP 404)
+ */
 export async function getLatestTrafficLight(
   chapter?: string | null
 ): Promise<TrafficLightReport | null> {
-  const response = await fetch(withChapterQuery(`${API_BASE}/api/traffic-light/latest`, chapter), {
+  const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/traffic-light/latest`, chapter), {
     mode: "cors",
   });
   if (response.status === 404) return null;
   return handleResponse(response);
 }
 
+/**
+ * POST `/api/traffic-light/reminder` — DeepSeek or template copy for one member.
+ * Side effects: backend may call DeepSeek; this client only fetches.
+ */
 export async function generateTrafficLightReminder(
   name: string,
   chapter?: string | null,
-  periodLabel?: string
+  periodLabel?: string,
+  reportId?: number | null
 ): Promise<TrafficLightReminder> {
-  const response = await fetch(withChapterQuery(`${API_BASE}/api/traffic-light/reminder`, chapter), {
+  const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/traffic-light/reminder`, chapter), {
     method: "POST",
     headers: jsonHeaders,
-    body: JSON.stringify({ name, periodLabel }),
+    body: JSON.stringify({ name, periodLabel, reportId: reportId ?? undefined }),
     mode: "cors",
   });
+  return handleResponse(response);
+}
+
+/**
+ * GET `/api/traffic-light/reports` — newest first, no member rows.
+ */
+export async function listTrafficLightReports(
+  chapter?: string | null
+): Promise<TrafficLightHistoryItem[]> {
+  const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/traffic-light/reports`, chapter), {
+    mode: "cors",
+  });
+  const data = (await handleResponse(response)) as { reports?: TrafficLightHistoryItem[] };
+  return Array.isArray(data.reports) ? data.reports : [];
+}
+
+/**
+ * GET `/api/traffic-light/reports/{id}` — full snapshot for a history row.
+ */
+export async function getTrafficLightReport(
+  id: number,
+  chapter?: string | null
+): Promise<TrafficLightReport> {
+  const response = await fetchWithTimeout(
+    withChapterQuery(`${API_BASE}/api/traffic-light/reports/${encodeURIComponent(String(id))}`, chapter),
+    { mode: "cors" }
+  );
   return handleResponse(response);
 }

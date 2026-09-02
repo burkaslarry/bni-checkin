@@ -44,7 +44,7 @@ class ChapterController(
     }
 
     @PostMapping("/api/client/login")
-    @Operation(summary = "Client chapter admin login (AdminLogin / AdminPassword; password verified as MD5)")
+    @Operation(summary = "Client chapter admin login (AdminLogin / AdminPassword; bcrypt with MD5 upgrade)")
     fun login(@RequestBody request: ClientLoginRequest): ResponseEntity<Map<String, Any>> {
         val login = (request.adminLogin ?: "").trim()
         val password = request.adminPassword ?: ""
@@ -85,7 +85,7 @@ class ChapterController(
     }
 
     @PutMapping("/api/chapters/{tag}/admin-password")
-    @Operation(summary = "Anchor-only: reset another chapter AdminPassword (stored as MD5)")
+    @Operation(summary = "Anchor-only: reset another chapter AdminPassword (stored as bcrypt)")
     fun updateChapterAdminPassword(
         @PathVariable tag: String,
         @RequestHeader(value = "X-Client-Token", required = false) token: String?,

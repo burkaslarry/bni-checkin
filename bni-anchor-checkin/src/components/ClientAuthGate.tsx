@@ -2,11 +2,11 @@ import { ReactNode } from "react";
 import { ClientAdminLoginPanel } from "./ClientAdminLoginPanel";
 import { useChapter } from "../chapterContext";
 
-/** Require login for all /admin/* routes (Anchor and other chapters). */
+/** Require login for /admin/* and /report. */
 export function ClientAuthGate({ children }: { children: ReactNode }) {
-  const { isAdminRoute, isAuthenticated, authReady } = useChapter();
+  const { requiresLogin, isAuthenticated, authReady } = useChapter();
 
-  if (!isAdminRoute) return <>{children}</>;
+  if (!requiresLogin) return <>{children}</>;
 
   if (!authReady) {
     return (

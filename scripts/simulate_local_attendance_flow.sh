@@ -57,7 +57,7 @@ PY
 }
 
 curl_json() {
-  curl -sS -H "Content-Type: application/json" "$@"
+  curl -sS -H "Content-Type: application/json" -H "${EVENTXP_AUTH_HEADER}" "$@"
 }
 
 post_json() {
@@ -147,6 +147,11 @@ if ! api_healthcheck; then
 fi
 ok "Backend reachable."
 
+# shellcheck source=scripts/lib/admin-auth.sh
+. "$(cd "$(dirname "$0")" && pwd)/lib/admin-auth.sh"
+eventxp_admin_login
+ok "Admin session ready."
+
 if [[ "${CLEAR_ALL}" == "1" ]]; then
   log "0a) Cleaning prior simulation guests (safe delete by pattern + event_date)"
   if ! psql_ok; then
@@ -157,7 +162,7 @@ if [[ "${CLEAR_ALL}" == "1" ]]; then
   ok "Cleaned prior simulated guests (if any)."
 
   log "0) Clearing all events + attendance (DB + memory): DELETE /api/events/clear-all"
-  curl -sS -X DELETE "${BASE_URL}/api/events/clear-all" >/dev/null
+  curl -sS -X DELETE -H "${EVENTXP_AUTH_HEADER}" "${BASE_URL}/api/events/clear-all" >/dev/null
   ok "Cleared."
 fi
 
@@ -310,7 +315,7 @@ ok "Attempted /api/checkin for 2 walk-in guests (ignore if duplicate)."
 
 log "7) Export attendance CSV: GET /api/export (expect filename attendance_${EVENT_DATE_YYYYMMDD}.csv)"
 tmp_body="$(mktemp)"
-curl -sS -o "${tmp_body}" "${BASE_URL}/api/export"
+curl -sS -H "${EVENTXP_AUTH_HEADER}" -o "${tmp_body}" "${BASE_URL}/api/export"
 filename="attendance_${EVENT_DATE_YYYYMMDD}.csv"
 mv "${tmp_body}" "./${filename}"
 ok "Saved CSV: ./${filename}"

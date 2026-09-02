@@ -4956,6 +4956,113 @@ td {
   margin: 0.5rem 0 0.75rem;
 }
 
+.traffic-board {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.85fr) minmax(280px, 1.4fr);
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.traffic-history,
+.traffic-lt {
+  border: 1px solid var(--border);
+  border-radius: 0.9rem;
+  padding: 0.85rem 1rem;
+  background: var(--card);
+}
+
+.traffic-history h3,
+.traffic-lt h4 {
+  margin: 0 0 0.4rem;
+}
+
+.traffic-history ul,
+.traffic-lt-lists ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 16rem;
+  overflow: auto;
+}
+
+.traffic-history-row {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  text-align: left;
+  background: transparent;
+  color: var(--text);
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  padding: 0.55rem 0.2rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.traffic-history-row.is-selected {
+  background: rgba(251, 191, 36, 0.16);
+}
+
+.traffic-history-meta {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.traffic-lt-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  gap: 0.6rem;
+  margin: 0.75rem 0;
+}
+
+.traffic-lt-stat {
+  border: 1px solid var(--border);
+  border-radius: 0.7rem;
+  padding: 0.55rem 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.traffic-lt-stat span,
+.traffic-lt-stat em {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-style: normal;
+}
+
+.traffic-lt-stat strong {
+  font-size: 1.05rem;
+}
+
+.traffic-lt-stat.is-ok {
+  border-color: #4ade80;
+}
+
+.traffic-lt-lists {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.75rem;
+}
+
+.traffic-lt-lists h4 {
+  font-size: 0.9rem;
+}
+
+button.linkish {
+  background: none;
+  border: 0;
+  color: var(--action);
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
 .traffic-summary {
   display: flex;
   flex-wrap: wrap;
@@ -5089,7 +5196,8 @@ a.button {
 }
 
 @media (max-width: 800px) {
-  .traffic-layout {
+  .traffic-layout,
+  .traffic-board {
     grid-template-columns: 1fr;
   }
 }

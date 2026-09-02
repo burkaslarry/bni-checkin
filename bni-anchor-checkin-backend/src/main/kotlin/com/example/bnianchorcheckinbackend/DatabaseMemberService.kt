@@ -24,13 +24,17 @@ class DatabaseMemberService(
     private val chapterService: ChapterService
 ) {
 
-    fun getAllMembers(chapterTag: String? = null, chapterIdParam: Int? = null): List<Map<String, Any>> {
+    fun getAllMembers(
+        chapterTag: String? = null,
+        chapterIdParam: Int? = null,
+        includeContact: Boolean = false
+    ): List<Map<String, Any>> {
         val chapterId = chapterService.resolveChapterId(chapterIdParam, chapterTag)
         val groupByCode = professionGroupRepository.findAllByChapterIdOrderByCodeAsc(chapterId)
             .associate { it.code.trim() to it.name }
         return memberRepository.findAllByChapterIdOrderByNameAsc(chapterId).map { member ->
             val code = member.professionCode.trim()
-            mapOf(
+            val base = mutableMapOf<String, Any>(
                 "id" to (member.id!!.toInt()),
                 "name" to member.name,
                 "domain" to (member.profession ?: ""),
@@ -39,10 +43,13 @@ class DatabaseMemberService(
                 "professionGroupName" to (groupByCode[code] ?: ""),
                 "membershipId" to (member.membershipId ?: ""),
                 "position" to member.position,
-                "chapterId" to member.chapterId,
-                "email" to (member.email ?: ""),
-                "phoneNumber" to (member.phoneNumber ?: "")
+                "chapterId" to member.chapterId
             )
+            if (includeContact) {
+                base["email"] = member.email ?: ""
+                base["phoneNumber"] = member.phoneNumber ?: ""
+            }
+            base
         }
     }
 

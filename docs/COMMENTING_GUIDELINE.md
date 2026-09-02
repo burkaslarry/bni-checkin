@@ -11,6 +11,7 @@ This document defines block-comment standards for the BNI Anchor Check-in codeba
 | **P1** | Public API (TS: `api.ts`, `lib/*.ts`, `types/seating.ts`, `qr-format.ts`, `hooks/useOfflineQueue.ts`, `supabase.ts`) | JSDoc added |
 | **P1** | Kotlin: `AttendanceController`, `AttendanceService`, `MatchingController`, `DeepSeekService`, `AttendanceRepository`, `DataClasses` | KDoc added |
 | **P2** | TS: `lib/matchGuestAPI.ts`, `lib/directDeepSeekMatch.ts`, `lib/sampleData.ts` | JSDoc added |
+| **P2** | Traffic Light (TS: `lib/trafficLight.ts`, `api.ts` traffic-light exports, `TrafficLightPanel.tsx`; Kotlin: `TrafficLight*` + `NextMeetingPlanner`) | JSDoc/KDoc added |
 | **P3** | TS: components (`*.tsx`), pages; Kotlin: other controllers, services, repos, entities, config | Add per PR when touching |
 
 ---

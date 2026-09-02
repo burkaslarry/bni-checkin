@@ -73,7 +73,7 @@ class EventDbServiceTimeParsingTest {
             isActive = true
         )
 
-        `when`(eventRepository.findByChapterIdAndEventDate(1, eventDate)).thenReturn(event)
+        `when`(eventRepository.findByChapterIdAndEventDateAndDeletedAtIsNull(1, eventDate)).thenReturn(event)
         `when`(memberRepository.findByChapterIdAndNameIgnoreCase(1, "Larry Lo"))
             .thenReturn(Optional.of(Member(id = 123L, name = "Larry Lo")))
         `when`(attendanceRepository.findByEventIdAndMemberId(999, 123)).thenReturn(null)

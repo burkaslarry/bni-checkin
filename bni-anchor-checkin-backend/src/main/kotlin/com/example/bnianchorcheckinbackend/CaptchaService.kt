@@ -26,9 +26,12 @@ data class CaptchaChallenge(
  */
 @Service
 class CaptchaService(
-    @Value("\${captcha.secret:dev-captcha-secret}") private val secret: String,
+    @Value("\${captcha.secret:}") secretFromEnv: String,
     @Value("\${captcha.ttlSeconds:600}") private val ttlSeconds: Long
 ) {
+    private val secret: String = secretFromEnv.trim().ifBlank {
+        java.util.UUID.randomUUID().toString()
+    }
     fun issue(): CaptchaChallenge {
         val a = Random.nextInt(1, 10)
         val b = Random.nextInt(1, 10)

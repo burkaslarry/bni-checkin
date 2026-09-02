@@ -2,16 +2,21 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import {
   generateTrafficLightReminder,
-  getLatestTrafficLight,
   getMembers,
+  getTrafficLightReport,
+  listTrafficLightReports,
   uploadTrafficLightExcel,
   type MemberInfo,
+  type TrafficLightHistoryItem,
   type TrafficLightReminder,
   type TrafficLightReport,
 } from "../api";
 import {
   analyzeGaps,
+  buildChapterLtStats,
   buildReminderTexts,
+  formatGreenPctDelta,
+  formatUploadAt,
   greenPathSummary,
   lightLabelZh,
   mailtoHref,
@@ -33,17 +38,37 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: "BLACK", label: "黑燈" },
 ];
 
+/** Map API row onto scoring helpers (light is already GREEN|YELLOW|RED|BLACK). */
 function rowToMetrics(r: TrafficLightReport["rows"][number]): TrafficLightMetrics {
   return { ...r, light: r.light };
 }
 
+function formatHkd(n: number): string {
+  return `HK$${Math.round(n).toLocaleString("en-US")}`;
+}
+
+function rateOk(value: number, goal: number): boolean {
+  return value + 1e-9 >= goal;
+}
+
+/**
+ * Admin: upload Anchor Traffic Light Excel, pick a historical snapshot, show LT board-pack
+ * stats, then coach per member (WhatsApp / email drafts).
+ *
+ * Side effects: POST upload, GET reports/latest-by-id, GET members, POST reminder.
+ * Does not send WhatsApp/email itself. Viewing history does not rewrite member standing.
+ *
+ * @param onNotify toast for upload/reminder success or error
+ */
 export function TrafficLightPanel({
   onNotify,
 }: {
   onNotify: (message: string, type: "success" | "error" | "info") => void;
 }) {
   const { chapterTag, isAnchorMode } = useChapter();
+  const [history, setHistory] = useState<TrafficLightHistoryItem[]>([]);
   const [report, setReport] = useState<TrafficLightReport | null>(null);
+  const [previousRows, setPreviousRows] = useState<TrafficLightMetrics[] | null>(null);
   const [members, setMembers] = useState<MemberInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -52,21 +77,45 @@ export function TrafficLightPanel({
   const [reminder, setReminder] = useState<TrafficLightReminder | null>(null);
   const [reminderLoading, setReminderLoading] = useState(false);
 
+  const applySnapshot = useCallback(
+    async (id: number, items: TrafficLightHistoryItem[]) => {
+      const idx = items.findIndex((h) => h.id === id);
+      const older = idx >= 0 ? items[idx + 1] : undefined;
+      const [full, prev] = await Promise.all([
+        getTrafficLightReport(id, chapterTag),
+        older
+          ? getTrafficLightReport(older.id, chapterTag).catch(() => null)
+          : Promise.resolve(null),
+      ]);
+      setReport(full);
+      setPreviousRows(prev ? prev.rows.map(rowToMetrics) : null);
+      setSelected(null);
+      setReminder(null);
+    },
+    [chapterTag]
+  );
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [latest, memberRes] = await Promise.all([
-        getLatestTrafficLight(chapterTag),
+      const [items, memberRes] = await Promise.all([
+        listTrafficLightReports(chapterTag),
         getMembers(chapterTag).catch(() => ({ members: [] as MemberInfo[] })),
       ]);
-      setReport(latest);
+      setHistory(items);
       setMembers(memberRes.members);
+      if (items[0]) {
+        await applySnapshot(items[0].id, items);
+      } else {
+        setReport(null);
+        setPreviousRows(null);
+      }
     } catch (e) {
       onNotify(e instanceof Error ? e.message : "載入紅綠燈失敗", "error");
     } finally {
       setLoading(false);
     }
-  }, [chapterTag, onNotify]);
+  }, [applySnapshot, chapterTag, onNotify]);
 
   useEffect(() => {
     if (isAnchorMode) void load();
@@ -78,11 +127,18 @@ export function TrafficLightPanel({
     return map;
   }, [members]);
 
-  const counts = useMemo(() => {
-    const c = { GREEN: 0, YELLOW: 0, RED: 0, BLACK: 0 };
-    for (const r of report?.rows ?? []) c[r.light] += 1;
-    return c;
-  }, [report]);
+  const metricsRows = useMemo(
+    () => (report?.rows ?? []).map(rowToMetrics),
+    [report]
+  );
+
+  const stats = useMemo(
+    () => buildChapterLtStats(metricsRows, members.map((m) => m.name), previousRows),
+    [metricsRows, members, previousRows]
+  );
+
+  const latestId = history[0]?.id ?? null;
+  const isLatest = report != null && latestId != null && report.id === latestId;
 
   const visible = useMemo(() => {
     const rows = report?.rows ?? [];
@@ -98,8 +154,19 @@ export function TrafficLightPanel({
       setUploading(true);
       try {
         const saved = await uploadTrafficLightExcel(file, chapterTag);
-        setReport(saved.report);
         onNotify(saved.message, "success");
+        const items = await listTrafficLightReports(chapterTag);
+        setHistory(items);
+        setReport(saved.report);
+        const older = items.find((h) => h.id !== saved.report.id);
+        if (older) {
+          const prev = await getTrafficLightReport(older.id, chapterTag).catch(() => null);
+          setPreviousRows(prev ? prev.rows.map(rowToMetrics) : null);
+        } else {
+          setPreviousRows(null);
+        }
+        setSelected(null);
+        setReminder(null);
       } catch (e) {
         onNotify(e instanceof Error ? e.message : "匯入失敗", "error");
       } finally {
@@ -135,7 +202,7 @@ export function TrafficLightPanel({
     });
     setReminderLoading(true);
     try {
-      const ai = await generateTrafficLightReminder(name, chapterTag, report.periodLabel);
+      const ai = await generateTrafficLightReminder(name, chapterTag, report.periodLabel, report.id);
       setReminder(ai);
     } catch {
       /* keep template */
@@ -160,6 +227,9 @@ export function TrafficLightPanel({
   const metrics = selectedRow ? rowToMetrics(selectedRow) : null;
   const weeks = metrics ? meetingWeeks(metrics) : 26;
   const gaps = metrics ? analyzeGaps(metrics, weeks) : [];
+  const greenDelta = stats.vsPrev
+    ? formatGreenPctDelta(stats.pct.GREEN, stats.pct.GREEN - stats.vsPrev.greenPctPts)
+    : null;
 
   return (
     <section className="section traffic-light-panel">
@@ -167,6 +237,7 @@ export function TrafficLightPanel({
         <h2>🚦 Anchor 會員紅綠燈</h2>
         <p className="hint">
           上傳 BNI Member Traffic Light Excel。綠燈 ≥70 分：少缺席、準時、每週 1.5 筆引薦、0.75 位嘉賓、每週 1 次 1-2-1、2 個 Skills Module、TYFCB HK$500,000。
+          再 upload 同一月份會新增一筆歷史，畫面只計你揀嘅嗰份，唔會加疊人數。
         </p>
       </div>
 
@@ -179,10 +250,137 @@ export function TrafficLightPanel({
         <p className="hint">載入中…</p>
       ) : report ? (
         <>
-          <p className="traffic-period">
-            <strong>{report.periodLabel}</strong>
-            {report.filename ? ` · ${report.filename}` : ""}
-          </p>
+          <div className="traffic-board">
+            <div className="traffic-history">
+              <h3>上傳歷史</h3>
+              <p className="hint">揀一份 Excel 睇統計。PDF 唔會存。會員 standing 只喺最新 upload 先更新。</p>
+              <ul>
+                {history.map((item) => (
+                  <li key={item.id}>
+                    <button
+                      type="button"
+                      className={`traffic-history-row${report.id === item.id ? " is-selected" : ""}`}
+                      onClick={() => void applySnapshot(item.id, history)}
+                    >
+                      <span className="traffic-history-title">{item.periodLabel}</span>
+                      <span className="traffic-history-meta">
+                        {item.filename || "（無檔名）"}
+                        {item.createdAt ? ` · ${formatUploadAt(item.createdAt)}` : ""}
+                        {` · ${item.rowCount} 人`}
+                        {latestId === item.id ? " · 最新" : ""}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="traffic-lt">
+              <p className="traffic-period">
+                <strong>{report.periodLabel}</strong>
+                {report.filename ? ` · ${report.filename}` : ""}
+                {report.createdAt ? ` · 上傳 ${formatUploadAt(report.createdAt)}` : ""}
+                {!isLatest ? " · 睇緊歷史" : ""}
+              </p>
+              {greenDelta ? <p className="hint">{greenDelta}{stats.vsPrev ? ` · 轉好 ${stats.vsPrev.improved} 人 · 轉差 ${stats.vsPrev.worsened} 人` : ""}</p> : null}
+
+              <div className="traffic-lt-grid">
+                <div className="traffic-lt-stat">
+                  <span>綠燈</span>
+                  <strong>{stats.pct.GREEN}%</strong>
+                  <em>{stats.counts.GREEN} 人</em>
+                </div>
+                <div className="traffic-lt-stat">
+                  <span>黃燈</span>
+                  <strong>{stats.pct.YELLOW}%</strong>
+                  <em>{stats.counts.YELLOW} 人</em>
+                </div>
+                <div className="traffic-lt-stat">
+                  <span>紅燈</span>
+                  <strong>{stats.pct.RED}%</strong>
+                  <em>{stats.counts.RED} 人</em>
+                </div>
+                <div className="traffic-lt-stat">
+                  <span>黑燈</span>
+                  <strong>{stats.pct.BLACK}%</strong>
+                  <em>{stats.counts.BLACK} 人</em>
+                </div>
+                <div className="traffic-lt-stat">
+                  <span>出席率</span>
+                  <strong>{stats.attendanceRatePct}%</strong>
+                  <em>P / 會議次數</em>
+                </div>
+                <div className={`traffic-lt-stat${rateOk(stats.referralsPerWeek, 1.5) ? " is-ok" : ""}`}>
+                  <span>引薦 / 週</span>
+                  <strong>{stats.referralsPerWeek.toFixed(2)}</strong>
+                  <em>目標 1.5</em>
+                </div>
+                <div className={`traffic-lt-stat${rateOk(stats.visitorsPerWeek, 0.75) ? " is-ok" : ""}`}>
+                  <span>嘉賓 / 週</span>
+                  <strong>{stats.visitorsPerWeek.toFixed(2)}</strong>
+                  <em>目標 0.75</em>
+                </div>
+                <div className={`traffic-lt-stat${rateOk(stats.oneToOnesPerWeek, 1) ? " is-ok" : ""}`}>
+                  <span>1-2-1 / 週</span>
+                  <strong>{stats.oneToOnesPerWeek.toFixed(2)}</strong>
+                  <em>目標 1.0</em>
+                </div>
+                <div className="traffic-lt-stat">
+                  <span>TYFCB 總額</span>
+                  <strong>{formatHkd(stats.tyfcbTotal)}</strong>
+                  <em>中位數 {formatHkd(stats.tyfcbMedian)}</em>
+                </div>
+                <div className={`traffic-lt-stat${stats.trainingPct >= 80 ? " is-ok" : ""}`}>
+                  <span>≥2 Skills Module</span>
+                  <strong>{stats.trainingPct}%</strong>
+                  <em>{stats.weeks} 週口徑</em>
+                </div>
+              </div>
+
+              <div className="traffic-lt-lists">
+                <div>
+                  <h4>At-risk（紅 + 黑）</h4>
+                  {stats.atRisk.length === 0 ? (
+                    <p className="hint">呢份報告冇紅/黑燈。</p>
+                  ) : (
+                    <ul>
+                      {stats.atRisk.map((m) => (
+                        <li key={m.name}>
+                          <button type="button" className="linkish" onClick={() => void openMember(m.name)}>
+                            {m.name} · {lightLabelZh(m.light)} · {m.totalPts} 分
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <div>
+                  <h4>引薦失衡（收 − 俾 ≥ 5）</h4>
+                  {stats.referralImbalance.length === 0 ? (
+                    <p className="hint">冇明顯失衡。</p>
+                  ) : (
+                    <ul>
+                      {stats.referralImbalance.map((m) => (
+                        <li key={m.name}>
+                          {m.name}：收 {m.received} / 俾 {m.given}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <div>
+                  <h4>對唔到名</h4>
+                  <p className="hint">
+                    Excel 冇喺會員名單：{stats.unmatchedExcel.length ? stats.unmatchedExcel.join("、") : "無"}
+                  </p>
+                  <p className="hint">
+                    會員名單冇喺 Excel：{stats.unmatchedRoster.length ? stats.unmatchedRoster.join("、") : "無"}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="traffic-summary">
             {FILTERS.map((f) => (
               <button
@@ -194,7 +392,7 @@ export function TrafficLightPanel({
                 {f.label}
                 {f.id === "ALL"
                   ? ` ${report.rows.length}`
-                  : ` ${counts[f.id]}`}
+                  : ` ${stats.counts[f.id]}`}
               </button>
             ))}
           </div>
@@ -294,7 +492,7 @@ export function TrafficLightPanel({
           </div>
         </>
       ) : (
-        <p className="hint">未有報告。請上傳 2026-05 / 06 / 07 嘅 Member Traffic Light Excel。</p>
+        <p className="hint">未有報告。請上傳 Member Traffic Light Excel（.xlsx）。</p>
       )}
     </section>
   );

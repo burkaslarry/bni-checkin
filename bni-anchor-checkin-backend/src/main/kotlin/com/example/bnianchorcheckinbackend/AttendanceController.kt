@@ -43,7 +43,8 @@ data class EventActiveRequest(
 
 /**
  * REST controller for attendance, members, guests, events, records, export, report, and AI insights.
- * Uses in-memory [AttendanceService] and optional DB ([DatabaseMemberService], [EventDbService]). No auth enforced.
+ * Uses in-memory [AttendanceService] and optional DB ([DatabaseMemberService], [EventDbService]).
+ * Mutating and report routes require `X-Client-Token` via [AdminAuthFilter]; kiosk GET/POST check-in stays public.
  * Side effects: DB read/write when DB services present; in-memory state; WebSocket not used here (handled elsewhere).
  *
  * Endpoints: POST /api/attendance/scan (member QR → DB attendance when configured), GET /api/members, GET /api/guests, POST /api/checkin, GET/DELETE /api/records,
@@ -367,7 +368,12 @@ class AttendanceController(
      */
     @GetMapping("/api/members")
     @Operation(summary = "Get list of members with domain info and standing")
-    fun getMembers(@RequestParam(required = false) chapter: String?, @RequestParam(required = false) chapterId: Int?): Map<String, List<Map<String, Any>>> {
+    fun getMembers(
+        @RequestParam(required = false) chapter: String?,
+        @RequestParam(required = false) chapterId: Int?,
+        @RequestHeader(value = "X-Client-Token", required = false) clientToken: String?
+    ): Map<String, List<Map<String, Any>>> {
+        val includeContact = chapterService?.resolveChapterFromSession(clientToken) != null
         val chapterTag = chapter?.trim()?.lowercase().orEmpty()
         val useCsvFallback = when {
             chapterId != null && chapterId > 0 -> chapterId == 1
@@ -382,7 +388,9 @@ class AttendanceController(
         return try {
             if (databaseMemberService != null) {
                 try {
-                    val dbMembers = withDbRetry("getMembers") { databaseMemberService.getAllMembers(chapter, chapterId) }
+                    val dbMembers = withDbRetry("getMembers") {
+                        databaseMemberService.getAllMembers(chapter, chapterId, includeContact)
+                    }
                     // Non-anchor chapters: return DB result even if empty (never leak Anchor CSV).
                     if (!useCsvFallback || dbMembers.isNotEmpty()) mapOf("members" to dbMembers)
                     else mapOf("members" to csvFallback)

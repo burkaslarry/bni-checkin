@@ -1,4 +1,5 @@
 import type { Guest, Member, MemberMatch } from "../types/seating";
+import { getClientAuthToken } from "../api";
 
 const BACKEND_API_URL = import.meta.env.VITE_API_BASE || "http://localhost:10000";
 
@@ -43,11 +44,14 @@ const callDeepSeekViaBackend = async (
     console.log("📤 [Frontend] Sending request to:", `${BACKEND_API_URL}/api/matching/members`);
     console.log("📤 [Frontend] Request body preview:", JSON.stringify(requestBody).substring(0, 200) + "...");
 
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    const token = getClientAuthToken();
+    if (token) headers["X-Client-Token"] = token;
     const response = await fetch(`${BACKEND_API_URL}/api/matching/members`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers,
       body: JSON.stringify(requestBody),
     });
 
@@ -89,56 +93,14 @@ const callDeepSeekViaBackend = async (
 };
 
 /**
- * Calls DeepSeek API directly when backend is unreachable. Requires VITE_DEEPSEEK_API_KEY. Returns null if key missing or API fails.
- * Side effects: network call to api.deepseek.com; no logging.
- * @param {Guest} guest
- * @param {Member[]} members
- * @returns {Promise<AIMatchResponse[] | null>}
+ * Direct browser → DeepSeek is disabled: VITE_ keys are public in the JS bundle.
+ * Matching must go through the Render backend.
  */
 const callDeepSeekDirect = async (
-  guest: Guest,
-  members: Member[]
+  _guest: Guest,
+  _members: Member[]
 ): Promise<AIMatchResponse[] | null> => {
-  const apiKey = import.meta.env.VITE_DEEPSEEK_API_KEY as string;
-  if (!apiKey || apiKey.startsWith("your_")) return null;
-
-  const memberList = members.map((m) => `- ${m.name} (${m.profession})`).join("\n");
-  const prompt = `You are a BNI networking consultant. Match guest to members.
-
-Guest: ${guest.name} - ${guest.profession}
-${guest.targetProfession ? `Target: ${guest.targetProfession}` : ""}
-${guest.bottlenecks?.length ? `Bottlenecks: ${guest.bottlenecks.join(", ")}` : ""}
-${guest.remarks ? `Remarks: ${guest.remarks}` : ""}
-
-Members:
-${memberList}
-
-Return JSON only: {"matches": [{"memberName": "name", "matchStrength": "High"|"Medium"|"Low", "reason": "..."}]}`;
-
-  try {
-    const res = await fetch("https://api.deepseek.com/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: "deepseek-chat",
-        messages: [
-          { role: "system", content: "Return valid JSON only." },
-          { role: "user", content: prompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 2000,
-        response_format: { type: "json_object" }
-      })
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    const content = data?.choices?.[0]?.message?.content;
-    if (!content) return null;
-    const parsed = JSON.parse(content) as { matches?: AIMatchResponse[] };
-    return parsed.matches ?? null;
-  } catch {
-    return null;
-  }
+  return null;
 };
 
 /**

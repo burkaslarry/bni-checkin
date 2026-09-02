@@ -17,6 +17,10 @@ need_cmd() { command -v "$1" >/dev/null 2>&1 || { err "Missing command: $1"; exi
 need_cmd curl
 need_cmd python3
 
+# shellcheck source=scripts/lib/admin-auth.sh
+. "$(cd "$(dirname "$0")" && pwd)/lib/admin-auth.sh"
+eventxp_admin_login
+
 api_ok() { curl -sS "${BASE_URL}/api/events/current" >/dev/null 2>&1; }
 
 if ! api_ok; then
@@ -25,11 +29,11 @@ if ! api_ok; then
 fi
 
 log "0) Clear all events + attendance"
-curl -sS -X DELETE "${BASE_URL}/api/events/clear-all" >/dev/null
+curl -sS -X DELETE -H "${EVENTXP_AUTH_HEADER}" "${BASE_URL}/api/events/clear-all" >/dev/null
 ok "Cleared."
 
 log "Phase 1: Event 1 lifecycle"
-event1_json="$(curl -sS -H 'Content-Type: application/json' -X POST "${BASE_URL}/api/events" -d "{\"name\":\"Workshop A\",\"date\":\"${TODAY}\",\"startTime\":\"07:00\",\"endTime\":\"09:00\",\"registrationStartTime\":\"06:30\",\"onTimeCutoff\":\"07:01\"}")"
+event1_json="$(curl -sS -H 'Content-Type: application/json' -H "${EVENTXP_AUTH_HEADER}" -X POST "${BASE_URL}/api/events" -d "{\"name\":\"Workshop A\",\"date\":\"${TODAY}\",\"startTime\":\"07:00\",\"endTime\":\"09:00\",\"registrationStartTime\":\"06:30\",\"onTimeCutoff\":\"07:01\"}")"
 event1_id="$(python3 - <<'PY' "$event1_json"
 import json,sys
 obj=json.loads(sys.argv[1]); print(obj["event"]["id"])
@@ -44,7 +48,7 @@ curl -sS -H 'Content-Type: application/json' -X POST "${BASE_URL}/api/attendance
 curl -sS -H 'Content-Type: application/json' -X POST "${BASE_URL}/api/checkin" -d "{\"name\":\"Guest_01\",\"type\":\"guest\",\"currentTime\":\"${TODAY}T07:00:00+08:00\",\"domain\":\"Consulting\",\"role\":\"GUEST\"}" >/dev/null
 
 csv1="$(mktemp)"
-curl -sS "${BASE_URL}/api/export?eventId=${event1_id}" -o "${csv1}"
+curl -sS -H "${EVENTXP_AUTH_HEADER}" "${BASE_URL}/api/export?eventId=${event1_id}" -o "${csv1}"
 count1="$(python3 - <<'PY' "$csv1"
 import csv,sys
 path=sys.argv[1]
@@ -63,7 +67,7 @@ echo "event1_non_absent_count=${count1}"
 ok "Phase1 export validation passed."
 
 log "Phase 2: Event 2 lifecycle (integrity test)"
-event2_json="$(curl -sS -H 'Content-Type: application/json' -X POST "${BASE_URL}/api/events" -d "{\"name\":\"Workshop B\",\"date\":\"${TOMORROW}\",\"startTime\":\"07:00\",\"endTime\":\"09:00\",\"registrationStartTime\":\"06:30\",\"onTimeCutoff\":\"07:01\"}")"
+event2_json="$(curl -sS -H 'Content-Type: application/json' -H "${EVENTXP_AUTH_HEADER}" -X POST "${BASE_URL}/api/events" -d "{\"name\":\"Workshop B\",\"date\":\"${TOMORROW}\",\"startTime\":\"07:00\",\"endTime\":\"09:00\",\"registrationStartTime\":\"06:30\",\"onTimeCutoff\":\"07:01\"}")"
 event2_id="$(python3 - <<'PY' "$event2_json"
 import json,sys
 obj=json.loads(sys.argv[1]); print(obj["event"]["id"])
@@ -75,7 +79,7 @@ ok "Created event2 id=${event2_id}, date=${TOMORROW}"
 curl -sS -H 'Content-Type: application/json' -X POST "${BASE_URL}/api/attendance/log" -d "{\"attendeeId\":null,\"attendeeType\":\"member\",\"attendeeName\":\"Larry Lo\",\"attendeeProfession\":\"客戶服務系統\",\"eventDate\":\"${TOMORROW}\",\"checkedInAt\":\"${TOMORROW}T06:59:00+08:00\",\"status\":\"on-time\"}" >/dev/null
 
 csv2="$(mktemp)"
-curl -sS "${BASE_URL}/api/export?eventId=${event2_id}" -o "${csv2}"
+curl -sS -H "${EVENTXP_AUTH_HEADER}" "${BASE_URL}/api/export?eventId=${event2_id}" -o "${csv2}"
 count2="$(python3 - <<'PY' "$csv2"
 import csv,sys
 path=sys.argv[1]
@@ -94,7 +98,7 @@ echo "event2_non_absent_count=${count2}"
 
 # Re-export event1 to verify no overwrite/data leakage
 csv1_again="$(mktemp)"
-curl -sS "${BASE_URL}/api/export?eventId=${event1_id}" -o "${csv1_again}"
+curl -sS -H "${EVENTXP_AUTH_HEADER}" "${BASE_URL}/api/export?eventId=${event1_id}" -o "${csv1_again}"
 count1_again="$(python3 - <<'PY' "$csv1_again"
 import csv,sys
 path=sys.argv[1]

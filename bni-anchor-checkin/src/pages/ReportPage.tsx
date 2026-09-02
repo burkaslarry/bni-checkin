@@ -7,11 +7,12 @@ import {
 } from "../api";
 import { buildAttendanceCsvBasename, buildAttendanceCsvFilename } from "../lib/attendanceExportFilename";
 import { useChapter } from "../chapterContext";
+import { ClientAuthGate } from "../components/ClientAuthGate";
 
 type FilterType = "all" | "members" | "guests";
 type ViewTab = "report" | "records";
 
-export default function ReportPage() {
+function ReportPageInner() {
   const navigate = useNavigate();
   const { chapterTag, chapterId, chapter, adminHref } = useChapter();
 
@@ -680,5 +681,13 @@ export default function ReportPage() {
         </div>
       </footer>
     </div>
+  );
+}
+
+export default function ReportPage() {
+  return (
+    <ClientAuthGate>
+      <ReportPageInner />
+    </ClientAuthGate>
   );
 }

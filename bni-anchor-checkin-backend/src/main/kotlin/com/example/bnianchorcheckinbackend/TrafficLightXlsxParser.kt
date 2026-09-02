@@ -6,7 +6,20 @@ import java.io.ByteArrayInputStream
 import java.util.zip.ZipInputStream
 import javax.xml.parsers.DocumentBuilderFactory
 
+/**
+ * Parse BNI Member Traffic Light `.xlsx` without Apache POI (OOXML zip + XML).
+ *
+ * Prefers the workbook sheet whose name contains “Traffic”. Member names start at column B row 5.
+ * Side effects: none (pure parse). Does not execute Excel formulas.
+ *
+ * Note: [splitRef] returns `(row, col)` — do not destructure as `(col, row)` or names come back empty.
+ */
 object TrafficLightXlsxParser {
+    /**
+     * @param bytes `.xlsx` zip bytes
+     * @return import payload with member rows
+     * @throws IllegalArgumentException when the zip/sheet/rows are unusable
+     */
     fun parse(bytes: ByteArray): TrafficLightImportRequest {
         val files = unzip(bytes)
         val shared = parseSharedStrings(files["xl/sharedStrings.xml"])
@@ -17,6 +30,7 @@ object TrafficLightXlsxParser {
         return parseSheet(sheetXml, shared, fills, cellXfs)
     }
 
+    /** Read XML/rels entries from the OOXML zip. */
     private fun unzip(bytes: ByteArray): Map<String, String> {
         val out = mutableMapOf<String, String>()
         ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
@@ -32,6 +46,7 @@ object TrafficLightXlsxParser {
         return out
     }
 
+    /** Workbook sheet named like Traffic Light Report, else the first sheet. */
     private fun resolveTrafficLightSheetPath(files: Map<String, String>): String {
         val workbook = files["xl/workbook.xml"] ?: throw IllegalArgumentException("Invalid xlsx: missing workbook")
         val rels = files["xl/_rels/workbook.xml.rels"] ?: throw IllegalArgumentException("Invalid xlsx: missing workbook rels")
@@ -50,6 +65,7 @@ object TrafficLightXlsxParser {
         return if (normalized.startsWith("xl/")) normalized else "xl/$normalized"
     }
 
+    /** Shared-string table; phonetic runs (`rPh`) stripped so names are not duplicated. */
     private fun parseSharedStrings(xml: String?): List<String> {
         if (xml.isNullOrBlank()) return emptyList()
         val siBlocks = Regex("<si\\b[^>]*>(.*?)</si>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
@@ -62,6 +78,7 @@ object TrafficLightXlsxParser {
         }.toList()
     }
 
+    /** Theme fill RGBs in styles.xml order (index = fillId). */
     private fun parseFills(xml: String?): List<String?> {
         if (xml.isNullOrBlank()) return emptyList()
         val doc = parseXml(xml)
@@ -75,6 +92,7 @@ object TrafficLightXlsxParser {
             }
     }
 
+    /** cellXfs → fillId per style index (`s` on `<c>`). */
     private fun parseCellXfs(xml: String?): List<Int> {
         if (xml.isNullOrBlank()) return emptyList()
         val doc = parseXml(xml)
@@ -85,6 +103,10 @@ object TrafficLightXlsxParser {
         }
     }
 
+    /**
+     * Grid from sheet cells: row 1 chapter, row 2 period, row 3 KPI goals, row 5+ members.
+     * Skip “Perfect” and non-letter names.
+     */
     private fun parseSheet(
         xml: String,
         shared: List<String>,
@@ -182,6 +204,7 @@ object TrafficLightXlsxParser {
         )
     }
 
+    /** Excel theme RGB (with or without `FF` alpha) → light, or null to fall back to points. */
     private fun lightFromFill(rgb: String?): String? {
         if (rgb.isNullOrBlank()) return null
         val u = rgb.removePrefix("#").removePrefix("FF").uppercase()
@@ -196,6 +219,10 @@ object TrafficLightXlsxParser {
 
     private data class SheetCell(val text: String, val fillRgb: String?)
 
+    /**
+     * A1-style ref → `(row, col)` with col 1-based (`A` = 1).
+     * Callers must destructure as `val (row, col) = splitRef(ref)`.
+     */
     private fun splitRef(ref: String): Pair<Int, Int> {
         val m = Regex("^([A-Z]+)(\\d+)$").find(ref.uppercase())
             ?: return 0 to 0
@@ -203,6 +230,7 @@ object TrafficLightXlsxParser {
         return m.groupValues[2].toInt() to col
     }
 
+    /** Namespace-aware parse with DTD/XXE features disabled. */
     private fun parseXml(xml: String) = DocumentBuilderFactory.newInstance().apply {
         isNamespaceAware = true
         isExpandEntityReferences = false

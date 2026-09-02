@@ -1,10 +1,21 @@
 package com.example.bnianchorcheckinbackend
 
+/**
+ * Anchor 6-month Traffic Light row scoring.
+ *
+ * Cutoffs (from chapter Excel practice, not the “Green Goal: 60” KPI banner):
+ * green ≥ 70, yellow 40–69, red 30–39, black &lt; 30.
+ * Green-path maxima: A&lt;1 (15), L=0 (10), G ≥1.5/week (20), V ≥0.75/week (20),
+ * 1-2-1 ≥1/week (10), T ≥2 modules (10), TYFCB ≥ HK$500k (15).
+ *
+ * Keep in sync with `bni-anchor-checkin/src/lib/trafficLight.ts`.
+ */
 object TrafficLightScoring {
     const val GREEN_PTS = 70
     const val YELLOW_PTS = 40
     const val RED_PTS = 30
 
+    /** Row colour from total points when Excel fill is missing. */
     fun lightFromPts(pts: Int): String = when {
         pts >= GREEN_PTS -> "GREEN"
         pts >= YELLOW_PTS -> "YELLOW"

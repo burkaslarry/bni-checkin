@@ -4,6 +4,11 @@ import jakarta.persistence.*
 import java.time.LocalDate
 import java.time.OffsetDateTime
 
+/**
+ * Snapshot of one uploaded Member Traffic Light Excel (table `bni_traffic_light_reports`).
+ * [rowsJson] is a JSON array of [com.example.bnianchorcheckinbackend.TrafficLightRowDto].
+ * [greenGoal]/[yellowGoal] are Excel chapter KPI banners, not per-member cutoffs.
+ */
 @Entity
 @Table(name = "bni_traffic_light_reports")
 data class TrafficLightReport(

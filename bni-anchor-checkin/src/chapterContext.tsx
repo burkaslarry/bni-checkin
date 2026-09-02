@@ -13,6 +13,7 @@ import {
   clientLogout,
   fetchClientSession,
   setActiveApiChapter,
+  setClientAuthToken,
   ANCHOR_CHAPTER_ID,
   CHAPTER_TAG_TO_ID,
   type ChapterInfo
@@ -31,6 +32,8 @@ type StoredSession = {
 type ChapterContextValue = {
   /** True when on any /admin route */
   isAdminRoute: boolean;
+  /** Admin or report — require a chapter session */
+  requiresLogin: boolean;
   /** Non-anchor chapter (AMax / Dynasty / …) */
   isClientMode: boolean;
   /** Logged-in (or defaulting) as Anchor */
@@ -80,8 +83,9 @@ export function ChapterProvider({ children }: { children: ReactNode }) {
   const [searchParams] = useSearchParams();
   const location = useLocation();
   const isAdminRoute = location.pathname.startsWith("/admin");
+  const isReportRoute = location.pathname.startsWith("/report");
   /** Report page should also honor the logged-in admin chapter when ?chapter= is missing. */
-  const usesAdminSession = isAdminRoute || location.pathname.startsWith("/report");
+  const usesAdminSession = isAdminRoute || isReportRoute;
 
   const [session, setSession] = useState<StoredSession | null>(() =>
     usesAdminSession ? readStoredSession() : null
@@ -90,13 +94,14 @@ export function ChapterProvider({ children }: { children: ReactNode }) {
   const [loginError, setLoginError] = useState<string | null>(null);
 
   useEffect(() => {
+    const stored = readStoredSession();
+    setClientAuthToken(stored?.token ?? null);
     if (!usesAdminSession) {
       setSession(null);
       setAuthReady(true);
       return;
     }
     let cancelled = false;
-    const stored = readStoredSession();
     if (!stored) {
       setSession(null);
       setAuthReady(true);
@@ -113,15 +118,12 @@ export function ChapterProvider({ children }: { children: ReactNode }) {
         };
         writeStoredSession(next);
         setSession(next);
+        setClientAuthToken(next.token);
       } catch {
         if (cancelled) return;
-        // Keep local session chapter for report deep-links even if token refresh fails.
-        if (location.pathname.startsWith("/report") && stored.chapter?.tag) {
-          setSession(stored);
-        } else {
-          writeStoredSession(null);
-          setSession(null);
-        }
+        writeStoredSession(null);
+        setSession(null);
+        setClientAuthToken(null);
       } finally {
         if (!cancelled) setAuthReady(true);
       }
@@ -142,6 +144,7 @@ export function ChapterProvider({ children }: { children: ReactNode }) {
       };
       writeStoredSession(next);
       setSession(next);
+      setClientAuthToken(next.token);
       setActiveApiChapter({ id: result.chapter.id, tag: result.chapter.tag });
       return true;
     } catch (e) {
@@ -154,6 +157,7 @@ export function ChapterProvider({ children }: { children: ReactNode }) {
     const token = session?.token;
     writeStoredSession(null);
     setSession(null);
+    setClientAuthToken(null);
     setActiveApiChapter({ id: ANCHOR_CHAPTER_ID, tag: "anchor" });
     if (token) {
       try {
@@ -195,6 +199,7 @@ export function ChapterProvider({ children }: { children: ReactNode }) {
     const isAnchor = chapterTag === "anchor";
     return {
       isAdminRoute,
+      requiresLogin: usesAdminSession,
       isClientMode: isAdminRoute && !isAnchor,
       isAnchorMode: isAdminRoute && isAnchor && !!session?.token,
       chapterTag,
@@ -202,7 +207,7 @@ export function ChapterProvider({ children }: { children: ReactNode }) {
       chapter: session?.chapter ?? null,
       clientToken: session?.token ?? null,
       authReady,
-      isAuthenticated: !isAdminRoute || !!session?.token,
+      isAuthenticated: !usesAdminSession || !!session?.token,
       loginError,
       login,
       logout,
@@ -210,6 +215,7 @@ export function ChapterProvider({ children }: { children: ReactNode }) {
     };
   }, [
     isAdminRoute,
+    usesAdminSession,
     session,
     searchParams,
     authReady,

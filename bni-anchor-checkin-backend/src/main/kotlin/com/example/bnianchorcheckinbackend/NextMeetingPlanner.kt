@@ -8,6 +8,7 @@ import java.time.LocalDate
  * [jsWeekday] matches JS Date.getDay(): 0=Sunday … 6=Saturday (same as [Chapter.meetingWeekday]).
  */
 object NextMeetingPlanner {
+    /** Convert JS `Date.getDay()` (0=Sunday) to [DayOfWeek]. */
     fun jsWeekdayToDayOfWeek(jsWeekday: Int): DayOfWeek {
         val n = ((jsWeekday % 7) + 7) % 7
         return if (n == 0) DayOfWeek.SUNDAY else DayOfWeek.of(n)
@@ -23,6 +24,7 @@ object NextMeetingPlanner {
         return d
     }
 
+    /** `{displayName} Business Meeting YYYY-MM-DD` (e.g. `BNI Anchor Business Meeting 2026-09-03`). */
     fun defaultMeetingName(displayName: String, date: LocalDate): String {
         val chapter = displayName.trim().ifEmpty { "BNI Chapter" }
         return "$chapter Business Meeting $date"

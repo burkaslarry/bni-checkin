@@ -6,6 +6,10 @@
 BASE_URL="${1:-http://localhost:10000}"
 EVENT_DATE="2026-03-02"
 
+# shellcheck source=scripts/lib/admin-auth.sh
+. "$(dirname "$0")/lib/admin-auth.sh"
+eventxp_admin_login
+
 echo "=========================================="
 echo "BNI Anchor API Test"
 echo "Base URL: $BASE_URL"
@@ -16,6 +20,7 @@ echo ""
 echo "1. Creating event..."
 CREATE_RESP=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/events" \
   -H "Content-Type: application/json" \
+  -H "$EVENTXP_AUTH_HEADER" \
   -d '{
     "name": "BNI Anchor Meeting",
     "date": "'"$EVENT_DATE"'",
@@ -112,7 +117,7 @@ fi
 # Test 5: Get report and verify Larry Lo attendance
 echo ""
 echo "5. Getting report and verifying attendance..."
-REPORT_RESP=$(curl -s -w "\n%{http_code}" "$BASE_URL/api/report")
+REPORT_RESP=$(curl -s -w "\n%{http_code}" -H "$EVENTXP_AUTH_HEADER" "$BASE_URL/api/report")
 HTTP_CODE=$(echo "$REPORT_RESP" | tail -n1)
 BODY=$(echo "$REPORT_RESP" | sed '$d')
 

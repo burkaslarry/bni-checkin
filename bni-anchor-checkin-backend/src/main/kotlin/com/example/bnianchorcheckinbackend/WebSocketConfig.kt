@@ -9,8 +9,18 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 @EnableWebSocket
 class WebSocketConfig(private val attendanceWebSocketHandler: AttendanceWebSocketHandler) : WebSocketConfigurer {
     override fun registerWebSocketHandlers(registry: WebSocketHandlerRegistry) {
-        registry.addHandler(attendanceWebSocketHandler, "/ws/records").setAllowedOrigins("*")
-        registry.addHandler(attendanceWebSocketHandler, "/ws/report").setAllowedOrigins("*")
+        registry.addHandler(attendanceWebSocketHandler, "/ws/records")
+            .setAllowedOriginPatterns(
+                "https://bni-anchor-checkin.vercel.app",
+                "http://localhost:*",
+                "http://127.0.0.1:*"
+            )
+        registry.addHandler(attendanceWebSocketHandler, "/ws/report")
+            .setAllowedOriginPatterns(
+                "https://bni-anchor-checkin.vercel.app",
+                "http://localhost:*",
+                "http://127.0.0.1:*"
+            )
     }
 }
 
