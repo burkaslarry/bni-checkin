@@ -10,11 +10,12 @@ class CorsConfig : WebMvcConfigurer {
         registry.addMapping("/**")
             .allowedOriginPatterns(
                 "https://bni-anchor-checkin.vercel.app",
+                "https://*.vercel.app",
                 "http://localhost:*",
                 "http://127.0.0.1:*"
             )
-            .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
-            .allowedHeaders("*")
+            .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+            .allowedHeaders("Content-Type", "X-Client-Token", "Authorization", "*")
             .exposedHeaders("Content-Disposition")
             .allowCredentials(false)
             .maxAge(3600)

@@ -192,10 +192,24 @@ function isRetriableStatus(status: number): boolean {
   return status >= 500 || status === 429;
 }
 
+/** Safari: "Load failed"; Chrome: "Failed to fetch"; Firefox: NetworkError. */
+export function isBrowserNetworkError(e: unknown): boolean {
+  if (!(e instanceof Error)) return false;
+  const msg = e.message;
+  if (e.name === "AbortError") return true;
+  return (
+    msg === "Load failed" ||
+    msg === "Failed to fetch" ||
+    msg.includes("Load failed") ||
+    msg.includes("Failed to fetch") ||
+    msg.includes("NetworkError") ||
+    msg.includes("fetch")
+  );
+}
+
 /** True if error looks like a transient network/abort error. */
 function isRetriableNetworkError(e: unknown): boolean {
-  if (!(e instanceof Error)) return false;
-  return e.name === "AbortError" || e.message.includes("fetch") || e.message.includes("NetworkError");
+  return isBrowserNetworkError(e);
 }
 
 /**
@@ -721,11 +735,11 @@ export async function importAttendanceCsv(eventDate: string, file: File): Promis
  * @throws {Error} Always (either wrapped message or e/fallback)
  */
 function wrapNetworkError(e: unknown, fallback: string): never {
-  const msg = e instanceof Error ? e.message : String(e);
-  if (msg === "Failed to fetch" || msg.includes("fetch") || msg.includes("NetworkError")) {
-    throw new Error(
-      "無法連接後端服務。請確認：(1) 後端已啟動 (執行 ./run.sh 或 cd bni-anchor-checkin-backend && ./gradlew bootRun) (2) VITE_API_BASE 設定正確"
-    );
+  if (isBrowserNetworkError(e)) {
+    const hint = import.meta.env.DEV
+      ? "無法連接後端服務。請確認後端已啟動（./run.sh）且 VITE_API_BASE 正確"
+      : "無法連接後端服務，請稍後再試（網路或伺服器暫時無回應）";
+    throw new Error(hint);
   }
   throw e instanceof Error ? e : new Error(fallback);
 }
@@ -842,13 +856,17 @@ export async function activateEvent(
   chapter?: string | null,
   chapterId?: number | null
 ): Promise<{ status: string; exclusive?: boolean; event?: unknown; message?: string }> {
-  const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/events/${eventId}/activate`, chapter, chapterId), {
-    method: "POST",
-    headers: jsonHeaders,
-    body: JSON.stringify({ exclusive }),
-    mode: "cors"
-  });
-  return handleResponse(response);
+  try {
+    const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/events/${eventId}/activate`, chapter, chapterId), {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify({ exclusive }),
+      mode: "cors"
+    });
+    return handleResponse(response);
+  } catch (e) {
+    wrapNetworkError(e, "啟用活動失敗");
+  }
 }
 
 /**
@@ -1021,8 +1039,8 @@ export async function getEventForDate(
     }
     return handleResponse(response);
   } catch (e) {
-    if ((e as Error).name === "AbortError") {
-      throw new Error("連線逾時，請確認後端已啟動並重試");
+    if (isBrowserNetworkError(e)) {
+      wrapNetworkError(e, "連線逾時，請重試");
     }
     return null;
   }
@@ -1349,13 +1367,10 @@ export async function bulkImport(
       // Dedicated endpoints accept List<ImportRecord>
       body: JSON.stringify(request.records),
       mode: "cors"
-    }, 15000, 3);
+    }, 25000, 3);
     return handleResponse(response);
   } catch (e) {
-    if ((e as Error).name === "AbortError") {
-      throw new Error("連線逾時，請確認後端已啟動並重試");
-    }
-    throw e;
+    wrapNetworkError(e, "連線逾時，請重試");
   }
 }
 
@@ -1376,15 +1391,12 @@ export async function bulkImportObservers(
         body: JSON.stringify(records),
         mode: "cors",
       },
-      15000,
+      25000,
       3
     );
     return handleResponse(response);
   } catch (e) {
-    if ((e as Error).name === "AbortError") {
-      throw new Error("連線逾時，請確認後端已啟動並重試");
-    }
-    throw e;
+    wrapNetworkError(e, "連線逾時，請重試");
   }
 }
 
@@ -1425,9 +1437,7 @@ export async function createMember(
 }
 
 function isMemberFetchNetworkError(error: unknown): boolean {
-  if (!(error instanceof TypeError)) return false;
-  const msg = error.message;
-  return msg === "Failed to fetch" || msg.includes("NetworkError");
+  return isBrowserNetworkError(error);
 }
 
 /**

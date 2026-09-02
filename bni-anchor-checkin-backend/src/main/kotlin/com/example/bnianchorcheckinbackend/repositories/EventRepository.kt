@@ -24,6 +24,7 @@ interface EventRepository : JpaRepository<Event, Long> {
     fun findAllByChapterIdAndStatusAndDeletedAtIsNullOrderByEventDateAscStartTimeAsc(chapterId: Int, status: String): List<Event>
     fun findByChapterIdAndEventDate(chapterId: Int, eventDate: LocalDate): Event?
     fun findByChapterIdAndEventDateAndDeletedAtIsNull(chapterId: Int, eventDate: LocalDate): Event?
+    fun findAllByChapterIdAndEventDateAndDeletedAtIsNullOrderByIdDesc(chapterId: Int, eventDate: LocalDate): List<Event>
     fun existsByChapterIdAndEventDateBetween(chapterId: Int, start: LocalDate, end: LocalDate): Boolean
     fun existsByChapterIdAndEventDateBetweenAndDeletedAtIsNull(chapterId: Int, start: LocalDate, end: LocalDate): Boolean
 }

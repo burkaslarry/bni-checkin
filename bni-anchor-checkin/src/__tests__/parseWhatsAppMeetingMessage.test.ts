@@ -70,6 +70,21 @@ describe("splitSubstituteLine", () => {
       memberName: "Zoe",
     });
   });
+
+  it("strips fullwidth and ASCII parenthesis numbering", () => {
+    expect(splitSubstituteLine("1） Paul Leung/ Lucus")).toEqual({
+      substituteName: "Paul Leung",
+      memberName: "Lucus",
+    });
+    expect(splitSubstituteLine("2）May Wong/ 邦哥")).toEqual({
+      substituteName: "May Wong",
+      memberName: "邦哥",
+    });
+    expect(splitSubstituteLine("3) Lawrence Yuen/ Max")).toEqual({
+      substituteName: "Lawrence Yuen",
+      memberName: "Max",
+    });
+  });
 });
 
 describe("formatMemberCheckinLabel", () => {
@@ -119,6 +134,29 @@ describe("parseWhatsAppMeetingMessage", () => {
       name: "Eddie Cheng(Insight)",
       profession: "Marketing 公司老闆",
     });
+  });
+
+  it("parses substitute-only paste with mixed numbering and fallback event date", () => {
+    const paste = `替代人名單 (替代人姓名/會員姓名)
+1） Paul Leung/ Lucus
+2）May Wong/ 邦哥
+3) Lawrence Yuen/ Max`;
+
+    const withoutFallback = parseWhatsAppMeetingMessage(paste);
+    expect(withoutFallback.substitutes).toHaveLength(3);
+    expect(withoutFallback.eventDate).toBe("");
+    expect(withoutFallback.errors).toContain("找不到活動日期（例如 2026年8月13日）");
+
+    const result = parseWhatsAppMeetingMessage(paste, { fallbackEventDate: "2026-09-03" });
+    expect(result.eventDate).toBe("2026-09-03");
+    expect(result.guests).toHaveLength(0);
+    expect(result.observers).toHaveLength(0);
+    expect(result.substitutes).toEqual([
+      { substituteName: "Paul Leung", memberName: "Lucus", eventDate: "2026-09-03" },
+      { substituteName: "May Wong", memberName: "邦哥", eventDate: "2026-09-03" },
+      { substituteName: "Lawrence Yuen", memberName: "Max", eventDate: "2026-09-03" },
+    ]);
+    expect(result.errors).toEqual([]);
   });
 
   it("exports CSV matching guest and observer templates", () => {

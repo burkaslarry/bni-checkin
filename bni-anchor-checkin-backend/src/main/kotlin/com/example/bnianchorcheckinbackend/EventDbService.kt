@@ -126,6 +126,8 @@ class EventDbService(
     fun createEvent(request: EventRequest, chapterTag: String? = null): EventData {
         val chapterId = resolveChapterId(chapterTag)
         val eventDate = LocalDate.parse(request.date)
+        pickEventForDate(chapterId, eventDate)?.let { return toEventData(it) }
+
         val startTime = parseTime(request.startTime)
         val endTime = parseTime(request.endTime)
         val regStartTime = parseTime(request.registrationStartTime)
@@ -209,9 +211,26 @@ class EventDbService(
         return byMemberId.size
     }
 
+    /** Prefer the active event when more than one row exists for the same date. */
+    private fun pickEventForDate(chapterId: Int, date: LocalDate): Event? {
+        val listed = try {
+            eventRepository.findAllByChapterIdAndEventDateAndDeletedAtIsNullOrderByIdDesc(chapterId, date)
+        } catch (_: Exception) {
+            emptyList()
+        }
+        if (listed.isNotEmpty()) {
+            return listed.firstOrNull { it.isActive } ?: listed.first()
+        }
+        return try {
+            eventRepository.findByChapterIdAndEventDateAndDeletedAtIsNull(chapterId, date)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     private fun resolveEventForDate(eventDateStr: String, chapterId: Int): Event {
         val eventDate = LocalDate.parse(eventDateStr.trim())
-        return eventRepository.findByChapterIdAndEventDateAndDeletedAtIsNull(chapterId, eventDate)
+        return pickEventForDate(chapterId, eventDate)
             ?: throw IllegalArgumentException("No non-deleted event for date $eventDateStr")
     }
 
@@ -562,8 +581,7 @@ class EventDbService(
         val chapterId = resolveChapterId(chapterTag)
         return try {
             val date = LocalDate.parse(eventDate)
-            val event = eventRepository.findByChapterIdAndEventDateAndDeletedAtIsNull(chapterId, date) ?: return null
-            toEventData(event)
+            pickEventForDate(chapterId, date)?.let { toEventData(it) }
         } catch (_: Exception) {
             null
         }

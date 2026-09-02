@@ -20,6 +20,8 @@ type WhatsAppMeetingImportPanelProps = {
   chapterTag: string;
   chapterId: number;
   chapterLabel: string;
+  fallbackEventDate?: string;
+  currentEvent?: { id: number; name: string; date: string } | null;
   onImported?: () => void;
 };
 
@@ -27,6 +29,8 @@ export function WhatsAppMeetingImportPanel({
   chapterTag,
   chapterId,
   chapterLabel,
+  fallbackEventDate,
+  currentEvent,
   onImported,
 }: WhatsAppMeetingImportPanelProps) {
   const [message, setMessage] = useState("");
@@ -40,7 +44,9 @@ export function WhatsAppMeetingImportPanel({
   };
 
   const handleExtract = () => {
-    const result = parseWhatsAppMeetingMessage(message);
+    const result = parseWhatsAppMeetingMessage(message, {
+      fallbackEventDate: fallbackEventDate?.trim() || undefined,
+    });
     setParsed(result);
     if (result.errors.length > 0 && result.guests.length === 0 && result.observers.length === 0 && result.substitutes.length === 0) {
       showNotice(result.errors[0] ?? "解析失敗");
@@ -85,13 +91,22 @@ export function WhatsAppMeetingImportPanel({
 
     setIsWorking(true);
     try {
+      const known =
+        currentEvent && currentEvent.date === parsed.eventDate ? currentEvent : null;
       const event = await ensureEventForDate(
         parsed.eventDate,
         chapterTag,
         chapterId,
-        chapterLabel
+        chapterLabel,
+        known
       );
-      await activateEvent(event.id, true, chapterTag, chapterId);
+      if (!known || known.id !== event.id) {
+        try {
+          await activateEvent(event.id, true, chapterTag, chapterId);
+        } catch (activateErr) {
+          console.warn("activateEvent failed; continuing import", activateErr);
+        }
+      }
 
       let guestSummary = "";
       if (parsed.guests.length > 0) {
@@ -154,7 +169,8 @@ export function WhatsAppMeetingImportPanel({
       <div className="section-header">
         <h2>📱 WhatsApp 訊息批量匯入</h2>
         <p className="hint">
-          貼上 Anchor 正式會議 WhatsApp 公告，自動提取嘉賓名單與觀察員、匯出 CSV、寫入資料庫（chapter={chapterTag}）
+          貼上 Anchor 正式會議 WhatsApp 公告，或只貼「替代人名單」段落；自動提取嘉賓、觀察員與替代人（chapter={chapterTag}）
+          {fallbackEventDate ? `。訊息未含日期時使用目前活動 ${fallbackEventDate}` : ""}
         </p>
       </div>
 
@@ -167,7 +183,7 @@ export function WhatsAppMeetingImportPanel({
       <textarea
         value={message}
         onChange={(e) => setMessage(e.target.value)}
-        placeholder="貼上 WhatsApp 會議公告（含 嘉賓名單、觀察員 段落）…"
+        placeholder="貼上 WhatsApp 會議公告，或只貼替代人名單（例如 1） Paul Leung/ Lucus）…"
         rows={12}
         style={{
           width: "100%",
@@ -237,6 +253,9 @@ export function WhatsAppMeetingImportPanel({
           {parsed.eventDate && (
             <p className="hint" style={{ marginBottom: "1rem" }}>
               活動日期：<strong>{parsed.eventDate}</strong>
+              {fallbackEventDate && parsed.eventDate === fallbackEventDate
+                ? "（目前活動）"
+                : ""}
             </p>
           )}
 

@@ -41,7 +41,7 @@ class AdminAuthFilter(
                 val ip = LoginRateLimiter.clientIp(request.getHeader("X-Forwarded-For"), request.remoteAddr)
                 if (!LoginRateLimiter.allow(ip)) {
                     log.warn("Login rate limited ip={}", ip)
-                    writeJson(response, 429, "Too many login attempts")
+                    writeJson(request, response, 429, "Too many login attempts")
                     return
                 }
             }
@@ -58,18 +58,39 @@ class AdminAuthFilter(
                 path,
                 LoginRateLimiter.clientIp(request.getHeader("X-Forwarded-For"), request.remoteAddr)
             )
-            writeJson(response, HttpServletResponse.SC_UNAUTHORIZED, "Not authenticated")
+            writeJson(request, response, HttpServletResponse.SC_UNAUTHORIZED, "Not authenticated")
             return
         }
         filterChain.doFilter(request, response)
     }
 
-    private fun writeJson(response: HttpServletResponse, status: Int, message: String) {
+    private fun writeJson(
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+        status: Int,
+        message: String
+    ) {
+        applyCorsHeaders(request, response)
         response.status = status
         response.contentType = MediaType.APPLICATION_JSON_VALUE
         response.characterEncoding = "UTF-8"
         response.writer.write(
             objectMapper.writeValueAsString(mapOf("status" to "error", "message" to message))
         )
+    }
+
+    private fun applyCorsHeaders(request: HttpServletRequest, response: HttpServletResponse) {
+        val origin = request.getHeader("Origin") ?: return
+        if (!isAllowedOrigin(origin)) return
+        response.setHeader("Access-Control-Allow-Origin", origin)
+        response.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Client-Token, Authorization")
+        response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+        response.setHeader("Vary", "Origin")
+    }
+
+    private fun isAllowedOrigin(origin: String): Boolean {
+        if (origin == "https://bni-anchor-checkin.vercel.app") return true
+        if (origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:")) return true
+        return origin.startsWith("https://") && origin.endsWith(".vercel.app")
     }
 }

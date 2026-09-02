@@ -27,13 +27,30 @@ export type ParsedMeetingMessage = {
   errors: string[];
 };
 
-const INVISIBLE_CHARS = /[\u200B-\u200D\uFEFF\u2060]/g;
+/** WhatsApp / iOS paste: WJ, ZWSP, LRM/RLM, NBSP, soft hyphen. */
+const INVISIBLE_CHARS = /[\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF\u00AD]/g;
+const NBSP_CHARS = /[\u00A0\u202F\u2007]/g;
 const EMOJI_CHARS = /[\u{1F300}-\u{1FAFF}\u2600-\u27BF]/gu;
-const LINE_NUMBER_PREFIX = /^\d+\.\s*/;
+/** Numbered list: 1.  1．  1、  1)  1） */
+const LINE_NUMBER_PREFIX = /^\d+\s*[.．、)）]\s*/;
+
+export function normalizeMeetingLine(raw: string): string {
+  return raw.replace(INVISIBLE_CHARS, "").replace(NBSP_CHARS, " ").trim();
+}
 
 /** Strip WhatsApp / copy-paste invisible characters and list numbering. */
 export function cleanMeetingLine(raw: string): string {
-  return raw.replace(INVISIBLE_CHARS, "").replace(LINE_NUMBER_PREFIX, "").trim();
+  return normalizeMeetingLine(raw).replace(LINE_NUMBER_PREFIX, "").trim();
+}
+
+function isNumberedMeetingLine(line: string): boolean {
+  return LINE_NUMBER_PREFIX.test(normalizeMeetingLine(line));
+}
+
+function isGuestLikeLine(line: string): boolean {
+  const cleaned = normalizeMeetingLine(line);
+  if (!cleaned || /嘉賓名單|觀察員|替代人/.test(cleaned)) return false;
+  return isNumberedMeetingLine(cleaned) || /[/／]/.test(cleaned);
 }
 
 /** Parse 2026年8月13日 or embedded YYYY-MM-DD from meeting announcement text. */
@@ -94,30 +111,46 @@ function extractSectionLines(text: string, startPattern: RegExp, endPattern: Reg
   const endMatch = rest.match(endPattern);
   const block = endMatch && endMatch.index != null ? rest.slice(0, endMatch.index) : rest;
 
-  return block
+  const lines = block
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter((line) => /^\d+\./.test(line.replace(INVISIBLE_CHARS, "")));
+    .filter(Boolean);
+  const numbered = lines.filter(isNumberedMeetingLine);
+  if (numbered.length > 0) return numbered;
+  return lines.filter(isGuestLikeLine);
 }
 
 function extractSectionLinesToEnd(text: string, startPattern: RegExp): string[] {
   const startMatch = text.match(startPattern);
   if (!startMatch || startMatch.index == null) return [];
   const block = text.slice(startMatch.index + startMatch[0].length);
-  return block
+  const lines = block
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter((line) => /^\d+\./.test(line.replace(INVISIBLE_CHARS, "")));
+    .filter(Boolean);
+  const numbered = lines.filter(isNumberedMeetingLine);
+  if (numbered.length > 0) return numbered;
+  return lines.filter(isGuestLikeLine);
 }
 
+export type ParseMeetingMessageOptions = {
+  /** Used when the paste has no date (e.g. 替代人名單 only). */
+  fallbackEventDate?: string;
+};
+
 /**
- * Parse Anchor-style WhatsApp meeting announcements into guest and observer rows.
- * Expects sections 嘉賓名單 and 觀察員 with numbered name/profession/referrer lines.
+ * Parse Anchor-style WhatsApp meeting announcements into guest, observer, and substitute rows.
+ * Accepts a full meeting announcement or a standalone 替代人名單 block.
  */
-export function parseWhatsAppMeetingMessage(text: string): ParsedMeetingMessage {
+export function parseWhatsAppMeetingMessage(
+  text: string,
+  options?: ParseMeetingMessageOptions
+): ParsedMeetingMessage {
   const errors: string[] = [];
   const normalized = text.replace(/\r\n/g, "\n");
-  const eventDate = parseMeetingEventDate(normalized);
+  const parsedDate = parseMeetingEventDate(normalized);
+  const fallbackDate = options?.fallbackEventDate?.trim() || "";
+  const eventDate = parsedDate || fallbackDate;
 
   if (!eventDate) {
     errors.push("找不到活動日期（例如 2026年8月13日）");

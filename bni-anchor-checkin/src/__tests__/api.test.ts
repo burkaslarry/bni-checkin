@@ -1,4 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { isBrowserNetworkError } from "../api";
+
+describe("isBrowserNetworkError", () => {
+  it("treats Safari Load failed as a network error", () => {
+    expect(isBrowserNetworkError(new TypeError("Load failed"))).toBe(true);
+    expect(isBrowserNetworkError(new TypeError("Failed to fetch"))).toBe(true);
+    expect(isBrowserNetworkError(new Error("boom"))).toBe(false);
+  });
+});
 
 describe("API helpers", () => {
   beforeEach(() => {

@@ -239,14 +239,22 @@ function ImportPageInner() {
         ];
 
         for (const d of eventDates) {
+          const date = normalizeEventDate(d);
+          const known =
+            targetEvent && targetEvent.date === date ? targetEvent : null;
           const event = await ensureEventForDate(
-            normalizeEventDate(d),
+            date,
             chapterTag,
             chapterId,
-            chapterLabel
+            chapterLabel,
+            known
           );
-          if (d === eventDateDefault || d === preferredGuestEventDate) {
-            await activateEvent(event.id, true, chapterTag, chapterId);
+          if (!known && (d === eventDateDefault || d === preferredGuestEventDate)) {
+            try {
+              await activateEvent(event.id, true, chapterTag, chapterId);
+            } catch (activateErr) {
+              console.warn("activateEvent failed; continuing import", activateErr);
+            }
           }
         }
       }
@@ -685,6 +693,8 @@ function ImportPageInner() {
         chapterTag={chapterTag}
         chapterId={chapterId}
         chapterLabel={chapterLabel}
+        fallbackEventDate={preferredGuestEventDate}
+        currentEvent={targetEvent}
         onImported={() => {
           void refreshTargetEvent();
           setObserverPanelKey((k) => k + 1);
