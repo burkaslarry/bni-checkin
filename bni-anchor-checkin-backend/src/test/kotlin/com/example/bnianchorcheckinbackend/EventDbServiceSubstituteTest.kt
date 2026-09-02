@@ -127,4 +127,47 @@ class EventDbServiceSubstituteTest {
         org.mockito.Mockito.verify(attendanceRepository, org.mockito.Mockito.atLeastOnce()).save(captor.capture())
         assertEquals("Wendy Cheung", captor.allValues.last().substituteFor)
     }
+
+    @Test
+    fun `bulkSetPlannedSubstitutes maps 邦哥 to Kevin Cheung and Lucus to Locus`() {
+        val eventDate = LocalDate.of(2026, 9, 3)
+        val event = Event(
+            id = 54L,
+            name = "BNI Anchor 2026-09-03",
+            createDate = eventDate,
+            eventDate = eventDate,
+            startTime = LocalTime.of(7, 0),
+            endTime = LocalTime.of(9, 0),
+            registrationStartTime = LocalTime.of(6, 30),
+            onTimeCutoffTime = LocalTime.of(7, 5),
+            lateCutoffTime = null,
+            status = "ACTIVE",
+            isActive = true
+        )
+        `when`(eventRepository.findByChapterIdAndEventDateAndDeletedAtIsNull(1, eventDate)).thenReturn(event)
+        `when`(memberRepository.findByChapterIdAndNameIgnoreCase(1, "邦哥")).thenReturn(Optional.empty())
+        `when`(memberRepository.findByChapterIdAndNameIgnoreCase(1, "Lucus")).thenReturn(Optional.empty())
+        `when`(memberRepository.findAllByChapterIdOrderByNameAsc(1)).thenReturn(
+            listOf(
+                Member(id = 8L, name = "Kevin Cheung", profession = "Insurance"),
+                Member(id = 9L, name = "Locus Lam", profession = "長者運動訓練"),
+                Member(id = 6L, name = "Vincent Chung", profession = "Finance")
+            )
+        )
+        `when`(attendanceRepository.findByEventIdAndMemberId(54, 8)).thenReturn(null)
+        `when`(attendanceRepository.findByEventIdAndMemberId(54, 9)).thenReturn(null)
+        `when`(attendanceRepository.save(any(Attendance::class.java))).thenAnswer { it.arguments[0] }
+
+        val result = eventDbService.bulkSetPlannedSubstitutes(
+            "2026-09-03",
+            listOf(
+                PlannedSubstituteEntry(memberName = "邦哥", substituteName = "May Wong"),
+                PlannedSubstituteEntry(memberName = "Lucus", substituteName = "Paul Leung")
+            ),
+            null
+        )
+
+        assertEquals(2, result.updated)
+        assertEquals(0, result.failed)
+    }
 }

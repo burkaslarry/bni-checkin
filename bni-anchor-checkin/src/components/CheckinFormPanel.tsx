@@ -293,13 +293,18 @@ export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFor
   const filteredList = useMemo(() => {
     const q = searchQuery.toLowerCase();
     if (checkinType === "member") {
-      return members.filter((m) => {
+      const matched = members.filter((m) => {
         const sub = plannedByMember[m.name.trim().toLowerCase()];
         return (
           m.name.toLowerCase().includes(q) ||
           m.profession.toLowerCase().includes(q) ||
           (sub?.toLowerCase().includes(q) ?? false)
         );
+      });
+      return [...matched].sort((a, b) => {
+        const aSub = plannedByMember[a.name.trim().toLowerCase()] ? 0 : 1;
+        const bSub = plannedByMember[b.name.trim().toLowerCase()] ? 0 : 1;
+        return aSub - bSub;
       });
     }
     if (checkinType === "guest") {
@@ -614,7 +619,11 @@ export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFor
           <input
             type="text"
             className="input-field"
-            placeholder={`搜尋${typeLabel}姓名或專業...`}
+            placeholder={
+              checkinType === "member"
+                ? "搜尋會員、替代人或專業…"
+                : `搜尋${typeLabel}姓名或專業...`
+            }
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{
@@ -640,6 +649,7 @@ export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFor
           <button
             type="button"
             onClick={() => {
+              if (eventSnapshot?.date) void fetchPlannedSubstitutes(eventSnapshot.date);
               if (checkinType === "member") void fetchMembers();
               else if (checkinType === "guest") void fetchGuestsForDate(eventSnapshot.date);
               else void fetchObserversForDate(eventSnapshot.date);
@@ -808,7 +818,7 @@ export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFor
                   >
                     {checkinType === "member" && plannedSub ? (
                       <>
-                        會員 {item.name}
+                        替代人 {plannedSub}
                         {item.profession ? ` · ${item.profession}` : ""}
                       </>
                     ) : (

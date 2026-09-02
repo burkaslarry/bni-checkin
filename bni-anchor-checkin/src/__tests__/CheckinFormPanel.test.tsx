@@ -110,4 +110,34 @@ describe("CheckinFormPanel", () => {
     expect(screen.getByText(/2099-01-01/i)).toBeInTheDocument();
     expect(logAttendance).not.toHaveBeenCalled();
   });
+
+  it("shows planned substitute on the member row and matches search by substitute name", async () => {
+    vi.mocked(api.getMembers).mockResolvedValue({
+      members: [
+        { id: 1, name: "Alice", domain: "IT", standing: "GREEN" },
+        { id: 8, name: "Kevin Cheung", domain: "Insurance", standing: "GREEN" },
+      ],
+    });
+    vi.mocked(api.getPlannedSubstitutes).mockResolvedValue({
+      substitutes: [{ memberName: "Kevin Cheung", substituteName: "May Wong" }],
+      eventDate: "2026-02-10",
+    });
+
+    render(
+      <BrowserRouter>
+        <CheckinFormPanel onNotify={() => {}} />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Kevin Cheung (May Wong)")).toBeInTheDocument();
+    });
+    expect(screen.getByText(/替代人 May Wong/)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText(/搜尋會員、替代人或專業/), {
+      target: { value: "May" },
+    });
+    expect(screen.getByText("Kevin Cheung (May Wong)")).toBeInTheDocument();
+    expect(screen.queryByText("Alice")).not.toBeInTheDocument();
+  });
 });

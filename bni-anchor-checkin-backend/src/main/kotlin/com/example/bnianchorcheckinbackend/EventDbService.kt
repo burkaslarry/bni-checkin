@@ -106,10 +106,17 @@ class EventDbService(
         return resolveMemberIdByPartialName(trimmed, chapterId)
     }
 
+    /** WhatsApp nicknames / common typos → member given name used for unique match. */
+    private val memberNicknames = mapOf(
+        "邦哥" to "kevin cheung",
+        "lucus" to "locus",
+    )
+
     /** Match WhatsApp shorthand (e.g. "Zoe") to a unique full member name (e.g. "Zoe Wu"). */
     internal fun resolveMemberIdByPartialName(query: String, chapterId: Int): Int? {
-        val q = query.trim().lowercase()
-        if (q.isEmpty()) return null
+        val raw = query.trim().lowercase()
+        if (raw.isEmpty()) return null
+        val q = memberNicknames[raw] ?: raw
         val members = memberRepository.findAllByChapterIdOrderByNameAsc(chapterId)
         val matches = members.filter { member ->
             val n = member.name.trim().lowercase()
