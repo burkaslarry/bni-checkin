@@ -1,0 +1,40 @@
+name: CI
+
+# Render GitHub Flow: PR checks on burkaslarry/bni-anchor-checkin-backend.
+# Does not deploy. Production deploy stays ./scripts/deploy-render-production.sh
+# from the bni-checkin monorepo (Render auto-deploy is off).
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: backend-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests and build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+
+      - name: Run tests
+        run: ./gradlew test
+        env:
+          DEEPSEEK_API_KEY: ""
+
+      - name: Build
+        run: ./gradlew build
+        env:
+          DEEPSEEK_API_KEY: ""
