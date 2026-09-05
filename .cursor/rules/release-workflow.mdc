@@ -5,6 +5,19 @@ alwaysApply: true
 
 # EventXP Release Workflow
 
+## GitHub Flow (always use the parent repo)
+
+Source of truth is **`burkaslarry/bni-checkin`** branch **`master`**. GitHub CI lives at `.github/workflows/ci.yml` and does **not** deploy.
+
+`bni-anchor-checkin/` and `bni-anchor-checkin-backend/` contain **nested `.git` directories** that point at the Vercel/Render deploy repos. `git checkout` / `git commit` / `git push` **inside those folders steal the branch** from the monorepo (Cursor GitHub Flow then looks at `bni-checkin` and cannot find the branch).
+
+1. Run every `git` command from the **workspace root** (`bni-checkin`).
+2. Branch from `master`: `git checkout -b cursor/short-name`.
+3. Open a PR against `master` (`gh pr create`). Parent CI must pass.
+4. After merge, sync deploy GitHub repos: `PUSH=1 ./scripts/sync-github-deploy-repos.sh` (frontend → `bni-anchor-checkin` `main`, backend → `bni-anchor-checkin-backend` `main`). Then deploy with the scripts below.
+
+Never force-push `master` or the deploy `main` branches.
+
 ## Monorepo layout (always acknowledge before release work)
 
 | Area | Path | Stack | Deploy target |

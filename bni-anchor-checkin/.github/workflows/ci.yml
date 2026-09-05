@@ -1,0 +1,38 @@
+name: CI
+
+# Vercel GitHub Flow: PR checks on burkaslarry/bni-anchor-checkin.
+# Does not deploy. Production deploy stays ./scripts/deploy-vercel-production.sh
+# from the bni-checkin monorepo (or `npx vercel --prod` in this folder).
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: frontend-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests and build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm run test -- --run
+
+      - name: Build
+        run: npm run build
