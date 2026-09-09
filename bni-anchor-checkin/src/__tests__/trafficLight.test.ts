@@ -11,6 +11,7 @@ import {
   scoreReferralsPerWeek,
   toWhatsAppPhone,
   buildChapterLtStats,
+  trafficLightNamesMatch,
 } from "../lib/trafficLight";
 
 describe("trafficLight scoring", () => {
@@ -110,5 +111,66 @@ describe("trafficLight scoring", () => {
     expect(stats.referralImbalance[0]?.name).toBe("Ben");
     expect(stats.vsPrev?.worsened).toBe(1);
     expect(stats.trainingPct).toBe(50);
+  });
+
+  it("maps Excel aliases Chow Chong Kwan, Wade Suen, and Eddie Chou to roster names", () => {
+    const row = {
+      name: "Ada",
+      present: 20,
+      absent: 0,
+      late: 0,
+      medical: 0,
+      substitute: 0,
+      referralsGiven: 10,
+      referralsReceived: 10,
+      visitors: 4,
+      oneToOnes: 20,
+      training: 2,
+      bizGive: 100_000,
+      plsPct: 90,
+      totalPts: 50,
+      light: "YELLOW" as const,
+    };
+    expect(trafficLightNamesMatch("Chow Chong Kwan", "Dr. Chow C.K.")).toBe(true);
+    expect(trafficLightNamesMatch("Wade Suen", "Dr. Wade Suen")).toBe(true);
+    expect(trafficLightNamesMatch("Eddie Chou", "Max Chan/William Lai/Eddie Chou")).toBe(true);
+    expect(trafficLightNamesMatch("Wayne Lo", "Catherine Suen/Wayne Lo")).toBe(false);
+
+    const stats = buildChapterLtStats(
+      [
+        { ...row, name: "Chow Chong Kwan" },
+        { ...row, name: "Wade Suen" },
+        { ...row, name: "Eddie Chou" },
+        { ...row, name: "Wayne Lo" },
+        { ...row, name: "Kevin Ho" },
+        { ...row, name: "Michelle Wong" },
+        { ...row, name: "Summer Ha" },
+        { ...row, name: "Jayden Wong" },
+      ],
+      [
+        "Dr. Chow C.K.",
+        "Dr. Wade Suen",
+        "Max Chan/William Lai/Eddie Chou",
+        "Catherine Suen/Wayne Lo",
+        "Jimmy Ho",
+        "Johnny Li",
+        "Raymond Chan",
+        "Steve Ho",
+      ]
+    );
+    expect(stats.unmatchedExcel).toEqual([
+      "Wayne Lo",
+      "Kevin Ho",
+      "Michelle Wong",
+      "Summer Ha",
+      "Jayden Wong",
+    ]);
+    expect(stats.unmatchedRoster).toEqual([
+      "Catherine Suen/Wayne Lo",
+      "Jimmy Ho",
+      "Johnny Li",
+      "Raymond Chan",
+      "Steve Ho",
+    ]);
   });
 });

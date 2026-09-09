@@ -357,6 +357,36 @@ export type ChapterLtStats = {
 
 const EMPTY_COUNTS: LightCounts = { GREEN: 0, YELLOW: 0, RED: 0, BLACK: 0 };
 
+/**
+ * Excel Traffic Light names → EventXP roster names (Anchor).
+ * Keys are lowercase, collapsed whitespace. Unlisted mismatches stay unmatched.
+ */
+export const TRAFFIC_LIGHT_EXCEL_TO_ROSTER: Record<string, string> = {
+  "chow chong kwan": "Dr. Chow C.K.",
+  "wade suen": "Dr. Wade Suen",
+  "eddie chou": "Max Chan/William Lai/Eddie Chou",
+};
+
+/** Lowercase collapsed whitespace for Traffic Light name compares. */
+export function normalizeTrafficLightName(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/** Roster name to look up from an Excel cell, or the trimmed Excel name if no alias. */
+export function rosterNameForExcel(excelName: string): string {
+  const key = normalizeTrafficLightName(excelName);
+  return TRAFFIC_LIGHT_EXCEL_TO_ROSTER[key] ?? excelName.trim();
+}
+
+/** True when Excel and roster refer to the same member, including known aliases. */
+export function trafficLightNamesMatch(excelName: string, rosterName: string): boolean {
+  const excelKey = normalizeTrafficLightName(excelName);
+  const rosterKey = normalizeTrafficLightName(rosterName);
+  if (excelKey.length === 0 || rosterKey.length === 0) return false;
+  if (excelKey === rosterKey) return true;
+  return normalizeTrafficLightName(rosterNameForExcel(excelName)) === rosterKey;
+}
+
 function lightRank(light: TrafficLight): number {
   switch (light) {
     case "GREEN":
@@ -449,8 +479,8 @@ export function buildChapterLtStats(
   const visitors = rows.reduce((s, r) => s + r.visitors, 0);
   const oneToOnes = rows.reduce((s, r) => s + r.oneToOnes, 0);
   const tyfcb = rows.map((r) => r.bizGive);
-  const roster = new Set(rosterNames.map((n) => n.trim().toLowerCase()).filter(Boolean));
-  const excel = new Set(rows.map((r) => r.name.trim().toLowerCase()).filter(Boolean));
+  const roster = rosterNames.map((n) => n.trim()).filter(Boolean);
+  const excelNames = rows.map((r) => r.name.trim()).filter(Boolean);
 
   let vsPrev: ChapterLtStats["vsPrev"] = null;
   if (previousRows && previousRows.length > 0) {
@@ -472,13 +502,12 @@ export function buildChapterLtStats(
     };
   }
 
-  const unmatchedExcel = rows
-    .filter((r) => !roster.has(r.name.trim().toLowerCase()))
-    .map((r) => r.name);
-  const unmatchedRoster = rosterNames.filter((n) => {
-    const key = n.trim().toLowerCase();
-    return key.length > 0 && !excel.has(key);
-  });
+  const unmatchedExcel = excelNames.filter(
+    (excelName) => !roster.some((rosterName) => trafficLightNamesMatch(excelName, rosterName))
+  );
+  const unmatchedRoster = roster.filter(
+    (rosterName) => !excelNames.some((excelName) => trafficLightNamesMatch(excelName, rosterName))
+  );
 
   return {
     memberCount,
