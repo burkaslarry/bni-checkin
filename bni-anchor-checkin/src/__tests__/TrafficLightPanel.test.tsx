@@ -124,6 +124,7 @@ describe("TrafficLightPanel LT board", () => {
     expect(await screen.findByText("At-risk（紅 + 黑）")).toBeInTheDocument();
     expect(screen.getByText(/會員名單冇喺 Excel：Cara/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Ben · 黑燈/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "可鼓勵主動付出更多引薦" })).toBeInTheDocument();
   });
 
   it("opens an at-risk member from the board list", async () => {
