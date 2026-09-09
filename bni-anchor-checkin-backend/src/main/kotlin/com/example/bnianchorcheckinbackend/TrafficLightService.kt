@@ -140,7 +140,9 @@ class TrafficLightService(
     /** Overlay [MemberStanding] from light color; skip unknown names / invalid lights. */
     private fun syncMemberStanding(chapterId: Int, rows: List<TrafficLightRowDto>) {
         for (row in rows) {
-            val member = memberRepository.findByChapterIdAndNameIgnoreCase(chapterId, row.name).orElse(null)
+            val lookupName = TrafficLightNameAliases.rosterNameForExcel(row.name)
+            val member = memberRepository.findByChapterIdAndNameIgnoreCase(chapterId, lookupName).orElse(null)
+                ?: memberRepository.findByChapterIdAndNameIgnoreCase(chapterId, row.name).orElse(null)
                 ?: continue
             val standing = try {
                 MemberStanding.valueOf(row.light.uppercase())
