@@ -94,9 +94,11 @@ INSERT INTO bni_anchor_members (name, profession, profession_code, position, mem
 ('Sunny Wong', '健身教練', 'H', 'Member', 'ANCHOR-040'),
 ('Locus Lam', '長者運動訓練', 'H', 'Member', 'ANCHOR-043'),
 ('Enoch Hung', '物理治療師', 'H', 'Member', 'ANCHOR-045'),
+('Dr. Ronnie Chan', '心臟科專科醫生', 'H', 'Member', 'ANCHOR-050'),
 -- (J)
 ('Eric Su', '升學移民', 'J', 'Member', 'ANCHOR-013'),
 ('Eison Chiang', '科技教育', 'J', 'Member', 'ANCHOR-042'),
+('Rebecca Hung', '兒童英語', 'J', 'Member', 'ANCHOR-049'),
 -- (K)
 ('Cyrus Koo', '個人保險(健康及保障)', 'K', '教育統籌', 'ANCHOR-003'),
 ('Raymond Kuo', '個人保險(理財及儲蓄)', 'K', '主席', 'ANCHOR-005'),
