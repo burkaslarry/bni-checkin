@@ -204,10 +204,10 @@ function MembersPageInner() {
 
   const getStandingLabel = (standing?: MemberStanding) => {
     switch (standing) {
-      case "GREEN": return "🟢 正常";
-      case "YELLOW": return "🟡 觀察";
-      case "RED": return "🔴 停權";
-      case "BLACK": return "⚫ 已離會";
+      case "GREEN": return "🟢 綠燈";
+      case "YELLOW": return "🟡 黃燈";
+      case "RED": return "🔴 紅燈";
+      case "BLACK": return "⚫ 黑燈";
       default: return "⚪ 未設定";
     }
   };
