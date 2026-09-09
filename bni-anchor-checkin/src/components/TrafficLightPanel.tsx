@@ -355,9 +355,9 @@ export function TrafficLightPanel({
                   )}
                 </div>
                 <div>
-                  <h4>引薦失衡（收 − 俾 ≥ 5）</h4>
+                  <h4>可鼓勵主動付出更多引薦</h4>
                   {stats.referralImbalance.length === 0 ? (
-                    <p className="hint">冇明顯失衡。</p>
+                    <p className="hint">暫時冇需要特別鼓勵嘅會員。</p>
                   ) : (
                     <ul>
                       {stats.referralImbalance.map((m) => (
