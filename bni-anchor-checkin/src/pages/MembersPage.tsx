@@ -40,11 +40,9 @@ function MembersPageInner() {
   const [showAddMember, setShowAddMember] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDomain, setNewDomain] = useState("");
-  const [newStanding, setNewStanding] = useState<MemberStanding>("GREEN");
   const [newProfessionCode, setNewProfessionCode] = useState<MemberCategoryCode>("A");
   const [editDomain, setEditDomain] = useState("");
   const [editName, setEditName] = useState("");
-  const [editStanding, setEditStanding] = useState<MemberStanding>("GREEN");
   const [editProfessionCode, setEditProfessionCode] = useState<MemberCategoryCode>("A");
   const [notification, setNotification] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
 
@@ -109,7 +107,6 @@ function MembersPageInner() {
     setEditingMember(member);
     setEditName(member.name);
     setEditDomain(member.domain);
-    setEditStanding(member.standing || "GREEN");
     const code = resolveMemberCategoryCode(member, categories);
     setEditProfessionCode(code === "OTHER" ? String(categories[0]?.code ?? "A") : code);
   };
@@ -129,7 +126,6 @@ function MembersPageInner() {
         {
           name: trimmedName,
           profession: editDomain,
-          standing: editStanding,
           professionCode: editProfessionCode,
         },
         editingMember.id
@@ -161,14 +157,13 @@ function MembersPageInner() {
 
     try {
       await createMember(
-        { name, profession, standing: newStanding, professionCode: newProfessionCode },
+        { name, profession, professionCode: newProfessionCode },
         chapterTag
       );
       showNotification(`已新增會員 ${name}`, "success");
       setShowAddMember(false);
       setNewName("");
       setNewDomain("");
-      setNewStanding("GREEN");
       setNewProfessionCode("A");
       fetchMembers();
     } catch (error) {
@@ -211,6 +206,24 @@ function MembersPageInner() {
       default: return "⚪ 未設定";
     }
   };
+
+  const renderStandingReadOnly = (standing?: MemberStanding) => (
+    <div className="members-standing-readonly">
+      <span
+        className="members-standing-pill"
+        style={{
+          background: `${getStandingColor(standing)}20`,
+          color: getStandingColor(standing),
+          borderColor: getStandingColor(standing),
+        }}
+      >
+        {getStandingLabel(standing)}
+      </span>
+      <p className="hint" style={{ marginTop: "0.5rem", marginBottom: 0 }}>
+        由最新紅綠燈 Excel 更新，不可在此修改
+      </p>
+    </div>
+  );
 
   const memberGroups = useMemo(
     () => groupMembersByCategory(members, categories),
@@ -446,27 +459,7 @@ function MembersPageInner() {
 
             <div className="form-group" style={{ marginBottom: "1.5rem" }}>
               <label>會員狀態 Member Standing</label>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginTop: "0.5rem" }}>
-                {(["GREEN", "YELLOW", "RED", "BLACK"] as MemberStanding[]).map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    className={`role-option ${newStanding === s ? "active" : ""}`}
-                    style={{
-                      padding: "0.75rem",
-                      borderRadius: "8px",
-                      border: newStanding === s ? `2px solid ${getStandingColor(s)}` : "2px solid var(--border-color)",
-                      background: newStanding === s ? `${getStandingColor(s)}20` : "transparent",
-                      color: newStanding === s ? getStandingColor(s) : "inherit",
-                      fontWeight: newStanding === s ? 600 : 400,
-                      cursor: "pointer"
-                    }}
-                    onClick={() => setNewStanding(s)}
-                  >
-                    {getStandingLabel(s)}
-                  </button>
-                ))}
-              </div>
+              {renderStandingReadOnly("GREEN")}
             </div>
 
             <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
@@ -538,27 +531,7 @@ function MembersPageInner() {
 
             <div className="form-group" style={{ marginBottom: "1.5rem" }}>
               <label>會員狀態 Member Standing</label>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginTop: "0.5rem" }}>
-                {(["GREEN", "YELLOW", "RED", "BLACK"] as MemberStanding[]).map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    className={`role-option ${editStanding === s ? "active" : ""}`}
-                    style={{
-                      padding: "0.75rem",
-                      borderRadius: "8px",
-                      border: editStanding === s ? `2px solid ${getStandingColor(s)}` : "2px solid var(--border-color)",
-                      background: editStanding === s ? `${getStandingColor(s)}20` : "transparent",
-                      color: editStanding === s ? getStandingColor(s) : "inherit",
-                      fontWeight: editStanding === s ? 600 : 400,
-                      cursor: "pointer"
-                    }}
-                    onClick={() => setEditStanding(s)}
-                  >
-                    {getStandingLabel(s)}
-                  </button>
-                ))}
-              </div>
+              {renderStandingReadOnly(editingMember.standing)}
             </div>
 
             <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
