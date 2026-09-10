@@ -387,6 +387,26 @@ export function trafficLightNamesMatch(excelName: string, rosterName: string): b
   return normalizeTrafficLightName(rosterNameForExcel(excelName)) === rosterKey;
 }
 
+/** Map latest Excel rows onto roster names so member cards can show Total PTs. */
+export function trafficLightPtsByRosterName(
+  rows: { name: string; totalPts: number }[]
+): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const row of rows) {
+    map.set(normalizeTrafficLightName(row.name), row.totalPts);
+    map.set(normalizeTrafficLightName(rosterNameForExcel(row.name)), row.totalPts);
+  }
+  return map;
+}
+
+/** Look up Total PTs for a roster member name, or `undefined` if unmatched. */
+export function trafficLightPtsForName(
+  rosterName: string,
+  ptsByName: Map<string, number>
+): number | undefined {
+  return ptsByName.get(normalizeTrafficLightName(rosterName));
+}
+
 function lightRank(light: TrafficLight): number {
   switch (light) {
     case "GREEN":

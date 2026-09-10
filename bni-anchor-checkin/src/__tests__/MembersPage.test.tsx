@@ -16,6 +16,7 @@ vi.mock("../api", () => ({
   }),
   getMembers: vi.fn(),
   getProfessionGroups: vi.fn(),
+  getLatestTrafficLight: vi.fn(),
   updateMember: vi.fn(),
   deleteMember: vi.fn(),
   createMember: vi.fn(),
@@ -45,6 +46,36 @@ describe("MembersPage standing", () => {
     );
     const api = await import("../api");
     vi.mocked(api.getProfessionGroups).mockResolvedValue({ professionGroups: [] });
+    vi.mocked(api.getLatestTrafficLight).mockResolvedValue({
+      id: 12,
+      chapterId: 1,
+      periodLabel: "2026-02-01 - 2026-07-31",
+      periodStart: "2026-02-01",
+      periodEnd: "2026-07-31",
+      greenGoal: 60,
+      yellowGoal: 40,
+      filename: "BNI-Anchor-TL.xlsx",
+      createdAt: "2026-08-01T04:00:00Z",
+      rows: [
+        {
+          name: "Dr. Ronnie Chan",
+          present: 20,
+          absent: 0,
+          late: 0,
+          medical: 0,
+          substitute: 0,
+          referralsGiven: 40,
+          referralsReceived: 10,
+          visitors: 20,
+          oneToOnes: 40,
+          training: 2,
+          bizGive: 600_000,
+          plsPct: 100,
+          totalPts: 90,
+          light: "GREEN",
+        },
+      ],
+    });
     vi.mocked(api.getMembers).mockResolvedValue({
       members: [
         {
@@ -58,12 +89,12 @@ describe("MembersPage standing", () => {
     });
   });
 
-  it("shows 綠燈 / 黃燈 / 紅燈 / 黑燈 labels and does not let standing be edited", async () => {
+  it("shows 綠燈 / 黃燈 / 紅燈 / 黑燈 labels with Total PTs and does not let standing be edited", async () => {
     renderPage();
-    expect(await screen.findByText("🟢 綠燈")).toBeInTheDocument();
+    expect(await screen.findByText("🟢 綠燈 · 90 分")).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole("button", { name: /編輯/ })[0]);
     expect(await screen.findByText("編輯會員")).toBeInTheDocument();
-    expect(screen.getAllByText("🟢 綠燈").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("🟢 綠燈 · 90 分").length).toBeGreaterThan(0);
     expect(screen.getByText(/不可在此修改/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /黃燈/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /紅燈/ })).not.toBeInTheDocument();
