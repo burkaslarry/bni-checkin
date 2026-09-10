@@ -12,6 +12,8 @@ import {
   toWhatsAppPhone,
   buildChapterLtStats,
   trafficLightNamesMatch,
+  trafficLightPtsByRosterName,
+  trafficLightPtsForName,
 } from "../lib/trafficLight";
 
 describe("trafficLight scoring", () => {
@@ -172,5 +174,15 @@ describe("trafficLight scoring", () => {
       "Raymond Chan",
       "Steve Ho",
     ]);
+  });
+
+  it("looks up Total PTs from Excel rows onto roster names", () => {
+    const pts = trafficLightPtsByRosterName([
+      { name: "Chow Chong Kwan", totalPts: 88 },
+      { name: "Dr. Ronnie Chan", totalPts: 90 },
+    ]);
+    expect(trafficLightPtsForName("Dr. Chow C.K.", pts)).toBe(88);
+    expect(trafficLightPtsForName("Dr. Ronnie Chan", pts)).toBe(90);
+    expect(trafficLightPtsForName("Unknown", pts)).toBeUndefined();
   });
 });

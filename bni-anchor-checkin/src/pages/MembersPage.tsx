@@ -3,12 +3,17 @@ import { Link } from "react-router-dom";
 import {
   getMembers,
   getProfessionGroups,
+  getLatestTrafficLight,
   MemberInfo,
   MemberStanding,
   updateMember,
   deleteMember,
   createMember
 } from "../api";
+import {
+  trafficLightPtsByRosterName,
+  trafficLightPtsForName,
+} from "../lib/trafficLight";
 import {
   groupMembersByCategory,
   MEMBER_CATEGORIES,
@@ -32,8 +37,9 @@ export default function MembersPage({}: MembersPageProps) {
 }
 
 function MembersPageInner() {
-  const { chapterTag, chapterId, adminHref, isClientMode, isAuthenticated, authReady, chapter } = useChapter();
+  const { chapterTag, chapterId, adminHref, isClientMode, isAuthenticated, authReady, chapter, isAnchorMode } = useChapter();
   const [members, setMembers] = useState<MemberInfo[]>([]);
+  const [ptsByName, setPtsByName] = useState<Map<string, number>>(new Map());
   const [categories, setCategories] = useState<MemberCategory[]>(MEMBER_CATEGORIES);
   const [loading, setLoading] = useState(true);
   const [editingMember, setEditingMember] = useState<MemberInfo | null>(null);
@@ -50,7 +56,7 @@ function MembersPageInner() {
     if (isClientMode && (!authReady || !isAuthenticated)) return;
     void loadCategories();
     void fetchMembers();
-  }, [chapterTag, chapterId, isClientMode, authReady, isAuthenticated]);
+  }, [chapterTag, chapterId, isClientMode, isAuthenticated, authReady, isAnchorMode]);
 
   const loadCategories = async () => {
     try {
@@ -72,8 +78,14 @@ function MembersPageInner() {
   const fetchMembers = async () => {
     try {
       setLoading(true);
-      const data = await getMembers(chapterTag);
+      const [data, report] = await Promise.all([
+        getMembers(chapterTag),
+        isAnchorMode
+          ? getLatestTrafficLight(chapterTag).catch(() => null)
+          : Promise.resolve(null),
+      ]);
       setMembers(data.members);
+      setPtsByName(report ? trafficLightPtsByRosterName(report.rows) : new Map());
       // Recover chapter labels from member payload when category catalog is still the Anchor default.
       setCategories((prev) => {
         const looksLikeAnchorFallback =
@@ -92,6 +104,8 @@ function MembersPageInner() {
         );
       });
     } catch (error) {
+      setMembers([]);
+      setPtsByName(new Map());
       showNotification("無法載入會員列表", "error");
     } finally {
       setLoading(false);
@@ -207,7 +221,14 @@ function MembersPageInner() {
     }
   };
 
-  const renderStandingReadOnly = (standing?: MemberStanding) => (
+  const formatStandingDisplay = (standing?: MemberStanding, name?: string) => {
+    const label = getStandingLabel(standing);
+    if (!name) return label;
+    const pts = trafficLightPtsForName(name, ptsByName);
+    return pts == null ? label : `${label} · ${pts} 分`;
+  };
+
+  const renderStandingReadOnly = (standing?: MemberStanding, name?: string) => (
     <div className="members-standing-readonly">
       <span
         className="members-standing-pill"
@@ -217,7 +238,7 @@ function MembersPageInner() {
           borderColor: getStandingColor(standing),
         }}
       >
-        {getStandingLabel(standing)}
+        {formatStandingDisplay(standing, name)}
       </span>
       <p className="hint" style={{ marginTop: "0.5rem", marginBottom: 0 }}>
         由最新紅綠燈 Excel 更新，不可在此修改
@@ -262,7 +283,7 @@ function MembersPageInner() {
             borderColor: getStandingColor(member.standing),
           }}
         >
-          {getStandingLabel(member.standing)}
+          {formatStandingDisplay(member.standing, member.name)}
         </span>
       </td>
       <td className="members-table-actions">
@@ -531,7 +552,7 @@ function MembersPageInner() {
 
             <div className="form-group" style={{ marginBottom: "1.5rem" }}>
               <label>會員狀態 Member Standing</label>
-              {renderStandingReadOnly(editingMember.standing)}
+              {renderStandingReadOnly(editingMember.standing, editingMember.name)}
             </div>
 
             <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
