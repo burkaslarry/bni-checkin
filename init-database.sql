@@ -64,12 +64,10 @@ INSERT INTO bni_anchor_members (name, profession, profession_code, position, mem
 ('Tam O Yan', '內外抗衰老顧問', 'D', '來賓接待', 'ANCHOR-002'),
 ('Joe Li', '風水玄學', 'D', '新會員輔導', 'ANCHOR-006'),
 ('Zoe Wu', '花藝師', 'D', 'Member', 'ANCHOR-008'),
-('Charlotte Kamta', '鮮花批發零售', 'D', '副主席', 'ANCHOR-009'),
 ('Andrew Fong', '手錶買賣', 'D', 'Member', 'ANCHOR-027'),
 ('Eddy Wong', '汽車買賣', 'D', 'Member', 'ANCHOR-028'),
 ('Fan Lam', '女性及孕婦時裝', 'D', 'Member', 'ANCHOR-036'),
 ('Phoebe Lin', '催乳及紓肚服務', 'D', 'Member', 'ANCHOR-037'),
-('Cherry Xu', '中港車服務', 'D', 'Member', 'ANCHOR-038'),
 ('Ling Wan', '僱傭服務', 'D', 'Member', 'ANCHOR-039'),
 -- (E)
 ('Jayden Wong', '活動場地佈置', 'E', 'Member', 'ANCHOR-023'),
