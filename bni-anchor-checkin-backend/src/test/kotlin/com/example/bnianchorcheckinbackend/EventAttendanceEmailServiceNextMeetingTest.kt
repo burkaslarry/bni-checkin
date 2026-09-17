@@ -127,4 +127,53 @@ class EventAttendanceEmailServiceNextMeetingTest {
         assertEquals("BNI Anchor Closed Door Meeting 2026-08-20", result?.name)
         verify(eventDbService).setEventActive(55, true, "anchor")
     }
+
+    @Test
+    fun `defers creating 8 Oct when today is 17 Sep`() {
+        val midAutumn = finished.copy(
+            eventDate = LocalDate.of(2026, 9, 17),
+            name = "BNI Anchor Business Meeting 2026-09-17"
+        )
+        val result = service.createAndActivateNextMeeting(midAutumn, LocalDate.of(2026, 9, 17))
+        assertEquals(null, result)
+    }
+
+    @Test
+    fun `creates 8 Oct when today is 1 Oct after skipping blackout Thursdays`() {
+        val midAutumn = finished.copy(
+            eventDate = LocalDate.of(2026, 9, 17),
+            name = "BNI Anchor Business Meeting 2026-09-17"
+        )
+        val created = EventData(
+            id = 80,
+            name = "BNI Anchor Business Meeting 2026-10-08",
+            date = "2026-10-08",
+            startTime = "07:00",
+            endTime = "09:00",
+            registrationStartTime = "06:30",
+            onTimeCutoff = "07:01",
+            createdAt = "2026-10-01",
+            chapterId = 1
+        )
+        `when`(eventDbService.getEventForDate("2026-10-08", "anchor")).thenReturn(null)
+        `when`(
+            eventDbService.createEvent(
+                EventRequest(
+                    name = "BNI Anchor Business Meeting 2026-10-08",
+                    date = "2026-10-08",
+                    startTime = "07:00",
+                    endTime = "09:00",
+                    registrationStartTime = "06:30",
+                    onTimeCutoff = "07:01"
+                ),
+                "anchor"
+            )
+        ).thenReturn(created)
+        `when`(eventDbService.setEventActive(80, true, "anchor")).thenReturn(created)
+
+        val result = service.createAndActivateNextMeeting(midAutumn, LocalDate.of(2026, 10, 1))
+
+        assertEquals(80, result?.id)
+        assertEquals("2026-10-08", result?.date)
+    }
 }
