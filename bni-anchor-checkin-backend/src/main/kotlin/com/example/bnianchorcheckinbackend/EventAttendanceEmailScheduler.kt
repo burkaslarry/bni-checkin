@@ -25,12 +25,16 @@ class EventAttendanceEmailScheduler(
     @Scheduled(fixedDelayString = "\${attendance.email.poll-ms:300000}", initialDelayString = "60000")
     fun pollFinishedEvents() {
         if (!enabled) return
-        if (!emailService.isReady()) return
         try {
-            val sent = emailService.processDueEvents()
-            if (sent > 0) {
-                log.info("Attendance email scheduler sent {} email(s)", sent)
+            if (emailService.isReady()) {
+                val sent = emailService.processDueEvents()
+                if (sent > 0) {
+                    log.info("Attendance email scheduler sent {} email(s)", sent)
+                }
             }
+            // Independent of Resend: open the next meeting once it is within 7 days
+            // (Anchor 24 Sep / 1 Oct blackout → create 8 Oct on 1 Oct).
+            emailService.ensureUpcomingMeetings()
         } catch (e: Exception) {
             log.error("Attendance email scheduler failed: {}", e.message)
         }

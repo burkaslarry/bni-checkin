@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.LocalDate
 import java.time.LocalTime
 import java.time.OffsetDateTime
 import java.time.ZoneId
@@ -59,6 +60,8 @@ class EventAttendanceEmailService(
         return candidates.filter { event ->
             if (event.attendanceEmailSentAt != null) return@filter false
             val id = event.id ?: return@filter false
+            val chapterTag = chapterService.findInfoById(event.chapterId)?.tag
+            if (NextMeetingPlanner.isSkipped(chapterTag, event.eventDate)) return@filter false
             val endBase = event.endTime ?: event.startTime.plusHours(2)
             val endDate = if (!endBase.isAfter(event.startTime)) event.eventDate.plusDays(1) else event.eventDate
             val endAt = ZonedDateTime.of(endDate, endBase, hkt)
@@ -206,20 +209,57 @@ class EventAttendanceEmailService(
     }
 
     /**
+     * When the usual “email then create next week” path was deferred (holiday skip),
+     * open the next meeting once it is within 7 days (Anchor: 1 Oct → 8 Oct).
+     */
+    fun ensureUpcomingMeetings(today: LocalDate = LocalDate.now(hkt)) {
+        for (chapter in chapterService.listActiveChapters()) {
+            try {
+                val last = eventRepository.findTopByChapterIdAndDeletedAtIsNullOrderByEventDateDescStartTimeDesc(chapter.id)
+                    ?: continue
+                val created = createAndActivateNextMeeting(last, today)
+                if (created != null) {
+                    log.info(
+                        "Ensured upcoming meeting chapter={} id={} date={}",
+                        chapter.tag, created.id, created.date
+                    )
+                }
+            } catch (e: Exception) {
+                log.error("ensureUpcomingMeetings failed for chapter={}: {}", chapter.tag, e.message)
+            }
+        }
+    }
+
+    /**
      * After a finished event is emailed, create the chapter's next weekly meeting
      * (or reuse one already on that date) and set it as the exclusive current event.
      *
      * @param finished the event whose attendance email just succeeded
-     * @return the next [EventData], or null if the chapter cannot be resolved
+     * @param today HKT calendar day used to defer openings more than a week out
+     * @return the next [EventData], or null if the chapter cannot be resolved / still deferred
      *
      * Side effects: may INSERT `bni_events` then [EventDbService.setEventActive] exclusive.
      */
-    fun createAndActivateNextMeeting(finished: Event): EventData? {
+    fun createAndActivateNextMeeting(
+        finished: Event,
+        today: LocalDate = LocalDate.now(hkt)
+    ): EventData? {
         val chapter = chapterService.findInfoById(finished.chapterId) ?: run {
             log.warn("Skip next meeting create — unknown chapterId={}", finished.chapterId)
             return null
         }
-        val nextDate = NextMeetingPlanner.nextDateAfter(finished.eventDate, chapter.meetingWeekday)
+        val nextDate = NextMeetingPlanner.nextDateAfter(finished.eventDate, chapter.meetingWeekday, chapter.tag)
+        if (NextMeetingPlanner.isSkipped(chapter.tag, nextDate)) {
+            log.info("Skip next meeting create — blackout date {} chapter={}", nextDate, chapter.tag)
+            return null
+        }
+        if (NextMeetingPlanner.shouldDeferOpening(nextDate, today)) {
+            log.info(
+                "Defer next meeting chapter={} date={} until {}",
+                chapter.tag, nextDate, nextDate.minusDays(7)
+            )
+            return null
+        }
         val dateStr = nextDate.toString()
         val existing = eventDbService.getEventForDate(dateStr, chapter.tag)
         val event = if (existing != null) {
