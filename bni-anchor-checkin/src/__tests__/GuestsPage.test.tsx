@@ -68,17 +68,33 @@ describe("GuestsPage CSV export", () => {
     signIn();
   });
 
-  it("exports the current guest list", async () => {
+  it("exports the visible guest list in event-date order", async () => {
     renderGuests();
     await screen.findByText("Amy Chan");
+
+    const names = () =>
+      screen
+        .getAllByRole("row")
+        .slice(1)
+        .map((row) => row.textContent ?? "");
+    expect(names()[0]).toContain("Ben Wong");
+    expect(names()[1]).toContain("Amy Chan");
+
     fireEvent.click(screen.getByRole("button", { name: "📥 匯出 CSV" }));
-    expect(downloadGuestCsv).toHaveBeenCalledWith(
-      "guest_list_all.csv",
-      expect.arrayContaining([
-        expect.objectContaining({ name: "Amy Chan" }),
-        expect.objectContaining({ name: "Ben Wong" }),
-      ])
-    );
+    expect(downloadGuestCsv).toHaveBeenCalledWith("guest_list_all.csv", [
+      expect.objectContaining({ name: "Ben Wong", eventDate: "2026-08-01" }),
+      expect.objectContaining({ name: "Amy Chan", eventDate: "2026-07-16" }),
+    ]);
+
+    fireEvent.click(screen.getByRole("button", { name: /活動日期/ }));
+    expect(names()[0]).toContain("Amy Chan");
+    expect(names()[1]).toContain("Ben Wong");
+
+    fireEvent.click(screen.getByRole("button", { name: "📥 匯出 CSV" }));
+    expect(downloadGuestCsv).toHaveBeenLastCalledWith("guest_list_all.csv", [
+      expect.objectContaining({ name: "Amy Chan", eventDate: "2026-07-16" }),
+      expect.objectContaining({ name: "Ben Wong", eventDate: "2026-08-01" }),
+    ]);
   });
 
   it("exports only the selected event date", async () => {

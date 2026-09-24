@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo, type KeyboardEvent } from "react"
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { getGuests, GuestInfo, deleteGuest, updateGuest } from "../api";
 import { downloadGuestCsv } from "../lib/guestCsv";
-import { guestMatchesKeywords } from "../lib/guestSearch";
+import { guestMatchesKeywords, sortGuestsByEventDate } from "../lib/guestSearch";
 import { AnchorOnlyNotice } from "../components/AnchorOnlyNotice";
 import { ClientAuthGate } from "../components/ClientAuthGate";
 import { useChapter } from "../chapterContext";
@@ -29,6 +29,7 @@ function GuestsPageInner() {
   const [editProfession, setEditProfession] = useState("");
   const [editReferrer, setEditReferrer] = useState("");
   const [editEventDate, setEditEventDate] = useState("");
+  const [dateSort, setDateSort] = useState<"asc" | "desc">("desc");
   const [searchInput, setSearchInput] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
   const [notification, setNotification] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
@@ -180,6 +181,11 @@ function GuestsPageInner() {
     return eventFilteredGuests.filter((guest) => guestMatchesKeywords(guest, appliedSearch));
   }, [eventFilteredGuests, selectedEventDate, appliedSearch]);
 
+  const displayedGuests = useMemo(
+    () => sortGuestsByEventDate(filteredGuests, dateSort),
+    [filteredGuests, dateSort]
+  );
+
   const searchEnabled = selectedEventDate === "all";
 
   const handleExportCsv = () => {
@@ -188,8 +194,8 @@ function GuestsPageInner() {
       return;
     }
     const datePart = selectedEventDate === "all" ? "all" : selectedEventDate;
-    downloadGuestCsv(`guest_list_${datePart}.csv`, filteredGuests);
-    showNotification(`已匯出 ${filteredGuests.length} 位嘉賓`, "success");
+    downloadGuestCsv(`guest_list_${datePart}.csv`, displayedGuests);
+    showNotification(`已匯出 ${displayedGuests.length} 位嘉賓`, "success");
   };
 
   return (
@@ -297,7 +303,7 @@ function GuestsPageInner() {
                 color: "white",
                 boxShadow: "0 4px 12px rgba(79, 172, 254, 0.3)"
               }}>
-                <div style={{ fontSize: "2rem", fontWeight: "bold" }}>{filteredGuests.length}</div>
+                <div style={{ fontSize: "2rem", fontWeight: "bold" }}>{displayedGuests.length}</div>
                 <div style={{ fontSize: "0.875rem", opacity: 0.9 }}>已篩選 Filtered</div>
               </div>
             )}
@@ -351,9 +357,9 @@ function GuestsPageInner() {
           <p className="hint" style={{ margin: "0.5rem 0 0 0", fontSize: "0.875rem" }}>
             {selectedEventDate === "all"
               ? appliedSearch
-                ? `搜尋「${appliedSearch}」：${filteredGuests.length} / ${guests.length} 位嘉賓`
+                ? `搜尋「${appliedSearch}」：${displayedGuests.length} / ${guests.length} 位嘉賓`
                 : `顯示所有 ${guests.length} 位嘉賓`
-              : `已篩選：${filteredGuests.length} 位嘉賓參加此活動`}
+              : `已篩選：${displayedGuests.length} 位嘉賓參加此活動`}
           </p>
 
           <div className="guests-search-bar">
@@ -393,7 +399,7 @@ function GuestsPageInner() {
               type="button"
               className="button"
               onClick={handleExportCsv}
-              disabled={loading || loadFailedRedirect || filteredGuests.length === 0}
+              disabled={loading || loadFailedRedirect || displayedGuests.length === 0}
               title="匯出目前列表，欄位：name, profession, phone, referrer, event_date"
             >
               📥 匯出 CSV
@@ -413,12 +419,20 @@ function GuestsPageInner() {
                   <th style={{ padding: "1rem", textAlign: "left" }}>姓名</th>
                   <th style={{ padding: "1rem", textAlign: "left" }}>專業領域</th>
                   <th style={{ padding: "1rem", textAlign: "left" }}>邀請人</th>
-                  <th style={{ padding: "1rem", textAlign: "left" }}>活動日期</th>
+                  <th style={{ padding: "1rem", textAlign: "left" }} aria-sort={dateSort === "asc" ? "ascending" : "descending"}>
+                    <button
+                      type="button"
+                      className="guests-sort-button"
+                      onClick={() => setDateSort((current) => (current === "desc" ? "asc" : "desc"))}
+                    >
+                      活動日期 {dateSort === "asc" ? "↑" : "↓"}
+                    </button>
+                  </th>
                   <th style={{ padding: "1rem", textAlign: "center" }}>操作</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredGuests.map((guest) => (
+                {displayedGuests.map((guest) => (
                   <tr key={`${guest.name}-${guest.eventDate ?? ""}`} style={{ borderBottom: "1px solid var(--border-color)" }}>
                     <td style={{ padding: "1rem", fontWeight: 500 }}>{guest.name}</td>
                     <td style={{ padding: "1rem" }}>{guest.profession}</td>
