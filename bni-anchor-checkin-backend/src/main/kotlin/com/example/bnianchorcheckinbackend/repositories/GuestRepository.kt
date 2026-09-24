@@ -17,6 +17,14 @@ interface GuestRepository : JpaRepository<Guest, Long> {
     fun findAllByOrderByNameAsc(): List<Guest>
     fun findByEventDate(eventDate: String): List<Guest>
     fun findAllByChapterIdOrderByNameAsc(chapterId: Int): List<Guest>
+
+    /** Admin guest list: newest event first; missing dates stay last; same-day names A–Z. */
+    @Query(
+        "SELECT g FROM Guest g WHERE g.chapterId = :chapterId " +
+            "ORDER BY CASE WHEN g.eventDate IS NULL OR TRIM(g.eventDate) = '' THEN 1 ELSE 0 END, " +
+            "g.eventDate DESC, g.name ASC"
+    )
+    fun findAllByChapterIdOrderByEventDateDesc(@Param("chapterId") chapterId: Int): List<Guest>
     fun findByChapterIdAndEventDate(chapterId: Int, eventDate: String): List<Guest>
     fun findByChapterIdAndNameIgnoreCase(chapterId: Int, name: String): Optional<Guest>
     fun existsByChapterIdAndPhoneNumberAndEventDate(chapterId: Int, phoneNumber: String, eventDate: String): Boolean

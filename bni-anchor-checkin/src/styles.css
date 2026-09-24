@@ -4931,6 +4931,13 @@ td {
   margin-top: 1rem;
 }
 
+.guest-lt-label {
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #fbbf24;
+}
+
 .guests-sort-button {
   background: none;
   border: none;

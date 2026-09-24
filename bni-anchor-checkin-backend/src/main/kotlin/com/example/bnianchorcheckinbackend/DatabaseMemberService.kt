@@ -66,7 +66,7 @@ class DatabaseMemberService(
 
     fun getAllGuests(chapterTag: String? = null): List<Map<String, String>> {
         val chapterId = chapterService.resolveChapterId(chapterTag)
-        return guestRepository.findAllByChapterIdOrderByNameAsc(chapterId).map { guest ->
+        return guestRepository.findAllByChapterIdOrderByEventDateDesc(chapterId).map { guest ->
             mapOf(
                 "name" to guest.name,
                 "profession" to guest.profession,

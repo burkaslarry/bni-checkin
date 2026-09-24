@@ -78,7 +78,9 @@ describe("GuestsPage CSV export", () => {
         .slice(1)
         .map((row) => row.textContent ?? "");
     expect(names()[0]).toContain("Ben Wong");
+    expect(names()[0]).toContain("第 2 屆 LT");
     expect(names()[1]).toContain("Amy Chan");
+    expect(names()[1]).toContain("第 2 屆 LT");
 
     fireEvent.click(screen.getByRole("button", { name: "📥 匯出 CSV" }));
     expect(downloadGuestCsv).toHaveBeenCalledWith("guest_list_all.csv", [
