@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo, type KeyboardEvent } from "react"
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { getGuests, GuestInfo, deleteGuest, updateGuest } from "../api";
 import { downloadGuestCsv } from "../lib/guestCsv";
-import { guestLtTermLabel } from "../lib/guestLtTerm";
+import { formatGuestLtTerm, guestLtTermLabel, resolveGuestLtTerm } from "../lib/guestLtTerm";
 import { guestMatchesKeywords, sortGuestsByEventDate } from "../lib/guestSearch";
 import { AnchorOnlyNotice } from "../components/AnchorOnlyNotice";
 import { ClientAuthGate } from "../components/ClientAuthGate";
@@ -25,6 +25,7 @@ function GuestsPageInner() {
   const [guests, setGuests] = useState<GuestInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedEventDate, setSelectedEventDate] = useState<string>("all");
+  const [selectedLtTerm, setSelectedLtTerm] = useState<string>("all");
   const [editingGuest, setEditingGuest] = useState<GuestInfo | null>(null);
   const [editName, setEditName] = useState("");
   const [editProfession, setEditProfession] = useState("");
@@ -132,19 +133,14 @@ function GuestsPageInner() {
 
   const handleEventFilterChange = (value: string) => {
     setSelectedEventDate(value);
-    if (value !== "all") {
-      setSearchInput("");
-      setAppliedSearch("");
-    }
   };
 
   const handleSearch = () => {
-    if (selectedEventDate !== "all") return;
     setAppliedSearch(searchInput.trim());
   };
 
   const handleSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Enter" && selectedEventDate === "all") {
+    if (event.key === "Enter") {
       event.preventDefault();
       handleSearch();
     }
@@ -167,27 +163,40 @@ function GuestsPageInner() {
   // Get unique event dates from guests
   const eventDates = Array.from(new Set(guests.map(g => g.eventDate).filter(Boolean))).sort().reverse();
 
+  /**
+   * [F003][S404]
+   * Feature: Guest Registration
+   * Step: Filter guests by LT term
+   * Description: Intersects the event-date filter with bni_eventxp_guests.lt_term.
+   */
+  const ltTerms = useMemo(() => {
+    const terms = new Set<number>();
+    for (const guest of guests) {
+      const term = resolveGuestLtTerm(guest);
+      if (term != null) terms.add(term);
+    }
+    return Array.from(terms).sort((a, b) => b - a);
+  }, [guests]);
+
   const eventFilteredGuests = useMemo(
     () =>
-      selectedEventDate === "all"
-        ? guests
-        : guests.filter((g) => g.eventDate === selectedEventDate),
-    [guests, selectedEventDate]
+      guests.filter((guest) => {
+        if (selectedEventDate !== "all" && guest.eventDate !== selectedEventDate) return false;
+        if (selectedLtTerm !== "all" && String(resolveGuestLtTerm(guest) ?? "") !== selectedLtTerm) return false;
+        return true;
+      }),
+    [guests, selectedEventDate, selectedLtTerm]
   );
 
   const filteredGuests = useMemo(() => {
-    if (selectedEventDate !== "all" || !appliedSearch) {
-      return eventFilteredGuests;
-    }
+    if (!appliedSearch) return eventFilteredGuests;
     return eventFilteredGuests.filter((guest) => guestMatchesKeywords(guest, appliedSearch));
-  }, [eventFilteredGuests, selectedEventDate, appliedSearch]);
+  }, [eventFilteredGuests, appliedSearch]);
 
   const displayedGuests = useMemo(
     () => sortGuestsByEventDate(filteredGuests, dateSort),
     [filteredGuests, dateSort]
   );
-
-  const searchEnabled = selectedEventDate === "all";
 
   const handleExportCsv = () => {
     if (filteredGuests.length === 0) {
@@ -195,7 +204,8 @@ function GuestsPageInner() {
       return;
     }
     const datePart = selectedEventDate === "all" ? "all" : selectedEventDate;
-    downloadGuestCsv(`guest_list_${datePart}.csv`, displayedGuests);
+    const ltPart = selectedLtTerm === "all" ? "" : `_lt${selectedLtTerm}`;
+    downloadGuestCsv(`guest_list_${datePart}${ltPart}.csv`, displayedGuests);
     showNotification(`已匯出 ${displayedGuests.length} 位嘉賓`, "success");
   };
 
@@ -296,7 +306,7 @@ function GuestsPageInner() {
               <div style={{ fontSize: "2rem", fontWeight: "bold" }}>{eventDates.length}</div>
               <div style={{ fontSize: "0.875rem", opacity: 0.9 }}>活動數量 Events</div>
             </div>
-            {selectedEventDate !== "all" && (
+            {(selectedEventDate !== "all" || selectedLtTerm !== "all") && (
               <div style={{ 
                 padding: "1.5rem", 
                 background: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
@@ -356,12 +366,44 @@ function GuestsPageInner() {
               </select>
             </div>
           </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginTop: "1rem" }}>
+            <span style={{ fontSize: "1.5rem" }}>🏅</span>
+            <div style={{ flex: 1 }}>
+              <label htmlFor="guest-lt-filter" style={{
+                fontWeight: 600,
+                fontSize: "1rem",
+                display: "block",
+                marginBottom: "0.5rem"
+              }}>
+                篩選屆數 Filter by LT
+              </label>
+              <select
+                id="guest-lt-filter"
+                className="input-field"
+                value={selectedLtTerm}
+                onChange={(e) => setSelectedLtTerm(e.target.value)}
+                style={{ width: "100%", fontSize: "1rem" }}
+              >
+                <option value="all">全部屆數 All terms ({guests.length} 位嘉賓)</option>
+                {ltTerms.map((term) => {
+                  const count = guests.filter((guest) => resolveGuestLtTerm(guest) === term).length;
+                  return (
+                    <option key={term} value={String(term)}>
+                      {formatGuestLtTerm(term)} ({count} 位嘉賓)
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          </div>
           <p className="hint" style={{ margin: "0.5rem 0 0 0", fontSize: "0.875rem" }}>
-            {selectedEventDate === "all"
-              ? appliedSearch
-                ? `搜尋「${appliedSearch}」：${displayedGuests.length} / ${guests.length} 位嘉賓`
-                : `顯示所有 ${guests.length} 位嘉賓`
-              : `已篩選：${displayedGuests.length} 位嘉賓參加此活動`}
+            {appliedSearch
+              ? `搜尋「${appliedSearch}」：${displayedGuests.length} / ${eventFilteredGuests.length} 位嘉賓`
+              : selectedEventDate !== "all"
+                ? `已篩選：${displayedGuests.length} 位嘉賓參加此活動`
+                : selectedLtTerm !== "all"
+                  ? `已篩選 ${formatGuestLtTerm(Number(selectedLtTerm))}：${displayedGuests.length} 位嘉賓`
+                  : `顯示所有 ${guests.length} 位嘉賓`}
           </p>
 
           <div className="guests-search-bar">
@@ -377,22 +419,17 @@ function GuestsPageInner() {
                 onChange={(e) => setSearchInput(e.target.value)}
                 onKeyDown={handleSearchKeyDown}
                 placeholder="姓名、專業領域、邀請人、活動日期…"
-                disabled={!searchEnabled}
-                aria-disabled={!searchEnabled}
               />
               <button
                 type="button"
                 className="button guests-search-button"
                 onClick={handleSearch}
-                disabled={!searchEnabled}
               >
                 搜尋
               </button>
             </div>
             <p className="hint guests-search-hint">
-              {searchEnabled
-                ? "可輸入多個關鍵字（空格分隔），需同時符合姓名／專業領域／邀請人／活動日期"
-                : "請先選擇「全部活動」才可使用搜尋"}
+              可按姓名搜尋。活動日期篩選同第 N 屆 LT 篩選都會套用，匯出 CSV 跟住目前列表同日期排序。
             </p>
           </div>
 
@@ -441,8 +478,8 @@ function GuestsPageInner() {
                     <td style={{ padding: "1rem" }}>{guest.referrer || "-"}</td>
                     <td style={{ padding: "1rem" }}>
                       <div>{guest.eventDate || "-"}</div>
-                      {guestLtTermLabel(guest.eventDate) && (
-                        <div className="guest-lt-label">{guestLtTermLabel(guest.eventDate)}</div>
+                      {resolveGuestLtTerm(guest) != null && (
+                        <div className="guest-lt-label">{formatGuestLtTerm(resolveGuestLtTerm(guest)!)}</div>
                       )}
                     </td>
                     <td style={{ padding: "1rem", textAlign: "center" }}>

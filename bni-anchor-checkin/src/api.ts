@@ -449,6 +449,8 @@ export type GuestInfo = {
   profession: string;
   referrer: string;
   eventDate?: string;
+  /** [F003][S303] bni_eventxp_guests.lt_term. API sends the integer as a string. */
+  ltTerm?: number | string;
   phoneNumber?: string;
 };
 

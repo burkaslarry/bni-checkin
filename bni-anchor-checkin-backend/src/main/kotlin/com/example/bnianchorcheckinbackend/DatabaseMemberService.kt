@@ -71,7 +71,8 @@ class DatabaseMemberService(
                 "name" to guest.name,
                 "profession" to guest.profession,
                 "referrer" to (guest.referrer ?: ""),
-                "eventDate" to (guest.eventDate ?: "")
+                "eventDate" to (guest.eventDate ?: ""),
+                "ltTerm" to (guest.ltTerm?.toString() ?: "")
             )
         }
     }
@@ -87,7 +88,8 @@ class DatabaseMemberService(
                 "name" to guest.name,
                 "profession" to guest.profession,
                 "referrer" to (guest.referrer ?: ""),
-                "eventDate" to (guest.eventDate ?: "")
+                "eventDate" to (guest.eventDate ?: ""),
+                "ltTerm" to (guest.ltTerm?.toString() ?: "")
             )
         }
     }
@@ -263,6 +265,7 @@ class DatabaseMemberService(
         profession?.let { guest.profession = it }
         referrer?.let { guest.referrer = it }
         eventDate?.let { guest.eventDate = it }
+        guest.ltTerm = GuestLtTerm.number(guest.eventDate)
         return guestRepository.save(guest)
     }
 
@@ -273,6 +276,7 @@ class DatabaseMemberService(
         if (existing != null) {
             existing.profession = profession
             existing.referrer = referrer
+            existing.ltTerm = GuestLtTerm.number(existing.eventDate)
             return guestRepository.save(existing)
         }
         return guestRepository.save(
@@ -281,7 +285,8 @@ class DatabaseMemberService(
                 name = name,
                 profession = profession,
                 referrer = referrer,
-                eventDate = eventDate
+                eventDate = eventDate,
+                ltTerm = GuestLtTerm.number(eventDate)
             )
         )
     }

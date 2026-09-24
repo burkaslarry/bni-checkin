@@ -31,6 +31,15 @@ data class Guest(
     @Column(name = "event_date")
     var eventDate: String? = null,
 
+    /**
+     * [F003][S303]
+     * Feature: Guest Registration
+     * Step: Store guest row
+     * Description: Leadership Team term (第 N 屆). Kept in sync with [eventDate].
+     */
+    @Column(name = "lt_term")
+    var ltTerm: Int? = null,
+
     @Column(name = "check_in_time")
     var checkInTime: OffsetDateTime? = null,
 

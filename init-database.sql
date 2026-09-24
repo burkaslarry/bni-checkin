@@ -114,6 +114,7 @@ CREATE TABLE bni_anchor_guests (
     email TEXT,
     phone_number TEXT,
     event_date TEXT,
+    lt_term INTEGER,
     check_in_time TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP

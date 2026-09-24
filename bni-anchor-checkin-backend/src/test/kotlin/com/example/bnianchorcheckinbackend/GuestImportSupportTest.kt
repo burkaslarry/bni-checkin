@@ -18,4 +18,12 @@ class GuestImportSupportTest {
         assertEquals("2026-05-28", GuestImportSupport.normalizeEventDate("20260528"))
         assertEquals("2026-05-28", GuestImportSupport.normalizeEventDate("2026-05-28"))
     }
+
+    @Test
+    fun `new guest stores lt term from the event date`() {
+        val guest = GuestImportSupport.newGuestEntity(
+            ImportRecord(name = "Cara", profession = "設計", eventDate = "2026-10-08")
+        )
+        assertEquals(3, guest.ltTerm)
+    }
 }

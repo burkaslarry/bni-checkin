@@ -4,6 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import GuestsPage from "../pages/GuestsPage";
 import { ChapterProvider } from "../chapterContext";
 import { downloadGuestCsv } from "../lib/guestCsv";
+import { getGuests } from "../api";
 
 vi.mock("../lib/guestCsv", () => ({
   downloadGuestCsv: vi.fn(),
@@ -105,6 +106,51 @@ describe("GuestsPage CSV export", () => {
     fireEvent.click(screen.getByRole("button", { name: "📥 匯出 CSV" }));
     expect(downloadGuestCsv).toHaveBeenCalledWith("guest_list_2026-07-16.csv", [
       expect.objectContaining({ name: "Amy Chan", eventDate: "2026-07-16" }),
+    ]);
+
+    fireEvent.change(screen.getByLabelText("關鍵字搜尋 Keyword Search"), { target: { value: "Amy" } });
+    fireEvent.click(screen.getByRole("button", { name: "搜尋" }));
+    expect(screen.getByText("Amy Chan")).toBeInTheDocument();
+    expect(screen.queryByText("Ben Wong")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "📥 匯出 CSV" }));
+    expect(downloadGuestCsv).toHaveBeenLastCalledWith("guest_list_2026-07-16.csv", [
+      expect.objectContaining({ name: "Amy Chan", eventDate: "2026-07-16" }),
+    ]);
+  });
+
+  it("filters the list by the stored LT term", async () => {
+    vi.mocked(getGuests).mockResolvedValueOnce({
+      guests: [
+        {
+          name: "Amy Chan",
+          profession: "會計",
+          referrer: "Larry Lo",
+          eventDate: "2026-07-16",
+          ltTerm: "2",
+        },
+        {
+          name: "Cara Lee",
+          profession: "設計",
+          referrer: "Ann",
+          eventDate: "2026-10-08",
+          ltTerm: "3",
+        },
+      ],
+    });
+    renderGuests();
+    await screen.findByText("Cara Lee");
+
+    fireEvent.change(screen.getByLabelText("篩選屆數 Filter by LT"), { target: { value: "3" } });
+
+    expect(screen.getByText("Cara Lee")).toBeInTheDocument();
+    expect(screen.queryByText("Amy Chan")).not.toBeInTheDocument();
+    expect(screen.getByText(/已篩選 第 3 屆 LT/)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("關鍵字搜尋 Keyword Search"), { target: { value: "Cara" } });
+    fireEvent.click(screen.getByRole("button", { name: "搜尋" }));
+    fireEvent.click(screen.getByRole("button", { name: "📥 匯出 CSV" }));
+    expect(downloadGuestCsv).toHaveBeenCalledWith("guest_list_all_lt3.csv", [
+      expect.objectContaining({ name: "Cara Lee", eventDate: "2026-10-08" }),
     ]);
   });
 });

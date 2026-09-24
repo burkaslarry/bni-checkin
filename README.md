@@ -31,8 +31,9 @@ graph TD
     S203 --> S204[S204 Broadcast WebSocket update<br/>推送即時更新]
 
     F003 --> S301[S301 Import/register guest<br/>匯入或登記嘉賓]
-    S301 --> S302[S302 Match event date<br/>匹配活動日期]
-    S302 --> S303[S303 Store guest row<br/>寫入嘉賓資料]
+    S301 --> S302[S302 Match event date and LT term<br/>匹配活動日期及屆數]
+    S302 --> S303[S303 Store guest row including lt_term<br/>寫入嘉賓資料及屆數]
+    S303 --> S304[S304 Filter guest list by LT term<br/>按屆數篩選嘉賓]
 
     F004 --> S401[S401 Load current event<br/>載入當前活動]
     S401 --> S402[S402 Merge members + guests<br/>合併會員及嘉賓]
@@ -75,7 +76,7 @@ graph TD
 | `F001` | Event Creation / 活動建立 | `S101` validate, `S102` save, `S103` activate, `S104` QR/PDF | `QRGeneratorPanel.tsx`, `EventDbService.kt`, `AttendanceController.kt` |
 | `F009` | Event Management / 活動管理 | `S901` list/activate, `S902` edit name/times, `S903` regenerate PDF, `S904` import/export CSV | `EventManagementPanel.tsx`, `EventEditModal.tsx`, `EventDbService.kt`, `PUT /api/events/{id}` |
 | `F002` | Attendance Check-in / 簽到 | `S201` select/scan, `S202` verify, `S203` persist, `S204` broadcast | `CheckinFormPanel.tsx`, `MemberCheckinPanel.tsx`, `GuestCheckinPanel.tsx`, `AttendanceController.kt` |
-| `F003` | Guest Registration / 嘉賓登記 | `S301` import/register, `S302` match event date, `S303` store guest row | `PublicGuestWalkinPage.tsx`, `GuestsPage.tsx`, `GuestRepository.kt` |
+| `F003` | Guest Registration / 嘉賓登記 | `S301` import/register, `S302` match event date and LT term, `S303` store `lt_term`, `S304` filter by 第 N 屆 LT | `PublicGuestWalkinPage.tsx`, `GuestsPage.tsx`, `guestLtTerm.ts`, `GuestLtTerm.kt`, `GuestRepository.kt` |
 | `F004` | Live Report / 即時出席報告 | `S401` load event, `S402` merge records, `S403` classify status, `S404` render filters | `ReportPage.tsx`, `EventAttendanceDetailModal.tsx`, `EventDbService.kt` |
 | `F005` | CSV Import / Export / CSV 匯入匯出 | `S501` parse, `S502` map columns, `S503` upsert, `S504` export | `ImportPage.tsx`, `BulkImportService.kt`, `EventManagementPanel.tsx`, `scripts/import-member-csv-chapter.py` |
 | `F006` | AI Matching / AI 配對 | `S601` prepare context, `S602` AI request, `S603` render result | `StrategicPlanningPanel.tsx`, `DeepSeekService.kt` |
@@ -96,8 +97,9 @@ graph TD
 
 Latest production tags:
 
-- **Monorepo** (`bni-checkin`, branch `master`): `prod/6.1.2` — multi-chapter member import (`name,profession,chapter`), client chapter login, event edit + PDF regen
-- **Backend deploy repo** (`bni-anchor-checkin-backend`, branch `main`): `prod/6.1.1` — per-row chapter on bulk member import, chapter-scoped members API
+- **Monorepo** (`bni-checkin`, branch `master`): `prod/6.9.0` — guest list filters by Leadership Team term; `bni_eventxp_guests.lt_term` is stored from the event date
+- **Backend deploy repo** (`bni-anchor-checkin-backend`, branch `main`): synced from `prod/6.9.0` — same `lt_term` column written on guest create, update, import, and public registration
+- **Frontend deploy repo** (`bni-anchor-checkin`, branch `main`): synced from `prod/6.9.0` — Admin → 嘉賓管理 filter「篩選屆數 / Filter by LT」
 
 Render watches the **separate backend repository** `burkaslarry/bni-anchor-checkin-backend` on `main`, not this monorepo. After changing backend code here, sync `bni-anchor-checkin-backend/` to that repo and push before tagging or deploying.
 
@@ -338,7 +340,8 @@ Apply DB migrations for chapters: `migrations/add_chapters_and_member_chapter_id
 - **Admin → 活動管理** lists all events. Operators can activate, import/export attendance CSV, view attendance grid, and **edit** event name, start time, and end time (`✏️ 編輯`). On save, the updated QR flyer PDF downloads automatically.
 - Event update API (DB mode): `PUT /api/events/{eventId}` with JSON `{ "name"?, "startTime"?, "endTime"? }` (at least one field). Times use `HH:mm` or `HH:mm:ss`.
 - Member attendance is stored in `bni_anchor_attendances`.
-- Guest registration and guest check-in time are stored in `bni_anchor_guests`, including `check_in_time`.
+- Guest registration and guest check-in time are stored in `bni_eventxp_guests` (formerly `bni_anchor_guests`), including `check_in_time` and `lt_term`.
+- `lt_term` is the Leadership Team number. Dates before 2026-10-01 are `2`. From 2026-10-01 each six months increments (`3`, `4`, …). Apply `migrations/add_lt_term_to_guests.sql` on Render Postgres before deploying a backend that writes the column.
 - `/report` merges member attendance, checked-in guests, and registered-but-not-checked-in guests for the active event date.
 - WebSocket updates refresh operator-facing screens after attendance, event, and registry changes.
 - **Admin → 會員管理** (`/admin/members`) lists members for the active chapter, grouped by poster profession categories (A–K). Operators can edit name, profession, category, and standing.
@@ -348,7 +351,7 @@ Apply DB migrations for chapters: `migrations/add_chapters_and_member_chapter_id
   - `PUT /api/members?currentName={name}`
   - `DELETE /api/members?memberId={id}` or `?name={name}`
 - Member attendance supports optional **substitute_for** (替代人): recorded after check-in in the success popup, stored on `bni_anchor_attendances`, shown on `/report`, and exported in CSV column `替代人`. Members can be marked absent from the report records table.
-- **Admin → 嘉賓管理** supports guest rename and keyword search when **全部活動 / All Events** is selected.
+- **Admin → 嘉賓管理** supports guest rename, **篩選活動 / Filter by Event**, and **篩選屆數 / Filter by LT** (`lt_term`, shown as 第 N 屆 LT). Name search works with either filter. Export CSV follows the visible list: event date, LT term, and name search, sorted by event date.
 - Member sync scripts: `scripts/import-members-from-poster-2026-07.py`, `scripts/sync-local-members-from-poster.sh`, `scripts/update-production-members-2026-07-10.py`.
 - Chapter member scripts: `scripts/convert-member-csv-to-chapter-format.py`, `scripts/import-member-csv-chapter.py`.
 - Operational scripts: `scripts/cleanup-test-events.sh` (soft-delete events whose name contains `TEST`), `scripts/deploy-vercel-production.sh` (SRAA pre-deploy gate).

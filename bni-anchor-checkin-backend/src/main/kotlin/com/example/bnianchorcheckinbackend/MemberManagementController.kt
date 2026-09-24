@@ -408,7 +408,8 @@ class MemberManagementController(
                     "name" to updatedGuest.name,
                     "profession" to updatedGuest.profession,
                     "referrer" to (updatedGuest.referrer ?: ""),
-                    "eventDate" to (updatedGuest.eventDate ?: "")
+                    "eventDate" to (updatedGuest.eventDate ?: ""),
+                    "ltTerm" to (updatedGuest.ltTerm?.toString() ?: "")
                 )
             ))
         } else {
@@ -476,7 +477,8 @@ class MemberManagementController(
                         "name" to created.name,
                         "profession" to created.profession,
                         "referrer" to (created.referrer ?: ""),
-                        "eventDate" to (created.eventDate ?: "")
+                        "eventDate" to (created.eventDate ?: ""),
+                        "ltTerm" to (created.ltTerm?.toString() ?: "")
                     )
                 )
             )

@@ -32,7 +32,8 @@ class GuestService(
                     "profession" to it.profession,
                     "referrer" to it.referrer,
                     "type" to "guest",
-                    "eventDate" to (it.eventDate ?: "")
+                    "eventDate" to (it.eventDate ?: ""),
+                    "ltTerm" to (GuestLtTerm.number(it.eventDate)?.toString() ?: "")
                 )
             }
             .sortedBy { it["name"] }

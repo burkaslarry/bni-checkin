@@ -94,6 +94,7 @@ class PublicGuestController(
                 referrer = referrer,
                 phoneNumber = phone,
                 eventDate = resolvedEventDate,
+                ltTerm = GuestLtTerm.number(resolvedEventDate),
                 checkInTime = checkInAt
             )
         )

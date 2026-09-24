@@ -39,6 +39,7 @@ object GuestImportSupport {
         guest.email = record.email?.trim()?.takeIf { it.isNotBlank() }
         guest.phoneNumber = sanitizeGuestPhone(record.phoneNumber)
         guest.eventDate = normalizeEventDate(record.eventDate)
+        guest.ltTerm = GuestLtTerm.number(guest.eventDate)
     }
 
     fun newGuestEntity(record: ImportRecord, chapterId: Int = 1): Guest =
@@ -49,6 +50,7 @@ object GuestImportSupport {
             referrer = record.referrer?.trim()?.takeIf { it.isNotBlank() },
             email = record.email?.trim()?.takeIf { it.isNotBlank() },
             phoneNumber = sanitizeGuestPhone(record.phoneNumber),
-            eventDate = normalizeEventDate(record.eventDate)
+            eventDate = normalizeEventDate(record.eventDate),
+            ltTerm = GuestLtTerm.number(normalizeEventDate(record.eventDate))
         )
 }
