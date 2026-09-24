@@ -4931,6 +4931,17 @@ td {
   margin-top: 1rem;
 }
 
+.guests-sort-button {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
 @media (max-width: 640px) {
   .guests-search-row {
     flex-direction: column;
