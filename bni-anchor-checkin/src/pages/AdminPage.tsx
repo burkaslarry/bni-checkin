@@ -280,7 +280,7 @@ export default function AdminPage() {
             <Link to={adminHref("/admin/guests")} className="nav-card" style={{ textDecoration: "none" }}>
               <span className="nav-icon">🎫</span>
               <strong className="nav-title">嘉賓管理</strong>
-              <span className="hint">管理嘉賓資料</span>
+              <span className="hint">管理嘉賓資料，可匯出 CSV</span>
             </Link>
 
             <Link to={adminHref("/admin/import")} className="nav-card" style={{ textDecoration: "none" }}>

@@ -4925,12 +4925,22 @@ td {
   font-size: 0.8rem;
 }
 
+.guests-export-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
 @media (max-width: 640px) {
   .guests-search-row {
     flex-direction: column;
   }
 
   .guests-search-button {
+    width: 100%;
+  }
+
+  .guests-export-row .button {
     width: 100%;
   }
 }

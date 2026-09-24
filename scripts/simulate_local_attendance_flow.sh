@@ -105,7 +105,7 @@ restart_backend_if_needed() {
   fi
 
   # Force local DB behavior (avoid accidentally using prod env vars)
-  unset SPRING_PROFILES_ACTIVE DATABASE_URL DATABASE_PASSWORD SUPABASE_DB_PASSWORD
+  unset SPRING_PROFILES_ACTIVE DATABASE_URL DATABASE_PASSWORD
 
   (cd "${backend_dir}" && ./gradlew bootRun > /tmp/bni-backend-sim.log 2>&1) &
   backend_pid="$!"
