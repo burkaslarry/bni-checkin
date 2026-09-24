@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo, type KeyboardEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { getGuests, GuestInfo, deleteGuest, updateGuest } from "../api";
+import { downloadGuestCsv } from "../lib/guestCsv";
 import { guestMatchesKeywords } from "../lib/guestSearch";
 import { AnchorOnlyNotice } from "../components/AnchorOnlyNotice";
 import { ClientAuthGate } from "../components/ClientAuthGate";
@@ -181,6 +182,16 @@ function GuestsPageInner() {
 
   const searchEnabled = selectedEventDate === "all";
 
+  const handleExportCsv = () => {
+    if (filteredGuests.length === 0) {
+      showNotification("沒有嘉賓可匯出", "error");
+      return;
+    }
+    const datePart = selectedEventDate === "all" ? "all" : selectedEventDate;
+    downloadGuestCsv(`guest_list_${datePart}.csv`, filteredGuests);
+    showNotification(`已匯出 ${filteredGuests.length} 位嘉賓`, "success");
+  };
+
   return (
     <div className="app-shell">
       {notification && (
@@ -247,7 +258,7 @@ function GuestsPageInner() {
 
         <div className="section-header">
           <h2>🎫 嘉賓列表</h2>
-          <p className="hint">Guest Management - 管理嘉賓資料</p>
+          <p className="hint">管理嘉賓資料，可匯出目前列表為 CSV（欄位與批量匯入相同）</p>
         </div>
 
         {/* Summary Stats */}
@@ -375,6 +386,18 @@ function GuestsPageInner() {
                 ? "可輸入多個關鍵字（空格分隔），需同時符合姓名／專業領域／邀請人／活動日期"
                 : "請先選擇「全部活動」才可使用搜尋"}
             </p>
+          </div>
+
+          <div className="guests-export-row">
+            <button
+              type="button"
+              className="button"
+              onClick={handleExportCsv}
+              disabled={loading || loadFailedRedirect || filteredGuests.length === 0}
+              title="匯出目前列表，欄位：name, profession, phone, referrer, event_date"
+            >
+              📥 匯出 CSV
+            </button>
           </div>
         </div>
 

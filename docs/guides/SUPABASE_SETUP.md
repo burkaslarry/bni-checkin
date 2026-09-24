@@ -142,13 +142,10 @@ CREATE TABLE guests (
 ## 🚀 Quick Start
 
 ```bash
-# 1. Set your Supabase password
-export SUPABASE_DB_PASSWORD=your_password
-
-# 2. Start the application
+# 1. Start the application
 ./run.sh
 
-# 3. Access the application
+# 2. Access the application
 # Frontend: http://localhost:5173
 # Backend: http://localhost:10000
 ```
