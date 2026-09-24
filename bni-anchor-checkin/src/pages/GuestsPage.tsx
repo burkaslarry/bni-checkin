@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo, type KeyboardEvent } from "react"
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { getGuests, GuestInfo, deleteGuest, updateGuest } from "../api";
 import { downloadGuestCsv } from "../lib/guestCsv";
+import { guestLtTermLabel } from "../lib/guestLtTerm";
 import { guestMatchesKeywords, sortGuestsByEventDate } from "../lib/guestSearch";
 import { AnchorOnlyNotice } from "../components/AnchorOnlyNotice";
 import { ClientAuthGate } from "../components/ClientAuthGate";
@@ -345,9 +346,10 @@ function GuestsPageInner() {
                     day: "numeric",
                     weekday: "short"
                   });
+                  const ltLabel = guestLtTermLabel(date);
                   return (
                     <option key={date} value={date}>
-                      🎯 活動日期：{formattedDate} ({count} 位嘉賓)
+                      🎯 活動日期：{formattedDate}{ltLabel ? ` · ${ltLabel}` : ""} ({count} 位嘉賓)
                     </option>
                   );
                 })}
@@ -438,7 +440,10 @@ function GuestsPageInner() {
                     <td style={{ padding: "1rem" }}>{guest.profession}</td>
                     <td style={{ padding: "1rem" }}>{guest.referrer || "-"}</td>
                     <td style={{ padding: "1rem" }}>
-                      {guest.eventDate || "-"}
+                      <div>{guest.eventDate || "-"}</div>
+                      {guestLtTermLabel(guest.eventDate) && (
+                        <div className="guest-lt-label">{guestLtTermLabel(guest.eventDate)}</div>
+                      )}
                     </td>
                     <td style={{ padding: "1rem", textAlign: "center" }}>
                       <div style={{ display: "flex", gap: "0.5rem", justifyContent: "center" }}>
