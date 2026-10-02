@@ -8,9 +8,7 @@ import { AnchorOnlyNotice } from "../components/AnchorOnlyNotice";
 import { ClientAuthGate } from "../components/ClientAuthGate";
 import { useChapter } from "../chapterContext";
 
-type GuestsPageProps = {};
-
-export default function GuestsPage({}: GuestsPageProps) {
+export default function GuestsPage() {
   return (
     <ClientAuthGate>
       <GuestsPageInner />
@@ -160,8 +158,49 @@ function GuestsPageInner() {
     }
   };
 
-  // Get unique event dates from guests
-  const eventDates = Array.from(new Set(guests.map(g => g.eventDate).filter(Boolean))).sort().reverse();
+  const { eventDates, ltTerms } = useMemo(() => {
+    const dates = new Set<string>();
+    const terms = new Set<number>();
+
+    for (const guest of guests) {
+      if (guest.eventDate) dates.add(guest.eventDate);
+      const term = resolveGuestLtTerm(guest);
+      if (term != null) terms.add(term);
+    }
+
+    return {
+      eventDates: Array.from(dates).sort().reverse(),
+      ltTerms: Array.from(terms).sort((a, b) => b - a),
+    };
+  }, [guests]);
+
+  const { eventCounts, ltCounts } = useMemo(() => {
+    const dateCounts = new Map<string, number>();
+    const termCounts = new Map<number, number>();
+
+    for (const guest of guests) {
+      const matchesSearch = !appliedSearch || guestMatchesKeywords(guest, appliedSearch);
+      const term = resolveGuestLtTerm(guest);
+
+      if (
+        guest.eventDate &&
+        matchesSearch &&
+        (selectedLtTerm === "all" || String(term ?? "") === selectedLtTerm)
+      ) {
+        dateCounts.set(guest.eventDate, (dateCounts.get(guest.eventDate) ?? 0) + 1);
+      }
+
+      if (
+        term != null &&
+        matchesSearch &&
+        (selectedEventDate === "all" || guest.eventDate === selectedEventDate)
+      ) {
+        termCounts.set(term, (termCounts.get(term) ?? 0) + 1);
+      }
+    }
+
+    return { eventCounts: dateCounts, ltCounts: termCounts };
+  }, [appliedSearch, guests, selectedEventDate, selectedLtTerm]);
 
   /**
    * [F003][S404]
@@ -169,15 +208,6 @@ function GuestsPageInner() {
    * Step: Filter guests by LT term
    * Description: Intersects the event-date filter with bni_eventxp_guests.lt_term.
    */
-  const ltTerms = useMemo(() => {
-    const terms = new Set<number>();
-    for (const guest of guests) {
-      const term = resolveGuestLtTerm(guest);
-      if (term != null) terms.add(term);
-    }
-    return Array.from(terms).sort((a, b) => b - a);
-  }, [guests]);
-
   const eventFilteredGuests = useMemo(
     () =>
       guests.filter((guest) => {
@@ -209,10 +239,24 @@ function GuestsPageInner() {
     showNotification(`已匯出 ${displayedGuests.length} 位嘉賓`, "success");
   };
 
+  const hasActiveFilters =
+    selectedEventDate !== "all" || selectedLtTerm !== "all" || appliedSearch !== "";
+
+  const clearFilters = () => {
+    setSelectedEventDate("all");
+    setSelectedLtTerm("all");
+    setSearchInput("");
+    setAppliedSearch("");
+  };
+
   return (
     <div className="app-shell">
       {notification && (
-        <div className={`notification notification-${notification.type}`} style={{
+        <div
+          className={`notification notification-${notification.type}`}
+          role="status"
+          aria-live="polite"
+          style={{
           position: "fixed",
           top: "20px",
           right: "20px",
@@ -222,7 +266,8 @@ function GuestsPageInner() {
           color: "white",
           zIndex: 1000,
           boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
-        }}>
+          }}
+        >
           {notification.message}
         </div>
       )}
@@ -306,7 +351,7 @@ function GuestsPageInner() {
               <div style={{ fontSize: "2rem", fontWeight: "bold" }}>{eventDates.length}</div>
               <div style={{ fontSize: "0.875rem", opacity: 0.9 }}>活動數量 Events</div>
             </div>
-            {(selectedEventDate !== "all" || selectedLtTerm !== "all") && (
+            {hasActiveFilters && (
               <div style={{ 
                 padding: "1.5rem", 
                 background: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
@@ -349,8 +394,8 @@ function GuestsPageInner() {
               >
                 <option value="all">📋 全部活動 All Events ({guests.length} 位嘉賓)</option>
                 {eventDates.map(date => {
-                  const count = guests.filter(g => g.eventDate === date).length;
-                  const formattedDate = new Date(date as string).toLocaleDateString("zh-TW", {
+                  const count = eventCounts.get(date) ?? 0;
+                  const formattedDate = new Date(date).toLocaleDateString("zh-TW", {
                     year: "numeric",
                     month: "long",
                     day: "numeric",
@@ -386,7 +431,7 @@ function GuestsPageInner() {
               >
                 <option value="all">全部屆數 All terms ({guests.length} 位嘉賓)</option>
                 {ltTerms.map((term) => {
-                  const count = guests.filter((guest) => resolveGuestLtTerm(guest) === term).length;
+                  const count = ltCounts.get(term) ?? 0;
                   return (
                     <option key={term} value={String(term)}>
                       {formatGuestLtTerm(term)} ({count} 位嘉賓)
@@ -434,6 +479,11 @@ function GuestsPageInner() {
           </div>
 
           <div className="guests-export-row">
+            {hasActiveFilters && (
+              <button type="button" className="ghost-button" onClick={clearFilters}>
+                清除篩選 Clear filters
+              </button>
+            )}
             <button
               type="button"
               className="button"
@@ -522,7 +572,7 @@ function GuestsPageInner() {
 
         {!loadFailedRedirect && filteredGuests.length === 0 && !loading && guests.length > 0 && (
           <div style={{ textAlign: "center", padding: "2rem" }}>
-            <p className="hint">此活動日期暫無嘉賓資料</p>
+            <p className="hint">沒有符合目前篩選或搜尋條件的嘉賓</p>
           </div>
         )}
 

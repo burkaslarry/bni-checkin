@@ -152,5 +152,11 @@ describe("GuestsPage CSV export", () => {
     expect(downloadGuestCsv).toHaveBeenCalledWith("guest_list_all_lt3.csv", [
       expect.objectContaining({ name: "Cara Lee", eventDate: "2026-10-08" }),
     ]);
+
+    fireEvent.click(screen.getByRole("button", { name: "清除篩選 Clear filters" }));
+    expect(screen.getByText("Amy Chan")).toBeInTheDocument();
+    expect(screen.getByText("Cara Lee")).toBeInTheDocument();
+    expect(screen.getByLabelText("篩選屆數 Filter by LT")).toHaveValue("all");
+    expect(screen.getByLabelText("關鍵字搜尋 Keyword Search")).toHaveValue("");
   });
 });

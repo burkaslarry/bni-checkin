@@ -7,6 +7,12 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "jsdom",
+    // Node 25+ provides its own global Web Storage object, which prevents
+    // Vitest from installing jsdom's browser-scoped localStorage.
+    execArgv:
+      Number(process.versions.node.split(".")[0]) >= 25
+        ? ["--no-webstorage"]
+        : [],
     setupFiles: ["./src/__tests__/setup.ts"],
     include: ["src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"],
     coverage: {
