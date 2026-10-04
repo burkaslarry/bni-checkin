@@ -390,3 +390,8 @@ Log readability improvements:
 Proprietary commercial prototype. See [LICENSE.md](./LICENSE.md) before distribution, reuse, or production deployment.
 
 本專案為專有商業原型。分發、重用或正式部署前，請先閱讀 [LICENSE.md](./LICENSE.md)。
+
+<!--
+Repository maintenance: GitHub remotes use the burkaslarry-GitHub SSH alias,
+which selects this account's SSH key and connects over port 443.
+-->
