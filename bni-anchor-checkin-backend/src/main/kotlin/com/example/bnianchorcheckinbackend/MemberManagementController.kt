@@ -31,14 +31,16 @@ data class UpdateGuestRequest(
     val name: String? = null,
     val profession: String? = null,
     val referrer: String? = null,
-    val eventDate: String? = null
+    val eventDate: String? = null,
+    val becameMember: Boolean? = null
 )
 
 data class CreateGuestRequest(
     val name: String,
     val profession: String,
     val referrer: String? = null,
-    val eventDate: String? = null
+    val eventDate: String? = null,
+    val becameMember: Boolean? = null
 )
 
 data class CreateMemberRequest(
@@ -386,7 +388,8 @@ class MemberManagementController(
                 profession = request.profession,
                 referrer = request.referrer,
                 eventDate = request.eventDate,
-                chapterTag = chapterTag
+                chapterTag = chapterTag,
+                becameMember = request.becameMember
             )
         } catch (e: IllegalArgumentException) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(mapOf(
@@ -409,7 +412,8 @@ class MemberManagementController(
                     "profession" to updatedGuest.profession,
                     "referrer" to (updatedGuest.referrer ?: ""),
                     "eventDate" to (updatedGuest.eventDate ?: ""),
-                    "ltTerm" to (updatedGuest.ltTerm?.toString() ?: "")
+                    "ltTerm" to (updatedGuest.ltTerm?.toString() ?: ""),
+                    "becameMember" to updatedGuest.becameMember.toString()
                 )
             ))
         } else {
@@ -467,7 +471,8 @@ class MemberManagementController(
                 profession = profession,
                 referrer = request.referrer?.trim()?.takeIf { it.isNotEmpty() },
                 eventDate = resolvedDate,
-                chapterTag = chapter
+                chapterTag = chapter,
+                becameMember = request.becameMember == true
             )
             attendanceWebSocketHandler?.broadcast(mapOf("type" to "guest_registry_updated"))
             ResponseEntity.status(HttpStatus.CREATED).body(
@@ -479,7 +484,8 @@ class MemberManagementController(
                         "profession" to created.profession,
                         "referrer" to (created.referrer ?: ""),
                         "eventDate" to (created.eventDate ?: ""),
-                        "ltTerm" to (created.ltTerm?.toString() ?: "")
+                        "ltTerm" to (created.ltTerm?.toString() ?: ""),
+                        "becameMember" to created.becameMember.toString()
                     )
                 )
             )

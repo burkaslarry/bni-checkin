@@ -51,6 +51,7 @@ type Guest = {
   profession: string;
   referrer?: string;
   event_date?: string;
+  becameMember?: boolean | string;
 };
 
 type Observer = {
@@ -59,7 +60,7 @@ type Observer = {
   profession: string;
   event_date?: string;
   attended?: boolean;
-  becameMember?: boolean;
+  bniChapter?: string;
 };
 
 type CheckinFormPanelProps = {
@@ -149,6 +150,7 @@ export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFor
           profession: g.profession,
           referrer: g.referrer,
           event_date: g.eventDate,
+          becameMember: g.becameMember,
         }));
         setGuests(mappedGuests);
       } catch {
@@ -170,7 +172,7 @@ export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFor
           profession: o.profession,
           event_date: o.eventDate,
           attended: o.attended,
-          becameMember: o.becameMember,
+          bniChapter: o.bniChapter,
         }));
         setObservers(mappedObservers);
       } catch {
@@ -831,14 +833,22 @@ export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFor
                         · 邀請人: {(item as Guest).referrer}
                       </span>
                     )}
+                    {checkinType === "guest" && (
+                      <span style={{ marginLeft: "0.5rem", opacity: 0.8 }}>
+                        · 成為Member?{" "}
+                        {(item as Guest).becameMember === true || (item as Guest).becameMember === "true"
+                          ? "Yes"
+                          : "No"}
+                      </span>
+                    )}
                     {checkinType === "observer" && (item as Observer).event_date?.trim() && (
                       <span style={{ marginLeft: "0.5rem", opacity: 0.8 }}>
                         · {(item as Observer).event_date}
                       </span>
                     )}
-                    {checkinType === "observer" && (
+                    {checkinType === "observer" && (item as Observer).bniChapter?.trim() && (
                       <span style={{ marginLeft: "0.5rem", opacity: 0.8 }}>
-                        · 成為Member? {(item as Observer).becameMember ? "Yes" : "No"}
+                        · {(item as Observer).bniChapter}
                       </span>
                     )}
                     {checkinType === "observer" && (item as Observer).attended && (
