@@ -59,6 +59,7 @@ type Observer = {
   profession: string;
   event_date?: string;
   attended?: boolean;
+  becameMember?: boolean;
 };
 
 type CheckinFormPanelProps = {
@@ -169,6 +170,7 @@ export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFor
           profession: o.profession,
           event_date: o.eventDate,
           attended: o.attended,
+          becameMember: o.becameMember,
         }));
         setObservers(mappedObservers);
       } catch {
@@ -827,6 +829,16 @@ export const CheckinFormPanel = ({ onNotify, chapterTag = "anchor" }: CheckinFor
                     {checkinType === "guest" && (item as Guest).referrer && (
                       <span style={{ marginLeft: "0.5rem", opacity: 0.8 }}>
                         · 邀請人: {(item as Guest).referrer}
+                      </span>
+                    )}
+                    {checkinType === "observer" && (item as Observer).event_date?.trim() && (
+                      <span style={{ marginLeft: "0.5rem", opacity: 0.8 }}>
+                        · {(item as Observer).event_date}
+                      </span>
+                    )}
+                    {checkinType === "observer" && (
+                      <span style={{ marginLeft: "0.5rem", opacity: 0.8 }}>
+                        · 成為Member? {(item as Observer).becameMember ? "Yes" : "No"}
                       </span>
                     )}
                     {checkinType === "observer" && (item as Observer).attended && (

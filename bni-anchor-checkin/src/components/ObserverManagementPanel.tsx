@@ -23,10 +23,12 @@ export function ObserverManagementPanel({ onChanged }: ObserverManagementPanelPr
   const [editingObserver, setEditingObserver] = useState<ObserverInfo | null>(null);
   const [editProfession, setEditProfession] = useState("");
   const [editEventDate, setEditEventDate] = useState("");
+  const [editBecameMember, setEditBecameMember] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState("");
   const [newProfession, setNewProfession] = useState("");
   const [newEventDate, setNewEventDate] = useState("");
+  const [newBecameMember, setNewBecameMember] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [deletingSelected, setDeletingSelected] = useState(false);
@@ -111,11 +113,13 @@ export function ObserverManagementPanel({ onChanged }: ObserverManagementPanelPr
       await createObserver({
         name,
         profession,
-        eventDate: newEventDate || currentEventDate || undefined,
+        eventDate: newEventDate,
+        becameMember: newBecameMember,
       });
       showNotification(`已新增觀察員 ${name}`, "success");
       setNewName("");
       setNewProfession("");
+      setNewBecameMember(false);
       setShowAddForm(false);
       void fetchObservers();
       onChanged?.();
@@ -129,7 +133,9 @@ export function ObserverManagementPanel({ onChanged }: ObserverManagementPanelPr
     try {
       await updateObserver(editingObserver.name, {
         profession: editProfession,
-        eventDate: editEventDate || undefined,
+        eventDate: editEventDate,
+        becameMember: editBecameMember,
+        matchEventDate: editingObserver.eventDate,
       });
       showNotification(`已更新 ${editingObserver.name}`, "success");
       setEditingObserver(null);
@@ -156,6 +162,20 @@ export function ObserverManagementPanel({ onChanged }: ObserverManagementPanelPr
       onChanged?.();
     } catch {
       showNotification("刪除失敗", "error");
+    }
+  };
+
+  const handleBecameMemberChange = async (observer: ObserverInfo, becameMember: boolean) => {
+    try {
+      await updateObserver(observer.name, {
+        becameMember,
+        matchEventDate: observer.eventDate,
+      });
+      setObservers((prev) =>
+        prev.map((row) => (row.id === observer.id ? { ...row, becameMember } : row))
+      );
+    } catch {
+      showNotification("更新成為Member失敗", "error");
     }
   };
 
@@ -266,12 +286,26 @@ export function ObserverManagementPanel({ onChanged }: ObserverManagementPanelPr
               value={newProfession}
               onChange={(e) => setNewProfession(e.target.value)}
             />
+            <label htmlFor="new-observer-date" className="hint">
+              活動日期（可留空）
+            </label>
             <input
+              id="new-observer-date"
               type="date"
               className="input-field"
               value={newEventDate}
               onChange={(e) => setNewEventDate(e.target.value)}
             />
+            <label htmlFor="new-observer-member">成為Member?</label>
+            <select
+              id="new-observer-member"
+              className="input-field"
+              value={newBecameMember ? "yes" : "no"}
+              onChange={(e) => setNewBecameMember(e.target.value === "yes")}
+            >
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
             <div style={{ display: "flex", gap: "0.5rem" }}>
               <button type="button" className="button" onClick={() => void handleAdd()}>
                 儲存
@@ -367,6 +401,7 @@ export function ObserverManagementPanel({ onChanged }: ObserverManagementPanelPr
                 <th style={{ padding: "1rem", textAlign: "left" }}>姓名</th>
                 <th style={{ padding: "1rem", textAlign: "left" }}>專業領域</th>
                 <th style={{ padding: "1rem", textAlign: "left" }}>活動日期</th>
+                <th style={{ padding: "1rem", textAlign: "left" }}>成為Member?</th>
                 <th style={{ padding: "1rem", textAlign: "left" }}>出席</th>
                 <th style={{ padding: "1rem", textAlign: "center" }}>操作</th>
               </tr>
@@ -384,7 +419,18 @@ export function ObserverManagementPanel({ onChanged }: ObserverManagementPanelPr
                   </td>
                   <td style={{ padding: "1rem", fontWeight: 500 }}>{observer.name}</td>
                   <td style={{ padding: "1rem" }}>{observer.profession}</td>
-                  <td style={{ padding: "1rem" }}>{observer.eventDate}</td>
+                  <td style={{ padding: "1rem" }}>{observer.eventDate?.trim() ? observer.eventDate : ""}</td>
+                  <td style={{ padding: "1rem" }}>
+                    <select
+                      aria-label={`${observer.name} 成為Member?`}
+                      className="input-field"
+                      value={observer.becameMember ? "yes" : "no"}
+                      onChange={(e) => void handleBecameMemberChange(observer, e.target.value === "yes")}
+                    >
+                      <option value="no">No</option>
+                      <option value="yes">Yes</option>
+                    </select>
+                  </td>
                   <td style={{ padding: "1rem" }}>
                     {observer.attended ? (
                       <span style={{ color: "#15803d", fontWeight: 600 }}>✓ 出席</span>
@@ -400,7 +446,8 @@ export function ObserverManagementPanel({ onChanged }: ObserverManagementPanelPr
                         onClick={() => {
                           setEditingObserver(observer);
                           setEditProfession(observer.profession);
-                          setEditEventDate(observer.eventDate);
+                          setEditEventDate(observer.eventDate ?? "");
+                          setEditBecameMember(observer.becameMember === true);
                         }}
                       >
                         ✏️ 編輯
@@ -464,8 +511,8 @@ export function ObserverManagementPanel({ onChanged }: ObserverManagementPanelPr
                 style={{ width: "100%" }}
               />
             </div>
-            <div className="form-group" style={{ marginBottom: "1.5rem" }}>
-              <label htmlFor="edit-observer-date">活動日期</label>
+            <div className="form-group" style={{ marginBottom: "1rem" }}>
+              <label htmlFor="edit-observer-date">活動日期（可留空）</label>
               <input
                 id="edit-observer-date"
                 type="date"
@@ -474,6 +521,19 @@ export function ObserverManagementPanel({ onChanged }: ObserverManagementPanelPr
                 onChange={(e) => setEditEventDate(e.target.value)}
                 style={{ width: "100%" }}
               />
+            </div>
+            <div className="form-group" style={{ marginBottom: "1.5rem" }}>
+              <label htmlFor="edit-observer-member">成為Member?</label>
+              <select
+                id="edit-observer-member"
+                className="input-field"
+                value={editBecameMember ? "yes" : "no"}
+                onChange={(e) => setEditBecameMember(e.target.value === "yes")}
+                style={{ width: "100%" }}
+              >
+                <option value="no">No</option>
+                <option value="yes">Yes</option>
+              </select>
             </div>
             <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
               <button type="button" className="ghost-button" onClick={() => setEditingObserver(null)}>
