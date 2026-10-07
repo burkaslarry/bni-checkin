@@ -8,6 +8,10 @@ import { AnchorOnlyNotice } from "../components/AnchorOnlyNotice";
 import { ClientAuthGate } from "../components/ClientAuthGate";
 import { useChapter } from "../chapterContext";
 
+function isBecameMember(value: GuestInfo["becameMember"]): boolean {
+  return value === true || value === "true" || value === "Yes";
+}
+
 export default function GuestsPage() {
   return (
     <ClientAuthGate>
@@ -29,6 +33,7 @@ function GuestsPageInner() {
   const [editProfession, setEditProfession] = useState("");
   const [editReferrer, setEditReferrer] = useState("");
   const [editEventDate, setEditEventDate] = useState("");
+  const [editBecameMember, setEditBecameMember] = useState(false);
   const [dateSort, setDateSort] = useState<"asc" | "desc">("desc");
   const [searchInput, setSearchInput] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
@@ -93,6 +98,22 @@ function GuestsPageInner() {
     setEditProfession(guest.profession);
     setEditReferrer(guest.referrer || "");
     setEditEventDate(guest.eventDate || "");
+    setEditBecameMember(isBecameMember(guest.becameMember));
+  };
+
+  const handleBecameMemberChange = async (guest: GuestInfo, becameMember: boolean) => {
+    try {
+      await updateGuest(guest.name, { becameMember }, guest.eventDate);
+      setGuests((prev) =>
+        prev.map((row) =>
+          row.name === guest.name && row.eventDate === guest.eventDate
+            ? { ...row, becameMember }
+            : row
+        )
+      );
+    } catch {
+      showNotification("更新成為Member失敗", "error");
+    }
   };
 
   const handleSaveEdit = async () => {
@@ -112,6 +133,7 @@ function GuestsPageInner() {
           profession: editProfession,
           referrer: editReferrer || undefined,
           eventDate: editEventDate || undefined,
+          becameMember: editBecameMember,
         },
         editingGuest.eventDate
       );
@@ -604,6 +626,7 @@ function GuestsPageInner() {
                       活動日期 {dateSort === "asc" ? "↑" : "↓"}
                     </button>
                   </th>
+                  <th style={{ padding: "1rem", textAlign: "left" }}>成為Member?</th>
                   <th style={{ padding: "1rem", textAlign: "center" }}>操作</th>
                 </tr>
               </thead>
@@ -626,6 +649,17 @@ function GuestsPageInner() {
                       {resolveGuestLtTerm(guest) != null && (
                         <div className="guest-lt-label">{formatGuestLtTerm(resolveGuestLtTerm(guest)!)}</div>
                       )}
+                    </td>
+                    <td style={{ padding: "1rem" }}>
+                      <select
+                        aria-label={`${guest.name} 成為Member?`}
+                        className="input-field"
+                        value={isBecameMember(guest.becameMember) ? "yes" : "no"}
+                        onChange={(e) => void handleBecameMemberChange(guest, e.target.value === "yes")}
+                      >
+                        <option value="no">No</option>
+                        <option value="yes">Yes</option>
+                      </select>
                     </td>
                     <td style={{ padding: "1rem", textAlign: "center" }}>
                       <div style={{ display: "flex", gap: "0.5rem", justifyContent: "center" }}>
@@ -735,6 +769,20 @@ function GuestsPageInner() {
                 placeholder="選填 Optional"
                 style={{ width: "100%" }}
               />
+            </div>
+
+            <div className="form-group" style={{ marginBottom: "1.5rem" }}>
+              <label htmlFor="edit-became-member">成為Member?</label>
+              <select
+                id="edit-became-member"
+                className="input-field"
+                value={editBecameMember ? "yes" : "no"}
+                onChange={(e) => setEditBecameMember(e.target.value === "yes")}
+                style={{ width: "100%" }}
+              >
+                <option value="no">No</option>
+                <option value="yes">Yes</option>
+              </select>
             </div>
 
             <div className="form-group" style={{ marginBottom: "1.5rem" }}>

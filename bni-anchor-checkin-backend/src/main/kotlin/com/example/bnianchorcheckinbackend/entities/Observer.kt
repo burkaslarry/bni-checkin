@@ -28,8 +28,8 @@ data class Observer(
     @Column(nullable = false)
     var attended: Boolean = false,
 
-    @Column(name = "became_member", nullable = false)
-    var becameMember: Boolean = false,
+    @Column(name = "bni_chapter", nullable = false)
+    var bniChapter: String = "",
 
     @Column(name = "created_at", insertable = false, updatable = false)
     var createdAt: OffsetDateTime? = null,

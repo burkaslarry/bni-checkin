@@ -16,13 +16,13 @@ data class CreateObserverRequest(
     val name: String,
     val profession: String,
     val eventDate: String? = null,
-    val becameMember: Boolean? = null
+    val bniChapter: String? = null
 )
 
 data class UpdateObserverRequest(
     val profession: String? = null,
     val eventDate: String? = null,
-    val becameMember: Boolean? = null,
+    val bniChapter: String? = null,
     /** Row to update when the same name exists on more than one date. Empty string matches a blank date. */
     val matchEventDate: String? = null
 )
@@ -80,7 +80,7 @@ class ObserverController(
                 profession,
                 resolvedDate,
                 chapter,
-                request.becameMember == true
+                request.bniChapter?.trim().orEmpty()
             )
             attendanceWebSocketHandler?.broadcast(mapOf("type" to "observer_registry_updated"))
             ResponseEntity.status(HttpStatus.CREATED).body(
@@ -93,7 +93,7 @@ class ObserverController(
                         "profession" to created.profession,
                         "eventDate" to created.eventDate,
                         "attended" to created.attended,
-                        "becameMember" to created.becameMember
+                        "bniChapter" to created.bniChapter
                     )
                 )
             )
@@ -117,7 +117,7 @@ class ObserverController(
                 request.profession,
                 request.eventDate,
                 chapter,
-                request.becameMember,
+                request.bniChapter,
                 request.matchEventDate
             )
         } catch (e: Exception) {
@@ -137,7 +137,7 @@ class ObserverController(
                         "profession" to updated.profession,
                         "eventDate" to updated.eventDate,
                         "attended" to updated.attended,
-                        "becameMember" to updated.becameMember
+                        "bniChapter" to updated.bniChapter
                     )
                 )
             )
@@ -179,13 +179,13 @@ class ObserverController(
         val out = ByteArrayOutputStream()
         out.write(byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()))
         val writer = PrintWriter(out)
-        writer.println("姓名,專業領域,活動日期,出席狀態,成為Member")
+        writer.println("姓名,專業領域,活動日期,BNI Chapter,出席狀態")
         for (o in observers) {
             val status = if (o["attended"] == true) "出席" else "缺席"
             val profession = (o["profession"] as? String ?: "").replace(",", "，")
             val visitDate = (o["eventDate"] as? String ?: "").replace(",", "，")
-            val becameMember = if (o["becameMember"] == true) "Yes" else "No"
-            writer.println("${o["name"]},$profession,$visitDate,$status,$becameMember")
+            val bniChapter = (o["bniChapter"] as? String ?: "").replace(",", "，")
+            writer.println("${o["name"]},$profession,$visitDate,$bniChapter,$status")
         }
         writer.flush()
         val filename = "observer-attendance-${eventDate.trim()}.csv"

@@ -452,6 +452,8 @@ export type GuestInfo = {
   /** [F003][S303] bni_eventxp_guests.lt_term. API sends the integer as a string. */
   ltTerm?: number | string;
   phoneNumber?: string;
+  /** API sends "true" or "false". */
+  becameMember?: boolean | string;
 };
 
 /**
@@ -1478,6 +1480,7 @@ export type UpdateGuestRequest = {
   profession?: string;
   referrer?: string;
   eventDate?: string;
+  becameMember?: boolean;
 };
 
 export type CreateGuestRequest = {
@@ -1485,6 +1488,7 @@ export type CreateGuestRequest = {
   profession: string;
   referrer?: string;
   eventDate?: string;
+  becameMember?: boolean;
 };
 
 /**
@@ -1581,20 +1585,20 @@ export type ObserverInfo = {
   profession: string;
   eventDate: string;
   attended: boolean;
-  becameMember?: boolean;
+  bniChapter?: string;
 };
 
 export type CreateObserverRequest = {
   name: string;
   profession: string;
   eventDate?: string;
-  becameMember?: boolean;
+  bniChapter?: string;
 };
 
 export type UpdateObserverRequest = {
   profession?: string;
   eventDate?: string;
-  becameMember?: boolean;
+  bniChapter?: string;
   matchEventDate?: string;
 };
 

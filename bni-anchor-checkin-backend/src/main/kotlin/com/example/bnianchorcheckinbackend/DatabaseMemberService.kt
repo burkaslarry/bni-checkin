@@ -72,7 +72,8 @@ class DatabaseMemberService(
                 "profession" to guest.profession,
                 "referrer" to (guest.referrer ?: ""),
                 "eventDate" to (guest.eventDate ?: ""),
-                "ltTerm" to (guest.ltTerm?.toString() ?: "")
+                "ltTerm" to (guest.ltTerm?.toString() ?: ""),
+                "becameMember" to guest.becameMember.toString()
             )
         }
     }
@@ -89,7 +90,8 @@ class DatabaseMemberService(
                 "profession" to guest.profession,
                 "referrer" to (guest.referrer ?: ""),
                 "eventDate" to (guest.eventDate ?: ""),
-                "ltTerm" to (guest.ltTerm?.toString() ?: "")
+                "ltTerm" to (guest.ltTerm?.toString() ?: ""),
+                "becameMember" to guest.becameMember.toString()
             )
         }
     }
@@ -241,7 +243,8 @@ class DatabaseMemberService(
         profession: String? = null,
         referrer: String? = null,
         eventDate: String? = null,
-        chapterTag: String? = null
+        chapterTag: String? = null,
+        becameMember: Boolean? = null
     ): Guest? {
         val chapterId = chapterService.resolveChapterId(chapterTag)
         val guest = if (!currentEventDate.isNullOrBlank()) {
@@ -265,12 +268,20 @@ class DatabaseMemberService(
         profession?.let { guest.profession = it }
         referrer?.let { guest.referrer = it }
         eventDate?.let { guest.eventDate = it }
+        becameMember?.let { guest.becameMember = it }
         guest.ltTerm = GuestLtTerm.number(guest.eventDate)
         return guestRepository.save(guest)
     }
 
     @Transactional
-    fun createGuest(name: String, profession: String, referrer: String?, eventDate: String, chapterTag: String? = null): Guest {
+    fun createGuest(
+        name: String,
+        profession: String,
+        referrer: String?,
+        eventDate: String,
+        chapterTag: String? = null,
+        becameMember: Boolean = false
+    ): Guest {
         val chapterId = chapterService.resolveChapterId(chapterTag)
         val existing = guestRepository.findByChapterIdAndNameIgnoreCaseAndEventDateTrimmed(chapterId, name, eventDate).orElse(null)
         if (existing != null) {
@@ -286,7 +297,8 @@ class DatabaseMemberService(
                 profession = profession,
                 referrer = referrer,
                 eventDate = eventDate,
-                ltTerm = GuestLtTerm.number(eventDate)
+                ltTerm = GuestLtTerm.number(eventDate),
+                becameMember = becameMember
             )
         )
     }
@@ -320,7 +332,7 @@ class DatabaseMemberService(
         "profession" to observer.profession,
         "eventDate" to observer.eventDate,
         "attended" to observer.attended,
-        "becameMember" to observer.becameMember
+        "bniChapter" to observer.bniChapter
     )
 
     @Transactional
@@ -329,7 +341,7 @@ class DatabaseMemberService(
         profession: String,
         eventDate: String,
         chapterTag: String? = null,
-        becameMember: Boolean = false
+        bniChapter: String = ""
     ): Observer {
         val chapterId = chapterService.resolveChapterId(chapterTag)
         val existing = observerRepository.findByChapterIdAndNameIgnoreCaseAndEventDate(chapterId, name, eventDate).orElse(null)
@@ -344,7 +356,7 @@ class DatabaseMemberService(
                 profession = profession,
                 eventDate = eventDate,
                 attended = false,
-                becameMember = becameMember
+                bniChapter = bniChapter.trim()
             )
         )
     }
@@ -355,7 +367,7 @@ class DatabaseMemberService(
         profession: String?,
         eventDate: String?,
         chapterTag: String? = null,
-        becameMember: Boolean? = null,
+        bniChapter: String? = null,
         matchEventDate: String? = null
     ): Observer? {
         val chapterId = chapterService.resolveChapterId(chapterTag)
@@ -366,7 +378,7 @@ class DatabaseMemberService(
         } ?: return null
         profession?.let { observer.profession = it }
         eventDate?.let { observer.eventDate = it.trim() }
-        becameMember?.let { observer.becameMember = it }
+        bniChapter?.let { observer.bniChapter = it.trim() }
         return observerRepository.save(observer)
     }
 

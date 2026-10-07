@@ -40,6 +40,9 @@ data class Guest(
     @Column(name = "lt_term")
     var ltTerm: Int? = null,
 
+    @Column(name = "became_member", nullable = false)
+    var becameMember: Boolean = false,
+
     @Column(name = "check_in_time")
     var checkInTime: OffsetDateTime? = null,
 
