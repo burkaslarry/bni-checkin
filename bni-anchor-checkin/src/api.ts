@@ -1581,17 +1581,21 @@ export type ObserverInfo = {
   profession: string;
   eventDate: string;
   attended: boolean;
+  becameMember?: boolean;
 };
 
 export type CreateObserverRequest = {
   name: string;
   profession: string;
   eventDate?: string;
+  becameMember?: boolean;
 };
 
 export type UpdateObserverRequest = {
   profession?: string;
   eventDate?: string;
+  becameMember?: boolean;
+  matchEventDate?: string;
 };
 
 export async function getObservers(

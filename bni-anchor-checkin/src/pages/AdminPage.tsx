@@ -283,6 +283,12 @@ export default function AdminPage() {
               <span className="hint">管理嘉賓資料，可勾選多位刪除、匯出 CSV</span>
             </Link>
 
+            <Link to={adminHref("/admin/observers")} className="nav-card" style={{ textDecoration: "none" }}>
+              <span className="nav-icon">👁️</span>
+              <strong className="nav-title">觀察員管理</strong>
+              <span className="hint">新增或刪除觀察員，可勾選多位一次刪除</span>
+            </Link>
+
             <Link to={adminHref("/admin/import")} className="nav-card" style={{ textDecoration: "none" }}>
               <span className="nav-icon">📥</span>
               <strong className="nav-title">批量匯入</strong>

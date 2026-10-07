@@ -319,11 +319,18 @@ class DatabaseMemberService(
         "name" to observer.name,
         "profession" to observer.profession,
         "eventDate" to observer.eventDate,
-        "attended" to observer.attended
+        "attended" to observer.attended,
+        "becameMember" to observer.becameMember
     )
 
     @Transactional
-    fun createObserver(name: String, profession: String, eventDate: String, chapterTag: String? = null): Observer {
+    fun createObserver(
+        name: String,
+        profession: String,
+        eventDate: String,
+        chapterTag: String? = null,
+        becameMember: Boolean = false
+    ): Observer {
         val chapterId = chapterService.resolveChapterId(chapterTag)
         val existing = observerRepository.findByChapterIdAndNameIgnoreCaseAndEventDate(chapterId, name, eventDate).orElse(null)
         if (existing != null) {
@@ -336,17 +343,30 @@ class DatabaseMemberService(
                 name = name,
                 profession = profession,
                 eventDate = eventDate,
-                attended = false
+                attended = false,
+                becameMember = becameMember
             )
         )
     }
 
     @Transactional
-    fun updateObserver(name: String, profession: String?, eventDate: String?, chapterTag: String? = null): Observer? {
+    fun updateObserver(
+        name: String,
+        profession: String?,
+        eventDate: String?,
+        chapterTag: String? = null,
+        becameMember: Boolean? = null,
+        matchEventDate: String? = null
+    ): Observer? {
         val chapterId = chapterService.resolveChapterId(chapterTag)
-        val observer = observerRepository.findByChapterIdAndNameIgnoreCase(chapterId, name).orElse(null) ?: return null
+        val observer = if (matchEventDate != null) {
+            observerRepository.findByChapterIdAndNameIgnoreCaseAndEventDate(chapterId, name, matchEventDate).orElse(null)
+        } else {
+            observerRepository.findByChapterIdAndNameIgnoreCase(chapterId, name).orElse(null)
+        } ?: return null
         profession?.let { observer.profession = it }
-        eventDate?.let { observer.eventDate = it }
+        eventDate?.let { observer.eventDate = it.trim() }
+        becameMember?.let { observer.becameMember = it }
         return observerRepository.save(observer)
     }
 
