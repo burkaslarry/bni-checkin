@@ -28,6 +28,8 @@ export function ObserverManagementPanel({ onChanged }: ObserverManagementPanelPr
   const [newProfession, setNewProfession] = useState("");
   const [newEventDate, setNewEventDate] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [deletingSelected, setDeletingSelected] = useState(false);
   const [notification, setNotification] = useState<{
     message: string;
     type: "success" | "error" | "info";
@@ -137,16 +139,62 @@ export function ObserverManagementPanel({ onChanged }: ObserverManagementPanelPr
     }
   };
 
-  const handleDelete = async (name: string) => {
-    if (!window.confirm(`確定要刪除觀察員 ${name} 嗎？`)) return;
+  const observerKey = (observer: ObserverInfo) => `${observer.eventDate}\t${observer.id}`;
+
+  const handleDelete = async (observer: ObserverInfo) => {
+    if (!window.confirm(`確定要刪除觀察員 ${observer.name} 嗎？`)) return;
     try {
-      await deleteObserver(name);
-      showNotification(`已刪除 ${name}`, "success");
+      await deleteObserver(observer.name, observer.eventDate);
+      setSelectedKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(observerKey(observer));
+        return next;
+      });
+      showNotification(`已刪除 ${observer.name}`, "success");
       void fetchObservers();
       onChanged?.();
     } catch {
       showNotification("刪除失敗", "error");
     }
+  };
+
+  const toggleObserver = (observer: ObserverInfo) => {
+    const key = observerKey(observer);
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const handleDeleteSelected = async () => {
+    const targets = filteredObservers.filter((observer) => selectedKeys.has(observerKey(observer)));
+    if (targets.length === 0 || deletingSelected) return;
+    const preview = targets
+      .slice(0, 8)
+      .map((observer) => observer.name)
+      .join("、");
+    const extra = targets.length > 8 ? ` 等 ${targets.length} 位` : "";
+    if (!window.confirm(`確定要刪除 ${targets.length} 位觀察員？\n${preview}${extra}\n此操作無法復原。`)) return;
+    setDeletingSelected(true);
+    let failed = 0;
+    for (const observer of targets) {
+      try {
+        await deleteObserver(observer.name, observer.eventDate);
+      } catch {
+        failed += 1;
+      }
+    }
+    setSelectedKeys(new Set());
+    setDeletingSelected(false);
+    if (failed === 0) {
+      showNotification(`已刪除 ${targets.length} 位觀察員`, "success");
+    } else {
+      showNotification(`已刪除 ${targets.length - failed} 位，失敗 ${failed} 位`, "error");
+    }
+    void fetchObservers();
+    onChanged?.();
   };
 
   return (
@@ -166,7 +214,7 @@ export function ObserverManagementPanel({ onChanged }: ObserverManagementPanelPr
       <div className="section-header">
         <h2>👁️ 觀察員管理</h2>
         <p className="hint">
-          管理當日活動觀察員名單；簽到頁可標記出席（不記錄簽到時間）。CSV 匯入請使用上方「匯入觀察員」或 WhatsApp 訊息匯入。
+          管理當日活動觀察員名單；可勾選多位後一次刪除。簽到頁可標記出席（不記錄簽到時間）。CSV 匯入請使用上方「匯入觀察員」或 WhatsApp 訊息匯入。
         </p>
       </div>
 
@@ -266,6 +314,22 @@ export function ObserverManagementPanel({ onChanged }: ObserverManagementPanelPr
             已出席 {attendedCount} / {filteredObservers.length} 位
           </p>
         )}
+        <div style={{ display: "flex", gap: "0.75rem", marginTop: "1rem", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={() => void handleDeleteSelected()}
+            disabled={
+              deletingSelected ||
+              filteredObservers.every((observer) => !selectedKeys.has(observerKey(observer)))
+            }
+            style={{ color: "#ef4444", borderColor: "#ef4444" }}
+          >
+            {deletingSelected
+              ? "刪除中…"
+              : `🗑️ 刪除所選 (${filteredObservers.filter((observer) => selectedKeys.has(observerKey(observer))).length})`}
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -275,6 +339,30 @@ export function ObserverManagementPanel({ onChanged }: ObserverManagementPanelPr
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: "2px solid var(--border-color)" }}>
+                <th style={{ padding: "1rem", textAlign: "center", width: "3rem" }}>
+                  <input
+                    type="checkbox"
+                    aria-label="全選目前列表"
+                    checked={
+                      filteredObservers.length > 0 &&
+                      filteredObservers.every((observer) => selectedKeys.has(observerKey(observer)))
+                    }
+                    onChange={() => {
+                      const allSelected =
+                        filteredObservers.length > 0 &&
+                        filteredObservers.every((observer) => selectedKeys.has(observerKey(observer)));
+                      setSelectedKeys((prev) => {
+                        const next = new Set(prev);
+                        for (const observer of filteredObservers) {
+                          const key = observerKey(observer);
+                          if (allSelected) next.delete(key);
+                          else next.add(key);
+                        }
+                        return next;
+                      });
+                    }}
+                  />
+                </th>
                 <th style={{ padding: "1rem", textAlign: "left" }}>姓名</th>
                 <th style={{ padding: "1rem", textAlign: "left" }}>專業領域</th>
                 <th style={{ padding: "1rem", textAlign: "left" }}>活動日期</th>
@@ -285,6 +373,14 @@ export function ObserverManagementPanel({ onChanged }: ObserverManagementPanelPr
             <tbody>
               {filteredObservers.map((observer) => (
                 <tr key={`${observer.id}-${observer.name}`} style={{ borderBottom: "1px solid var(--border-color)" }}>
+                  <td style={{ padding: "1rem", textAlign: "center" }}>
+                    <input
+                      type="checkbox"
+                      aria-label={`選擇 ${observer.name}`}
+                      checked={selectedKeys.has(observerKey(observer))}
+                      onChange={() => toggleObserver(observer)}
+                    />
+                  </td>
                   <td style={{ padding: "1rem", fontWeight: 500 }}>{observer.name}</td>
                   <td style={{ padding: "1rem" }}>{observer.profession}</td>
                   <td style={{ padding: "1rem" }}>{observer.eventDate}</td>
@@ -311,7 +407,7 @@ export function ObserverManagementPanel({ onChanged }: ObserverManagementPanelPr
                       <button
                         type="button"
                         className="ghost-button"
-                        onClick={() => void handleDelete(observer.name)}
+                        onClick={() => void handleDelete(observer)}
                         style={{ color: "#ef4444", borderColor: "#ef4444" }}
                       >
                         🗑️ 刪除

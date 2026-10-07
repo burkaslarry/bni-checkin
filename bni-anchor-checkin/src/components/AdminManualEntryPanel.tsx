@@ -3,6 +3,8 @@ import {
   checkIn,
   createGuest,
   createObserver,
+  deleteGuest,
+  deleteObserver,
   getMembers,
   getGuests,
   getObservers,
@@ -110,6 +112,7 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
   const [customTime, setCustomTime] = useState(formatDateTimeLocal(new Date()));
   const [selectedPeople, setSelectedPeople] = useState<Set<string>>(new Set());
   const [batchSubmitting, setBatchSubmitting] = useState(false);
+  const [deletingSelected, setDeletingSelected] = useState(false);
   const [noCurrentEvent, setNoCurrentEvent] = useState(false);
   const [loadingEvent, setLoadingEvent] = useState(true);
   const [listLoading, setListLoading] = useState(false);
@@ -214,6 +217,16 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
     }
     return rows;
   }, [visibleTypes, members, guests, observers]);
+
+  const deletableSelected = useMemo(
+    () =>
+      batchList.filter(
+        (person) =>
+          (person.type === "guest" || person.type === "observer") &&
+          selectedPeople.has(personKey(person.type, person.name))
+      ),
+    [batchList, selectedPeople]
+  );
 
   const pageSelectedCount = useMemo(
     () => visiblePeople.filter((p) => selectedPeople.has(p.key)).length,
@@ -422,6 +435,48 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
       onNotify(`✅ 批量處理成功！已完成 ${successCount} 位`, "success");
     } else {
       onNotify(`⚠️ 批量處理完成：成功 ${successCount} 位，失敗 ${failCount} 位`, "info");
+    }
+  };
+
+  const handleDeleteSelectedRoster = async () => {
+    if (!eventDate) {
+      onNotify("尚未設定當前活動", "error");
+      return;
+    }
+    const targets = deletableSelected;
+    if (targets.length === 0 || deletingSelected) {
+      onNotify("請勾選要刪除的嘉賓或觀察員", "error");
+      return;
+    }
+    const preview = targets
+      .slice(0, 8)
+      .map((person) => person.name)
+      .join("、");
+    const extra = targets.length > 8 ? ` 等 ${targets.length} 位` : "";
+    const memberNote = selectedPeople.size > targets.length ? "\n已勾選的會員不會刪除。" : "";
+    if (!window.confirm(`確定要從 ${eventDate} 刪除 ${targets.length} 位嘉賓／觀察員？\n${preview}${extra}${memberNote}\n此操作無法復原。`)) {
+      return;
+    }
+    setDeletingSelected(true);
+    let failed = 0;
+    for (const person of targets) {
+      try {
+        if (person.type === "observer") {
+          await deleteObserver(person.name, eventDate);
+        } else {
+          await deleteGuest(person.name, eventDate);
+        }
+      } catch {
+        failed += 1;
+      }
+    }
+    setDeletingSelected(false);
+    clearAllSelections();
+    void reloadLists();
+    if (failed === 0) {
+      onNotify(`已刪除 ${targets.length} 位嘉賓／觀察員`, "success");
+    } else {
+      onNotify(`已刪除 ${targets.length - failed} 位，失敗 ${failed} 位`, "error");
     }
   };
 
@@ -640,9 +695,20 @@ export const AdminManualEntryPanel = ({ onNotify }: AdminManualEntryPanelProps) 
               className="button submit-button manual-entry-batch-submit"
               type="button"
               onClick={handleBatchCheckIn}
-              disabled={selectedPeople.size === 0 || batchSubmitting}
+              disabled={selectedPeople.size === 0 || batchSubmitting || deletingSelected}
             >
               {batchSubmitting ? "批量處理中..." : `✅ 批量簽到 / 標記出席 (${selectedPeople.size} 位)`}
+            </button>
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => void handleDeleteSelectedRoster()}
+              disabled={deletableSelected.length === 0 || batchSubmitting || deletingSelected}
+              style={{ color: "#ef4444", borderColor: "#ef4444", marginTop: "0.5rem", width: "100%" }}
+            >
+              {deletingSelected
+                ? "刪除中…"
+                : `🗑️ 刪除所選嘉賓／觀察員 (${deletableSelected.length})`}
             </button>
           </div>
         </div>

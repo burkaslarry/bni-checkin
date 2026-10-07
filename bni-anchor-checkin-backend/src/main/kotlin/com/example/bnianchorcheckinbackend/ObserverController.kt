@@ -130,10 +130,11 @@ class ObserverController(
     @Operation(summary = "Delete an observer")
     fun deleteObserver(
         @PathVariable name: String,
-        @RequestParam(required = false) chapter: String?
+        @RequestParam(required = false) chapter: String?,
+        @RequestParam(required = false) eventDate: String?
     ): ResponseEntity<Map<String, String>> {
         val deleted = try {
-            databaseMemberService.deleteObserver(name, chapter)
+            databaseMemberService.deleteObserver(name, chapter, eventDate)
         } catch (e: Exception) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(mapOf("status" to "error", "message" to "無法刪除觀察員。"))

@@ -292,9 +292,13 @@ class DatabaseMemberService(
     }
 
     @Transactional
-    fun deleteGuest(name: String, chapterTag: String? = null): Boolean {
+    fun deleteGuest(name: String, chapterTag: String? = null, eventDate: String? = null): Boolean {
         val chapterId = chapterService.resolveChapterId(chapterTag)
-        val guest = guestRepository.findByChapterIdAndNameIgnoreCase(chapterId, name).orElse(null) ?: return false
+        val guest = if (!eventDate.isNullOrBlank()) {
+            guestRepository.findByChapterIdAndNameIgnoreCaseAndEventDateTrimmed(chapterId, name, eventDate.trim()).orElse(null)
+        } else {
+            guestRepository.findByChapterIdAndNameIgnoreCase(chapterId, name).orElse(null)
+        } ?: return false
         guestRepository.delete(guest)
         return true
     }
@@ -347,9 +351,13 @@ class DatabaseMemberService(
     }
 
     @Transactional
-    fun deleteObserver(name: String, chapterTag: String? = null): Boolean {
+    fun deleteObserver(name: String, chapterTag: String? = null, eventDate: String? = null): Boolean {
         val chapterId = chapterService.resolveChapterId(chapterTag)
-        val observer = observerRepository.findByChapterIdAndNameIgnoreCase(chapterId, name).orElse(null) ?: return false
+        val observer = if (!eventDate.isNullOrBlank()) {
+            observerRepository.findByChapterIdAndNameIgnoreCaseAndEventDateTrimmed(chapterId, name, eventDate.trim()).orElse(null)
+        } else {
+            observerRepository.findByChapterIdAndNameIgnoreCase(chapterId, name).orElse(null)
+        } ?: return false
         observerRepository.delete(observer)
         return true
     }

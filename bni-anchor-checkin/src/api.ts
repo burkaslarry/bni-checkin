@@ -1559,12 +1559,19 @@ export async function deleteMember(
  * @throws {Error} On HTTP error
  */
 export async function deleteGuest(
-  name: string
+  name: string,
+  eventDate?: string
 ): Promise<{ status: string; message: string }> {
-  const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/guests/${encodeURIComponent(name)}`), {
-    method: "DELETE",
-    mode: "cors"
-  });
+  const params = new URLSearchParams();
+  if (eventDate?.trim()) params.set("eventDate", eventDate.trim());
+  const qs = params.toString();
+  const response = await fetchWithTimeout(
+    withChapterQuery(`${API_BASE}/api/guests/${encodeURIComponent(name)}${qs ? `?${qs}` : ""}`),
+    {
+      method: "DELETE",
+      mode: "cors"
+    }
+  );
   return handleResponse(response);
 }
 
@@ -1622,12 +1629,19 @@ export async function updateObserver(
 }
 
 export async function deleteObserver(
-  name: string
+  name: string,
+  eventDate?: string
 ): Promise<{ status: string; message: string }> {
-  const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/observers/${encodeURIComponent(name)}`), {
-    method: "DELETE",
-    mode: "cors"
-  });
+  const params = new URLSearchParams();
+  if (eventDate?.trim()) params.set("eventDate", eventDate.trim());
+  const qs = params.toString();
+  const response = await fetchWithTimeout(
+    withChapterQuery(`${API_BASE}/api/observers/${encodeURIComponent(name)}${qs ? `?${qs}` : ""}`),
+    {
+      method: "DELETE",
+      mode: "cors"
+    }
+  );
   return handleResponse(response);
 }
 

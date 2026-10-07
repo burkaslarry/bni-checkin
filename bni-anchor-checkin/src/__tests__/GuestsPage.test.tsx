@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import GuestsPage from "../pages/GuestsPage";
 import { ChapterProvider } from "../chapterContext";
 import { downloadGuestCsv } from "../lib/guestCsv";
-import { getGuests } from "../api";
+import { deleteGuest, getGuests } from "../api";
 
 vi.mock("../lib/guestCsv", () => ({
   downloadGuestCsv: vi.fn(),
@@ -158,5 +158,20 @@ describe("GuestsPage CSV export", () => {
     expect(screen.getByText("Cara Lee")).toBeInTheDocument();
     expect(screen.getByLabelText("篩選屆數 Filter by LT")).toHaveValue("all");
     expect(screen.getByLabelText("關鍵字搜尋 Keyword Search")).toHaveValue("");
+  });
+
+  it("deletes every ticked guest for that event date", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.mocked(deleteGuest).mockResolvedValue({ status: "success", message: "ok" });
+    renderGuests();
+    await screen.findByText("Amy Chan");
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "全選目前列表" }));
+    fireEvent.click(screen.getByRole("button", { name: /刪除所選 \(2\)/ }));
+
+    await waitFor(() => {
+      expect(deleteGuest).toHaveBeenCalledWith("Ben Wong", "2026-08-01");
+      expect(deleteGuest).toHaveBeenCalledWith("Amy Chan", "2026-07-16");
+    });
   });
 });

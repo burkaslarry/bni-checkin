@@ -33,6 +33,8 @@ function GuestsPageInner() {
   const [searchInput, setSearchInput] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
   const [notification, setNotification] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [deletingSelected, setDeletingSelected] = useState(false);
   const [loadFailedRedirect, setLoadFailedRedirect] = useState(false);
   const [redirectCountdown, setRedirectCountdown] = useState(3);
   const countdownRef = useRef<number | null>(null);
@@ -144,18 +146,64 @@ function GuestsPageInner() {
     }
   };
 
-  const handleDeleteGuest = async (guestName: string) => {
-    if (!window.confirm(`確定要刪除嘉賓 ${guestName} 嗎？此操作無法復原！`)) {
+  const guestKey = (guest: GuestInfo) => `${guest.eventDate ?? ""}\t${guest.name}`;
+
+  const handleDeleteGuest = async (guest: GuestInfo) => {
+    if (!window.confirm(`確定要刪除嘉賓 ${guest.name} 嗎？此操作無法復原！`)) {
       return;
     }
 
     try {
-      await deleteGuest(guestName);
-      showNotification(`已刪除 ${guestName}`, "success");
+      await deleteGuest(guest.name, guest.eventDate);
+      setSelectedKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(guestKey(guest));
+        return next;
+      });
+      showNotification(`已刪除 ${guest.name}`, "success");
       fetchGuests();
     } catch (error) {
       showNotification("刪除失敗", "error");
     }
+  };
+
+  const toggleGuest = (guest: GuestInfo) => {
+    const key = guestKey(guest);
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const handleDeleteSelectedGuests = async (targets: GuestInfo[]) => {
+    if (targets.length === 0 || deletingSelected) return;
+    const preview = targets
+      .slice(0, 8)
+      .map((guest) => guest.name)
+      .join("、");
+    const extra = targets.length > 8 ? ` 等 ${targets.length} 位` : "";
+    if (!window.confirm(`確定要刪除 ${targets.length} 位嘉賓？\n${preview}${extra}\n此操作無法復原。`)) {
+      return;
+    }
+    setDeletingSelected(true);
+    let failed = 0;
+    for (const guest of targets) {
+      try {
+        await deleteGuest(guest.name, guest.eventDate);
+      } catch {
+        failed += 1;
+      }
+    }
+    setSelectedKeys(new Set());
+    setDeletingSelected(false);
+    if (failed === 0) {
+      showNotification(`已刪除 ${targets.length} 位嘉賓`, "success");
+    } else {
+      showNotification(`已刪除 ${targets.length - failed} 位，失敗 ${failed} 位`, "error");
+    }
+    fetchGuests();
   };
 
   const { eventDates, ltTerms } = useMemo(() => {
@@ -493,6 +541,21 @@ function GuestsPageInner() {
             >
               📥 匯出 CSV
             </button>
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() =>
+                void handleDeleteSelectedGuests(
+                  displayedGuests.filter((guest) => selectedKeys.has(guestKey(guest)))
+                )
+              }
+              disabled={deletingSelected || displayedGuests.every((guest) => !selectedKeys.has(guestKey(guest)))}
+              style={{ color: "#ef4444", borderColor: "#ef4444" }}
+            >
+              {deletingSelected
+                ? "刪除中…"
+                : `🗑️ 刪除所選 (${displayedGuests.filter((guest) => selectedKeys.has(guestKey(guest))).length})`}
+            </button>
           </div>
         </div>
 
@@ -505,6 +568,30 @@ function GuestsPageInner() {
             <table className="guests-table" style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "var(--card-bg)", borderBottom: "2px solid var(--border-color)" }}>
+                  <th style={{ padding: "1rem", textAlign: "center", width: "3rem" }}>
+                    <input
+                      type="checkbox"
+                      aria-label="全選目前列表"
+                      checked={
+                        displayedGuests.length > 0 &&
+                        displayedGuests.every((guest) => selectedKeys.has(guestKey(guest)))
+                      }
+                      onChange={() => {
+                        const allSelected =
+                          displayedGuests.length > 0 &&
+                          displayedGuests.every((guest) => selectedKeys.has(guestKey(guest)));
+                        setSelectedKeys((prev) => {
+                          const next = new Set(prev);
+                          for (const guest of displayedGuests) {
+                            const key = guestKey(guest);
+                            if (allSelected) next.delete(key);
+                            else next.add(key);
+                          }
+                          return next;
+                        });
+                      }}
+                    />
+                  </th>
                   <th style={{ padding: "1rem", textAlign: "left" }}>姓名</th>
                   <th style={{ padding: "1rem", textAlign: "left" }}>專業領域</th>
                   <th style={{ padding: "1rem", textAlign: "left" }}>邀請人</th>
@@ -523,6 +610,14 @@ function GuestsPageInner() {
               <tbody>
                 {displayedGuests.map((guest) => (
                   <tr key={`${guest.name}-${guest.eventDate ?? ""}`} style={{ borderBottom: "1px solid var(--border-color)" }}>
+                    <td style={{ padding: "1rem", textAlign: "center" }}>
+                      <input
+                        type="checkbox"
+                        aria-label={`選擇 ${guest.name}`}
+                        checked={selectedKeys.has(guestKey(guest))}
+                        onChange={() => toggleGuest(guest)}
+                      />
+                    </td>
                     <td style={{ padding: "1rem", fontWeight: 500 }}>{guest.name}</td>
                     <td style={{ padding: "1rem" }}>{guest.profession}</td>
                     <td style={{ padding: "1rem" }}>{guest.referrer || "-"}</td>
@@ -547,7 +642,7 @@ function GuestsPageInner() {
                         <button
                           type="button"
                           className="ghost-button"
-                          onClick={() => handleDeleteGuest(guest.name)}
+                          onClick={() => void handleDeleteGuest(guest)}
                           aria-label={`刪除 ${guest.name}`}
                           title={`刪除 ${guest.name}`}
                           style={{
