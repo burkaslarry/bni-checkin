@@ -58,6 +58,7 @@ export function ObserverManagementPanel({ onChanged }: ObserverManagementPanelPr
         if (evt?.date) {
           setCurrentEventDate(evt.date);
           setNewEventDate(evt.date);
+          setSelectedEventDate(evt.date);
         }
       })
       .catch(() => {});
