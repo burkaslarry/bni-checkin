@@ -3,6 +3,7 @@ import {
   getReportData,
   exportRecords,
   normalizeApiEventId,
+  updateAttendanceCheckInTime,
   type EventData,
   type ReportAttendance,
   type ReportData,
@@ -35,6 +36,7 @@ function roleLabel(role?: string): string {
 type GridRow = {
   name: string;
   role: string;
+  roleCode: string;
   status: string;
   checkInTime: string;
   attendance: "出席" | "缺席";
@@ -45,6 +47,16 @@ export function EventAttendanceDetailModal({ event, open, onClose, onNotify }: E
   const [report, setReport] = useState<ReportData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [editingName, setEditingName] = useState<string | null>(null);
+  const [editTime, setEditTime] = useState("");
+  const [savingName, setSavingName] = useState<string | null>(null);
+
+  const refreshReport = async () => {
+    const id = normalizeApiEventId(event.id) ?? event.id;
+    const data = await getReportData(id);
+    setReport(data);
+    return data;
+  };
 
   useEffect(() => {
     if (!open) {
@@ -87,6 +99,7 @@ export function EventAttendanceDetailModal({ event, open, onClose, onNotify }: E
     const present: GridRow[] = report.attendees.map((a: ReportAttendance) => ({
       name: a.memberName,
       role: roleLabel(a.role),
+      roleCode: (a.role ?? "MEMBER").toUpperCase(),
       status: statusLabel(a.status),
       checkInTime: a.checkInTime ?? "—",
       attendance: "出席" as const,
@@ -94,6 +107,7 @@ export function EventAttendanceDetailModal({ event, open, onClose, onNotify }: E
     const absent: GridRow[] = report.absentees.map((a: ReportAttendance) => ({
       name: a.memberName,
       role: roleLabel(a.role),
+      roleCode: (a.role ?? "MEMBER").toUpperCase(),
       status: "缺席",
       checkInTime: "—",
       attendance: "缺席" as const,
@@ -118,6 +132,29 @@ export function EventAttendanceDetailModal({ event, open, onClose, onNotify }: E
       onNotify("匯出失敗: " + (e instanceof Error ? e.message : "未知錯誤"), "error");
     } finally {
       setExporting(false);
+    }
+  };
+
+  const startEditingTime = (row: GridRow) => {
+    setEditingName(row.name);
+    setEditTime(/^\d{2}:\d{2}/.test(row.checkInTime) ? row.checkInTime.slice(0, 5) : "");
+  };
+
+  const handleSaveTime = async (row: GridRow) => {
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(editTime)) {
+      onNotify("請輸入有效簽到時間", "error");
+      return;
+    }
+    setSavingName(row.name);
+    try {
+      await updateAttendanceCheckInTime(event.date, row.name, editTime);
+      await refreshReport();
+      setEditingName(null);
+      onNotify(`已更新 ${row.name} 的簽到時間`, "success");
+    } catch (e) {
+      onNotify(e instanceof Error ? e.message : "更新簽到時間失敗", "error");
+    } finally {
+      setSavingName(null);
     }
   };
 
@@ -234,7 +271,46 @@ export function EventAttendanceDetailModal({ event, open, onClose, onNotify }: E
                       <td style={{ padding: "0.55rem 0.5rem" }}>{row.role}</td>
                       <td style={{ padding: "0.55rem 0.5rem" }}>{row.attendance}</td>
                       <td style={{ padding: "0.55rem 0.5rem" }}>{row.status}</td>
-                      <td style={{ padding: "0.55rem 0.5rem", fontFamily: "monospace" }}>{row.checkInTime}</td>
+                      <td style={{ padding: "0.55rem 0.5rem" }}>
+                        {editingName === row.name ? (
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+                            <input
+                              type="time"
+                              aria-label={`${row.name} 簽到時間`}
+                              className="input-field"
+                              value={editTime}
+                              disabled={savingName === row.name}
+                              onChange={(e) => setEditTime(e.target.value)}
+                              style={{ width: "8rem", padding: "0.4rem" }}
+                            />
+                            <button
+                              type="button"
+                              className="button"
+                              disabled={savingName === row.name}
+                              onClick={() => void handleSaveTime(row)}
+                            >
+                              {savingName === row.name ? "儲存中…" : "儲存"}
+                            </button>
+                            <button
+                              type="button"
+                              className="ghost-button"
+                              disabled={savingName === row.name}
+                              onClick={() => setEditingName(null)}
+                            >
+                              取消
+                            </button>
+                          </div>
+                        ) : (
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                            <span style={{ fontFamily: "monospace" }}>{row.checkInTime}</span>
+                            {row.roleCode === "MEMBER" && row.attendance === "出席" && (
+                              <button type="button" className="ghost-button" onClick={() => startEditingTime(row)}>
+                                修改時間
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

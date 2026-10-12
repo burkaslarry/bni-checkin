@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { ChapterProvider } from "../chapterContext";
 import MembersPage from "../pages/MembersPage";
@@ -103,5 +103,25 @@ describe("MembersPage standing", () => {
     expect(screen.queryByText("觀察")).not.toBeInTheDocument();
     expect(screen.queryByText("停權")).not.toBeInTheDocument();
     expect(screen.queryByText("已離會")).not.toBeInTheDocument();
+  });
+
+  it("creates a new member as a zero-point black-light newcomer", async () => {
+    const api = await import("../api");
+    vi.mocked(api.createMember).mockResolvedValue({ status: "success", message: "ok" });
+    renderPage();
+    await screen.findByText("Dr. Ronnie Chan");
+
+    fireEvent.click(screen.getAllByRole("button", { name: /新增會員/ })[0]);
+    expect(screen.getByText("⚫ 黑燈 · 0 分 · 新人")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("姓名 Name *"), { target: { value: "New Member" } });
+    fireEvent.change(screen.getByLabelText("專業領域 Profession *"), { target: { value: "顧問" } });
+    fireEvent.click(screen.getByRole("button", { name: "✅ 新增" }));
+
+    await waitFor(() => {
+      expect(api.createMember).toHaveBeenCalledWith(
+        expect.objectContaining({ name: "New Member", profession: "顧問", standing: "BLACK" }),
+        "anchor"
+      );
+    });
   });
 });

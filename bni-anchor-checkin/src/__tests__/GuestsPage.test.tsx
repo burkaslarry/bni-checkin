@@ -4,7 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import GuestsPage from "../pages/GuestsPage";
 import { ChapterProvider } from "../chapterContext";
 import { downloadGuestCsv } from "../lib/guestCsv";
-import { deleteGuest, getGuests } from "../api";
+import { createGuest, deleteGuest, getGuests } from "../api";
 
 vi.mock("../lib/guestCsv", () => ({
   downloadGuestCsv: vi.fn(),
@@ -39,6 +39,7 @@ vi.mock("../api", () => ({
   }),
   deleteGuest: vi.fn(),
   updateGuest: vi.fn(),
+  createGuest: vi.fn(),
 }));
 
 function renderGuests(path = "/admin/guests") {
@@ -81,6 +82,7 @@ describe("GuestsPage CSV export", () => {
     expect(names()[0]).toContain("Ben Wong");
     expect(names()[0]).toContain("第 2 屆 LT");
     expect(names()[1]).toContain("Amy Chan");
+    expect(screen.getByText("91234567")).toBeInTheDocument();
     expect(names()[1]).toContain("第 2 屆 LT");
 
     fireEvent.click(screen.getByRole("button", { name: "📥 匯出 CSV" }));
@@ -98,6 +100,30 @@ describe("GuestsPage CSV export", () => {
       expect.objectContaining({ name: "Amy Chan", eventDate: "2026-07-16" }),
       expect.objectContaining({ name: "Ben Wong", eventDate: "2026-08-01" }),
     ]);
+  });
+
+  it("links to guest import and creates a guest with a phone number", async () => {
+    vi.mocked(createGuest).mockResolvedValue({ status: "success", message: "ok" });
+    renderGuests();
+    await screen.findByText("Amy Chan");
+
+    expect(screen.getByRole("link", { name: /匯入 CSV/ })).toHaveAttribute("href", "/admin/import?type=guest");
+    fireEvent.click(screen.getByRole("button", { name: /新增嘉賓/ }));
+    fireEvent.change(screen.getByLabelText("姓名 Name *"), { target: { value: "Cara Lee" } });
+    fireEvent.change(screen.getByLabelText("專業領域 Profession *"), { target: { value: "設計" } });
+    fireEvent.change(screen.getByLabelText("電話 Phone Number"), { target: { value: "98887777" } });
+    fireEvent.change(screen.getByLabelText("活動日期 Event Date *"), { target: { value: "2026-10-08" } });
+    fireEvent.click(screen.getByRole("button", { name: "✅ 新增" }));
+
+    await waitFor(() => {
+      expect(createGuest).toHaveBeenCalledWith({
+        name: "Cara Lee",
+        profession: "設計",
+        phoneNumber: "98887777",
+        referrer: undefined,
+        eventDate: "2026-10-08",
+      });
+    });
   });
 
   it("exports only the selected event date", async () => {

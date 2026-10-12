@@ -8,6 +8,7 @@ export function guestMatchesKeywords(guest: GuestInfo, query: string): boolean {
   const haystack = [
     guest.name,
     guest.profession,
+    guest.phoneNumber || "",
     guest.referrer || "",
     guest.eventDate || "",
   ]

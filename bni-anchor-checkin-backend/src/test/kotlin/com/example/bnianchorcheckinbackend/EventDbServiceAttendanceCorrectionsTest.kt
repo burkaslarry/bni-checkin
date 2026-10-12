@@ -87,4 +87,46 @@ class EventDbServiceAttendanceCorrectionsTest {
         assertEquals(1, result["added"])
         assertNull(guest.checkInTime)
     }
+
+    @Test
+    fun `applyAttendanceCorrections updates an existing member check-in time and status`() {
+        val eventDate = LocalDate.of(2026, 10, 8)
+        val event = Event(
+            id = 12L,
+            name = "LT Meeting",
+            createDate = eventDate,
+            eventDate = eventDate,
+            startTime = LocalTime.of(7, 0),
+            endTime = LocalTime.of(9, 0),
+            registrationStartTime = LocalTime.of(6, 30),
+            onTimeCutoffTime = LocalTime.of(7, 5),
+            lateCutoffTime = null,
+            status = "COMPLETED",
+            isActive = false
+        )
+        val member = Member(id = 3L, name = "Amy Chan", profession = "Accounting")
+        val attendance = Attendance(
+            chapterId = 1,
+            eventId = 12,
+            memberId = 3,
+            checkInTime = OffsetDateTime.of(eventDate, LocalTime.of(6, 58), ZoneOffset.ofHours(8)),
+            status = "on-time"
+        )
+        `when`(eventRepository.findByChapterIdAndEventDateAndDeletedAtIsNull(1, eventDate)).thenReturn(event)
+        `when`(memberRepository.findByChapterIdAndNameIgnoreCase(1, "Amy Chan")).thenReturn(Optional.of(member))
+        `when`(attendanceRepository.findByEventIdAndMemberId(12, 3)).thenReturn(attendance)
+        `when`(attendanceRepository.save(any(Attendance::class.java))).thenAnswer { it.arguments[0] }
+
+        val result = eventDbService.applyAttendanceCorrections(
+            AttendanceCorrectionsRequest(
+                eventDate = "2026-10-08",
+                removeCheckIns = emptyList(),
+                addCheckIns = listOf(AttendanceCheckInEntry("Amy Chan", "07:12"))
+            )
+        )
+
+        assertEquals(1, result["added"])
+        assertEquals("late", attendance.status)
+        assertEquals(LocalTime.of(7, 12), attendance.checkInTime.atZoneSameInstant(ZoneOffset.ofHours(8)).toLocalTime())
+    }
 }

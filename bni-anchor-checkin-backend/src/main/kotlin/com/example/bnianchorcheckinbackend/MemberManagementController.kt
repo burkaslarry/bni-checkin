@@ -30,6 +30,7 @@ data class UpdateMemberByNameRequest(
 data class UpdateGuestRequest(
     val name: String? = null,
     val profession: String? = null,
+    val phoneNumber: String? = null,
     val referrer: String? = null,
     val eventDate: String? = null,
     val becameMember: Boolean? = null
@@ -38,6 +39,7 @@ data class UpdateGuestRequest(
 data class CreateGuestRequest(
     val name: String,
     val profession: String,
+    val phoneNumber: String? = null,
     val referrer: String? = null,
     val eventDate: String? = null,
     val becameMember: Boolean? = null
@@ -76,7 +78,7 @@ class MemberManagementController(
             )
         }
         val standing = try {
-            request.standing?.let { MemberStanding.valueOf(it.uppercase()) } ?: MemberStanding.GREEN
+            request.standing?.let { MemberStanding.valueOf(it.uppercase()) } ?: MemberStanding.BLACK
         } catch (e: Exception) {
             return ResponseEntity.badRequest().body(mapOf(
                 "status" to "error",
@@ -386,6 +388,7 @@ class MemberManagementController(
                 currentEventDate = currentEventDate,
                 newName = newName,
                 profession = request.profession,
+                phoneNumber = request.phoneNumber,
                 referrer = request.referrer,
                 eventDate = request.eventDate,
                 chapterTag = chapterTag,
@@ -410,6 +413,7 @@ class MemberManagementController(
                 "guest" to mapOf(
                     "name" to updatedGuest.name,
                     "profession" to updatedGuest.profession,
+                    "phoneNumber" to (updatedGuest.phoneNumber ?: ""),
                     "referrer" to (updatedGuest.referrer ?: ""),
                     "eventDate" to (updatedGuest.eventDate ?: ""),
                     "ltTerm" to (updatedGuest.ltTerm?.toString() ?: ""),
@@ -469,6 +473,7 @@ class MemberManagementController(
             val created = databaseMemberService.createGuest(
                 name = name,
                 profession = profession,
+                phoneNumber = request.phoneNumber?.trim()?.takeIf { it.isNotEmpty() },
                 referrer = request.referrer?.trim()?.takeIf { it.isNotEmpty() },
                 eventDate = resolvedDate,
                 chapterTag = chapter,
@@ -482,6 +487,7 @@ class MemberManagementController(
                     "guest" to mapOf(
                         "name" to created.name,
                         "profession" to created.profession,
+                        "phoneNumber" to (created.phoneNumber ?: ""),
                         "referrer" to (created.referrer ?: ""),
                         "eventDate" to (created.eventDate ?: ""),
                         "ltTerm" to (created.ltTerm?.toString() ?: ""),

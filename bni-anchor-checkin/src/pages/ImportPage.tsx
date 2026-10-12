@@ -324,7 +324,7 @@ function ImportPageInner() {
           email: row.email || "",
           phoneNumber: row.phone || "",
           referrer: row.referrer || "",
-          standing: row.standing || "GREEN",
+          standing: row.standing || "BLACK",
           eventDate,
           membershipId: row.membershipId || undefined,
           professionCode: row.professionCode || undefined,
@@ -661,7 +661,7 @@ function ImportPageInner() {
                       {importType === "member" && (
                         <>
                           <td style={{ padding: "0.5rem" }}>{row.chapter || chapterTag || "anchor"}</td>
-                          <td style={{ padding: "0.5rem" }}>{row.standing || "GREEN"}</td>
+                          <td style={{ padding: "0.5rem" }}>{row.standing || "BLACK"}</td>
                         </>
                       )}
                     </tr>

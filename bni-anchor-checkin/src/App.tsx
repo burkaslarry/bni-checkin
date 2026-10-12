@@ -9,11 +9,13 @@ import ImportPage from "./pages/ImportPage";
 import PublicGuestWalkinPage from "./pages/PublicGuestWalkinPage";
 import AdminPublicGuestLinkPage from "./pages/AdminPublicGuestLinkPage";
 import { ChapterProvider } from "./chapterContext";
+import { ApiLoadingDialog } from "./components/ApiLoadingDialog";
 
 export default function App() {
   return (
     <BrowserRouter>
       <ChapterProvider>
+        <ApiLoadingDialog />
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/admin" element={<AdminPage />} />

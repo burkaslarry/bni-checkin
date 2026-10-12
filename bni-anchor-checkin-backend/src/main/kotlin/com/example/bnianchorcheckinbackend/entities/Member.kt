@@ -36,7 +36,7 @@ data class Member(
 
     @Column(name = "standing")
     @Enumerated(EnumType.STRING)
-    var standing: MemberStanding = MemberStanding.GREEN,
+    var standing: MemberStanding = MemberStanding.BLACK,
 
     @Column(name = "created_at", insertable = false, updatable = false)
     var createdAt: OffsetDateTime? = null,

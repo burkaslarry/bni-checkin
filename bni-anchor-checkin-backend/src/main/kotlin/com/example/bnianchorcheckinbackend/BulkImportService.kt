@@ -83,10 +83,12 @@ class BulkImportService(
                     member.professionCode = record.professionCode ?: member.professionCode
                     member.position = record.position ?: member.position
                     member.membershipId = record.membershipId ?: member.membershipId
-                    member.standing = try {
-                        MemberStanding.valueOf(record.standing?.uppercase() ?: "GREEN")
-                    } catch (e: Exception) {
-                        MemberStanding.GREEN
+                    if (!record.standing.isNullOrBlank()) {
+                        member.standing = try {
+                            MemberStanding.valueOf(record.standing.uppercase())
+                        } catch (_: Exception) {
+                            member.standing
+                        }
                     }
                     memberRepository.save(member)
                     updated++
@@ -105,9 +107,9 @@ class BulkImportService(
                         position = record.position ?: "Member",
                         membershipId = record.membershipId,
                         standing = try {
-                            MemberStanding.valueOf(record.standing?.uppercase() ?: "GREEN")
+                            MemberStanding.valueOf(record.standing?.uppercase() ?: "BLACK")
                         } catch (e: Exception) {
-                            MemberStanding.GREEN
+                            MemberStanding.BLACK
                         }
                     )
                     memberRepository.save(member)

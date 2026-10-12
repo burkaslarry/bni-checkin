@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, type KeyboardEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { getGuests, GuestInfo, deleteGuest, updateGuest } from "../api";
+import { createGuest, getGuests, GuestInfo, deleteGuest, updateGuest } from "../api";
 import { downloadGuestCsv } from "../lib/guestCsv";
 import { formatGuestLtTerm, guestLtTermLabel, resolveGuestLtTerm } from "../lib/guestLtTerm";
 import { guestMatchesKeywords, sortGuestsByEventDate } from "../lib/guestSearch";
@@ -29,11 +29,19 @@ function GuestsPageInner() {
   const [selectedEventDate, setSelectedEventDate] = useState<string>("all");
   const [selectedLtTerm, setSelectedLtTerm] = useState<string>("all");
   const [editingGuest, setEditingGuest] = useState<GuestInfo | null>(null);
+  const [showAddGuest, setShowAddGuest] = useState(false);
   const [editName, setEditName] = useState("");
   const [editProfession, setEditProfession] = useState("");
+  const [editPhoneNumber, setEditPhoneNumber] = useState("");
   const [editReferrer, setEditReferrer] = useState("");
   const [editEventDate, setEditEventDate] = useState("");
   const [editBecameMember, setEditBecameMember] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newProfession, setNewProfession] = useState("");
+  const [newPhoneNumber, setNewPhoneNumber] = useState("");
+  const [newReferrer, setNewReferrer] = useState("");
+  const [newEventDate, setNewEventDate] = useState("");
+  const [creatingGuest, setCreatingGuest] = useState(false);
   const [dateSort, setDateSort] = useState<"asc" | "desc">("desc");
   const [searchInput, setSearchInput] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
@@ -96,6 +104,7 @@ function GuestsPageInner() {
     setEditingGuest(guest);
     setEditName(guest.name);
     setEditProfession(guest.profession);
+    setEditPhoneNumber(guest.phoneNumber || "");
     setEditReferrer(guest.referrer || "");
     setEditEventDate(guest.eventDate || "");
     setEditBecameMember(isBecameMember(guest.becameMember));
@@ -131,6 +140,7 @@ function GuestsPageInner() {
         {
           name: trimmedName,
           profession: editProfession,
+          phoneNumber: editPhoneNumber,
           referrer: editReferrer || undefined,
           eventDate: editEventDate || undefined,
           becameMember: editBecameMember,
@@ -150,6 +160,41 @@ function GuestsPageInner() {
     } catch (error) {
       const message = error instanceof Error ? error.message : "更新失敗";
       showNotification(message, "error");
+    }
+  };
+
+  const openAddGuest = () => {
+    setNewName("");
+    setNewProfession("");
+    setNewPhoneNumber("");
+    setNewReferrer("");
+    setNewEventDate(selectedEventDate !== "all" ? selectedEventDate : eventDates[0] ?? "");
+    setShowAddGuest(true);
+  };
+
+  const handleCreateGuest = async () => {
+    const name = newName.trim();
+    const profession = newProfession.trim();
+    if (!name || !profession || !newEventDate) {
+      showNotification("請填寫姓名、專業領域和活動日期", "error");
+      return;
+    }
+    setCreatingGuest(true);
+    try {
+      await createGuest({
+        name,
+        profession,
+        phoneNumber: newPhoneNumber.trim() || undefined,
+        referrer: newReferrer.trim() || undefined,
+        eventDate: newEventDate,
+      });
+      showNotification(`已新增嘉賓 ${name}`, "success");
+      setShowAddGuest(false);
+      await fetchGuests();
+    } catch (error) {
+      showNotification(error instanceof Error ? error.message : "新增嘉賓失敗", "error");
+    } finally {
+      setCreatingGuest(false);
     }
   };
 
@@ -554,6 +599,12 @@ function GuestsPageInner() {
                 清除篩選 Clear filters
               </button>
             )}
+            <button type="button" className="button" onClick={openAddGuest}>
+              ➕ 新增嘉賓
+            </button>
+            <Link to={adminHref("/admin/import?type=guest")} className="ghost-button">
+              📤 匯入 CSV
+            </Link>
             <button
               type="button"
               className="button"
@@ -616,6 +667,7 @@ function GuestsPageInner() {
                   </th>
                   <th style={{ padding: "1rem", textAlign: "left" }}>姓名</th>
                   <th style={{ padding: "1rem", textAlign: "left" }}>專業領域</th>
+                  <th style={{ padding: "1rem", textAlign: "left" }}>電話</th>
                   <th style={{ padding: "1rem", textAlign: "left" }}>邀請人</th>
                   <th style={{ padding: "1rem", textAlign: "left" }} aria-sort={dateSort === "asc" ? "ascending" : "descending"}>
                     <button
@@ -643,6 +695,7 @@ function GuestsPageInner() {
                     </td>
                     <td style={{ padding: "1rem", fontWeight: 500 }}>{guest.name}</td>
                     <td style={{ padding: "1rem" }}>{guest.profession}</td>
+                    <td style={{ padding: "1rem" }}>{guest.phoneNumber || "-"}</td>
                     <td style={{ padding: "1rem" }}>{guest.referrer || "-"}</td>
                     <td style={{ padding: "1rem" }}>
                       <div>{guest.eventDate || "-"}</div>
@@ -760,6 +813,20 @@ function GuestsPageInner() {
             </div>
 
             <div className="form-group" style={{ marginBottom: "1.5rem" }}>
+              <label htmlFor="edit-phone-number">電話 Phone Number</label>
+              <input
+                id="edit-phone-number"
+                type="tel"
+                inputMode="tel"
+                className="input-field"
+                value={editPhoneNumber}
+                onChange={(e) => setEditPhoneNumber(e.target.value)}
+                placeholder="選填 Optional"
+                style={{ width: "100%" }}
+              />
+            </div>
+
+            <div className="form-group" style={{ marginBottom: "1.5rem" }}>
               <label htmlFor="edit-referrer">邀請人 Referrer</label>
               <input
                 id="edit-referrer"
@@ -803,6 +870,66 @@ function GuestsPageInner() {
               </button>
               <button className="button" onClick={handleSaveEdit}>
                 ✅ 儲存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAddGuest && (
+        <div
+          className="modal-overlay"
+          role="presentation"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+          onClick={() => !creatingGuest && setShowAddGuest(false)}
+        >
+          <div
+            className="modal-content"
+            role="dialog"
+            aria-labelledby="add-guest-title"
+            style={{
+              background: "var(--bg)",
+              padding: "2rem",
+              borderRadius: "12px",
+              maxWidth: "500px",
+              width: "90%",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="add-guest-title" style={{ marginTop: 0 }}>新增嘉賓</h3>
+            <div className="form-group" style={{ marginBottom: "1rem" }}>
+              <label htmlFor="new-guest-name">姓名 Name *</label>
+              <input id="new-guest-name" className="input-field" value={newName} onChange={(e) => setNewName(e.target.value)} style={{ width: "100%" }} />
+            </div>
+            <div className="form-group" style={{ marginBottom: "1rem" }}>
+              <label htmlFor="new-guest-profession">專業領域 Profession *</label>
+              <input id="new-guest-profession" className="input-field" value={newProfession} onChange={(e) => setNewProfession(e.target.value)} style={{ width: "100%" }} />
+            </div>
+            <div className="form-group" style={{ marginBottom: "1rem" }}>
+              <label htmlFor="new-guest-phone">電話 Phone Number</label>
+              <input id="new-guest-phone" type="tel" inputMode="tel" className="input-field" value={newPhoneNumber} onChange={(e) => setNewPhoneNumber(e.target.value)} style={{ width: "100%" }} />
+            </div>
+            <div className="form-group" style={{ marginBottom: "1rem" }}>
+              <label htmlFor="new-guest-referrer">邀請人 Referrer</label>
+              <input id="new-guest-referrer" className="input-field" value={newReferrer} onChange={(e) => setNewReferrer(e.target.value)} style={{ width: "100%" }} />
+            </div>
+            <div className="form-group" style={{ marginBottom: "1.5rem" }}>
+              <label htmlFor="new-guest-event-date">活動日期 Event Date *</label>
+              <input id="new-guest-event-date" type="date" className="input-field" value={newEventDate} onChange={(e) => setNewEventDate(e.target.value)} style={{ width: "100%" }} />
+            </div>
+            <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+              <button type="button" className="ghost-button" disabled={creatingGuest} onClick={() => setShowAddGuest(false)}>取消</button>
+              <button type="button" className="button" disabled={creatingGuest} onClick={() => void handleCreateGuest()}>
+                {creatingGuest ? "新增中…" : "✅ 新增"}
               </button>
             </div>
           </div>

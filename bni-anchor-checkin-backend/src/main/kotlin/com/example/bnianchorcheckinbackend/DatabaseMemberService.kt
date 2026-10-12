@@ -70,6 +70,7 @@ class DatabaseMemberService(
             mapOf(
                 "name" to guest.name,
                 "profession" to guest.profession,
+                "phoneNumber" to (guest.phoneNumber ?: ""),
                 "referrer" to (guest.referrer ?: ""),
                 "eventDate" to (guest.eventDate ?: ""),
                 "ltTerm" to (guest.ltTerm?.toString() ?: ""),
@@ -88,6 +89,7 @@ class DatabaseMemberService(
             mapOf(
                 "name" to guest.name,
                 "profession" to guest.profession,
+                "phoneNumber" to (guest.phoneNumber ?: ""),
                 "referrer" to (guest.referrer ?: ""),
                 "eventDate" to (guest.eventDate ?: ""),
                 "ltTerm" to (guest.ltTerm?.toString() ?: ""),
@@ -191,7 +193,7 @@ class DatabaseMemberService(
     fun createMember(
         name: String,
         profession: String,
-        standing: MemberStanding = MemberStanding.GREEN,
+        standing: MemberStanding = MemberStanding.BLACK,
         professionCode: String = "A",
         membershipId: String? = null,
         position: String = "Member",
@@ -241,6 +243,7 @@ class DatabaseMemberService(
         currentEventDate: String? = null,
         newName: String? = null,
         profession: String? = null,
+        phoneNumber: String? = null,
         referrer: String? = null,
         eventDate: String? = null,
         chapterTag: String? = null,
@@ -266,6 +269,7 @@ class DatabaseMemberService(
             guest.name = newName
         }
         profession?.let { guest.profession = it }
+        phoneNumber?.let { guest.phoneNumber = it.trim().takeIf(String::isNotEmpty) }
         referrer?.let { guest.referrer = it }
         eventDate?.let { guest.eventDate = it }
         becameMember?.let { guest.becameMember = it }
@@ -277,6 +281,7 @@ class DatabaseMemberService(
     fun createGuest(
         name: String,
         profession: String,
+        phoneNumber: String?,
         referrer: String?,
         eventDate: String,
         chapterTag: String? = null,
@@ -286,6 +291,7 @@ class DatabaseMemberService(
         val existing = guestRepository.findByChapterIdAndNameIgnoreCaseAndEventDateTrimmed(chapterId, name, eventDate).orElse(null)
         if (existing != null) {
             existing.profession = profession
+            existing.phoneNumber = phoneNumber
             existing.referrer = referrer
             existing.ltTerm = GuestLtTerm.number(existing.eventDate)
             return guestRepository.save(existing)
@@ -295,6 +301,7 @@ class DatabaseMemberService(
                 chapterId = chapterId,
                 name = name,
                 profession = profession,
+                phoneNumber = phoneNumber,
                 referrer = referrer,
                 eventDate = eventDate,
                 ltTerm = GuestLtTerm.number(eventDate),

@@ -171,7 +171,7 @@ function MembersPageInner() {
 
     try {
       await createMember(
-        { name, profession, professionCode: newProfessionCode },
+        { name, profession, professionCode: newProfessionCode, standing: "BLACK" },
         chapterTag
       );
       showNotification(`已新增會員 ${name}`, "success");
@@ -225,6 +225,7 @@ function MembersPageInner() {
     const label = getStandingLabel(standing);
     if (!name) return label;
     const pts = trafficLightPtsForName(name, ptsByName);
+    if (pts == null && standing === "BLACK") return `${label} · 0 分 · 新人`;
     return pts == null ? label : `${label} · ${pts} 分`;
   };
 
@@ -480,7 +481,7 @@ function MembersPageInner() {
 
             <div className="form-group" style={{ marginBottom: "1.5rem" }}>
               <label>會員狀態 Member Standing</label>
-              {renderStandingReadOnly("GREEN")}
+              {renderStandingReadOnly("BLACK", "新人")}
             </div>
 
             <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>

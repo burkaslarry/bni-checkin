@@ -1,3 +1,5 @@
+import { beginApiRequest } from "./lib/apiLoading";
+
 /** Attendance summary for a member across events. */
 export type MemberAttendance = {
   eventName: string;
@@ -166,14 +168,20 @@ export function normalizeApiEventId(eventId?: number | string | null): number | 
  * @param {number} [timeoutMs]
  * @returns {Promise<Response>}
  */
-function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = FETCH_TIMEOUT_MS): Promise<Response> {
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = FETCH_TIMEOUT_MS): Promise<Response> {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
+  const endLoading = beginApiRequest();
   const headers = new Headers(options.headers);
   if (clientAuthToken) {
     headers.set("X-Client-Token", clientAuthToken);
   }
-  return globalThis.fetch(url, { ...options, headers, signal: options.signal ?? controller.signal }).finally(() => clearTimeout(id));
+  try {
+    return await globalThis.fetch(url, { ...options, headers, signal: options.signal ?? controller.signal });
+  } finally {
+    clearTimeout(id);
+    endLoading();
+  }
 }
 
 const RETRY_DELAYS_MS = [0, 1000, 3000];
@@ -607,6 +615,28 @@ export async function markAttendanceAbsent(
       eventDate: eventDate.trim(),
       removeCheckIns: [name.trim()],
       addCheckIns: []
+    }),
+    mode: "cors"
+  });
+  return handleResponse(response);
+}
+
+/**
+ * [F009][S905] Event Attendance Correction
+ * Updates one member's check-in time through the existing attendance correction boundary.
+ */
+export async function updateAttendanceCheckInTime(
+  eventDate: string,
+  name: string,
+  time: string
+): Promise<{ status: string; added?: number; warnings?: string[] }> {
+  const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/events/attendance-corrections`), {
+    method: "POST",
+    headers: jsonHeaders,
+    body: JSON.stringify({
+      eventDate: eventDate.trim(),
+      removeCheckIns: [],
+      addCheckIns: [{ name: name.trim(), time: time.trim() }]
     }),
     mode: "cors"
   });
@@ -1478,6 +1508,7 @@ export async function updateMember(
 export type UpdateGuestRequest = {
   name?: string;
   profession?: string;
+  phoneNumber?: string;
   referrer?: string;
   eventDate?: string;
   becameMember?: boolean;
@@ -1486,6 +1517,7 @@ export type UpdateGuestRequest = {
 export type CreateGuestRequest = {
   name: string;
   profession: string;
+  phoneNumber?: string;
   referrer?: string;
   eventDate?: string;
   becameMember?: boolean;
