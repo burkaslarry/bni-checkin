@@ -83,6 +83,7 @@ graph TD
 | `F007` | Environment & Deployment / 環境及部署 | `S701` env load, `S702` datasource profile, `S703` startup, `S704` health/logs | `.env.example`, `run.sh`, `scripts/run_local_with_remote_db.sh`, Spring profile files |
 | `F008` | Member Management / 會員管理 | `S801` list by category, `S802` edit name/profession, `S803` create newcomer as black light with 0 points | `MembersPage.tsx`, `memberCategories.ts`, `MemberManagementController.kt`, `DatabaseMemberService.kt` |
 | `F011` | API Loading Feedback / API 載入提示 | `S1101` count concurrent requests, `S1102` show one blocking spinner, `S1103` close after all calls finish | `apiLoading.ts`, `ApiLoadingDialog.tsx`, `api.ts` |
+| `F012` | Attendance Email Settings / 出席電郵設定 | `S1201` persist chapter settings, `S1202` read settings, `S1203` save up to three recipients | `AttendanceEmailSettingsService.kt`, `AttendanceEmailSettingsController.kt`, `EventManagementPanel.tsx` |
 | `F010` | Multi-Chapter / 多 chapter | `S1001` resolve chapter, `S1002` client login, `S1003` scope API/DB, `S1004` bulk import by chapter | `chapterContext.tsx`, `ChapterService.kt`, `migrations/add_chapters_and_member_chapter_id.sql`, `ImportPage.tsx` |
 
 ## Production | 正式環境
@@ -354,6 +355,8 @@ Apply DB migrations for chapters: `migrations/add_chapters_and_member_chapter_id
 - Member attendance supports optional **substitute_for** (替代人): recorded after check-in in the success popup, stored on `bni_anchor_attendances`, shown on `/report`, and exported in CSV column `替代人`. Members can be marked absent from the report records table.
 - **Admin → 嘉賓管理** supports adding and editing guests with phone numbers, guest CSV import/export, **篩選活動 / Filter by Event**, and **篩選屆數 / Filter by LT** (`lt_term`, shown as 第 N 屆 LT). Name and phone search work with either filter. Export CSV follows the visible list and includes phone number.
 - All shared API calls display one loading dialog; concurrent requests keep it visible until every request completes.
+- **Admin → 活動管理** can set 1–3 chapter-specific recipients for Resend attendance CSV emails. Anchor defaults to `Raymondkuo88@gmail.com`; settings persist in `bni_eventxp_chapter_email_settings`.
+- Automatic attendance CSV email is scheduled for **11:00 HKT on the event date**. Manual send and resend remain immediate.
 - Member sync scripts: `scripts/import-members-from-poster-2026-07.py`, `scripts/sync-local-members-from-poster.sh`, `scripts/update-production-members-2026-07-10.py`.
 - Chapter member scripts: `scripts/convert-member-csv-to-chapter-format.py`, `scripts/import-member-csv-chapter.py`.
 - Operational scripts: `scripts/cleanup-test-events.sh` (soft-delete events whose name contains `TEST`), `scripts/deploy-vercel-production.sh` (SRAA pre-deploy gate).

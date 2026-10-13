@@ -9,7 +9,9 @@ import {
   deleteEvent,
   normalizeApiEventId,
   sendAttendanceEmail,
-  resetAttendanceEmail
+  resetAttendanceEmail,
+  getAttendanceEmailSettings,
+  updateAttendanceEmailSettings
 } from "../api";
 import { EventSummaryCard } from "./EventSummaryCard";
 import { EventAttendanceDetailModal } from "./EventAttendanceDetailModal";
@@ -43,6 +45,8 @@ export const EventManagementPanel = ({ onNotify, onNavigateToGenerate }: EventMa
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [gridEvent, setGridEvent] = useState<EventData | null>(null);
   const [editEvent, setEditEvent] = useState<EventData | null>(null);
+  const [emailRecipients, setEmailRecipients] = useState<string[]>(["Raymondkuo88@gmail.com"]);
+  const [savingEmailRecipients, setSavingEmailRecipients] = useState(false);
 
   const fetchCurrentEvent = useCallback(async () => {
     setLoading(true);
@@ -62,6 +66,12 @@ export const EventManagementPanel = ({ onNotify, onNavigateToGenerate }: EventMa
   useEffect(() => {
     fetchCurrentEvent();
   }, [fetchCurrentEvent]);
+
+  useEffect(() => {
+    void getAttendanceEmailSettings()
+      .then((result) => setEmailRecipients(result.recipients.length ? result.recipients : ["Raymondkuo88@gmail.com"]))
+      .catch(() => setEmailRecipients(["Raymondkuo88@gmail.com"]));
+  }, []);
 
   useEffect(() => {
     if (!loading && !currentEvent && allEvents.length === 0 && onNavigateToGenerate) {
@@ -208,8 +218,8 @@ export const EventManagementPanel = ({ onNotify, onNavigateToGenerate }: EventMa
     if (
       !window.confirm(
         alreadySent
-          ? `重新寄送出席 CSV 電郵？\n\n活動：${ev.name}\n日期：${ev.date}\n上次寄出：${ev.attendanceEmailSentAt}\n\n會寄到 ATTENDANCE_EMAIL_TO。`
-          : `寄送出席 CSV 電郵？\n\n活動：${ev.name}\n日期：${ev.date}\n\n會寄到 ATTENDANCE_EMAIL_TO（預設 lo.wailun5@gmail.com）。`
+          ? `重新寄送出席 CSV 電郵？\n\n活動：${ev.name}\n日期：${ev.date}\n上次寄出：${ev.attendanceEmailSentAt}\n\n收件人：${emailRecipients.join(", ")}`
+          : `寄送出席 CSV 電郵？\n\n活動：${ev.name}\n日期：${ev.date}\n\n收件人：${emailRecipients.join(", ")}`
       )
     ) {
       return;
@@ -227,6 +237,20 @@ export const EventManagementPanel = ({ onNotify, onNavigateToGenerate }: EventMa
       onNotify("寄送失敗: " + (e instanceof Error ? e.message : "未知錯誤"), "error");
     } finally {
       setEmailingEventId(null);
+    }
+  };
+
+  const handleSaveEmailRecipients = async () => {
+    const recipients = emailRecipients.map((value) => value.trim()).filter(Boolean);
+    setSavingEmailRecipients(true);
+    try {
+      const result = await updateAttendanceEmailSettings(recipients);
+      setEmailRecipients(result.recipients);
+      onNotify(`已儲存 ${result.recipients.length} 位 CSV 收件人`, "success");
+    } catch (e) {
+      onNotify("儲存收件人失敗: " + (e instanceof Error ? e.message : "未知錯誤"), "error");
+    } finally {
+      setSavingEmailRecipients(false);
     }
   };
 
@@ -265,6 +289,56 @@ export const EventManagementPanel = ({ onNotify, onNavigateToGenerate }: EventMa
         aria-hidden
         onChange={(e) => void handleImportFileChange(e)}
       />
+
+      <div className="card" style={{ marginBottom: "1rem", padding: "1rem" }}>
+        <h3 style={{ marginTop: 0 }}>✉️ Attendance CSV 收件人</h3>
+        <p className="hint">Resend 寄出或重新寄出 CSV 時使用；每個 chapter 可設定 1 至 3 位。</p>
+        <div style={{ display: "grid", gap: "0.6rem", maxWidth: "560px" }}>
+          {emailRecipients.map((recipient, index) => (
+            <div key={index} style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+              <input
+                type="email"
+                className="input-field"
+                aria-label={`CSV 收件人 ${index + 1}`}
+                value={recipient}
+                onChange={(e) =>
+                  setEmailRecipients((current) => current.map((value, i) => (i === index ? e.target.value : value)))
+                }
+                placeholder="name@example.com"
+                style={{ flex: 1 }}
+              />
+              {emailRecipients.length > 1 && (
+                <button
+                  type="button"
+                  className="ghost-button"
+                  aria-label={`移除收件人 ${index + 1}`}
+                  onClick={() => setEmailRecipients((current) => current.filter((_, i) => i !== index))}
+                >
+                  移除
+                </button>
+              )}
+            </div>
+          ))}
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              className="ghost-button"
+              disabled={emailRecipients.length >= 3 || savingEmailRecipients}
+              onClick={() => setEmailRecipients((current) => [...current, ""])}
+            >
+              ➕ 加收件人（最多 3 位）
+            </button>
+            <button
+              type="button"
+              className="button"
+              disabled={savingEmailRecipients}
+              onClick={() => void handleSaveEmailRecipients()}
+            >
+              {savingEmailRecipients ? "儲存中…" : "儲存收件人"}
+            </button>
+          </div>
+        </div>
+      </div>
 
       {gridEvent && (
         <EventAttendanceDetailModal

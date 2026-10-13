@@ -674,6 +674,31 @@ export type SendAttendanceEmailResult = {
   recipient?: string;
 };
 
+export type AttendanceEmailSettings = {
+  status: string;
+  recipients: string[];
+  message?: string;
+};
+
+/** [F012][S1202] Read the active chapter's attendance CSV email recipients. */
+export async function getAttendanceEmailSettings(): Promise<AttendanceEmailSettings> {
+  const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/attendance-email/settings`), {
+    mode: "cors"
+  });
+  return handleResponse(response);
+}
+
+/** [F012][S1203] Save one to three attendance CSV email recipients. */
+export async function updateAttendanceEmailSettings(recipients: string[]): Promise<AttendanceEmailSettings> {
+  const response = await fetchWithTimeout(withChapterQuery(`${API_BASE}/api/attendance-email/settings`), {
+    method: "PUT",
+    headers: jsonHeaders,
+    body: JSON.stringify({ recipients }),
+    mode: "cors"
+  });
+  return handleResponse(response);
+}
+
 /**
  * Email attendance CSV for an event via Resend (admin test / manual).
  * POST /api/events/{eventId}/send-attendance-email?force=true

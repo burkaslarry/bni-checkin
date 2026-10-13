@@ -38,9 +38,9 @@ class EventAttendanceEmailService(
     private val resendEmailService: ResendEmailService,
     private val eventDbService: EventDbService,
     private val chapterService: ChapterService,
+    private val attendanceEmailSettingsService: AttendanceEmailSettingsService,
     @Value("\${attendance.email.from:EventXP <info@innovatexp.co>}") private val fromAddress: String = "EventXP <info@innovatexp.co>",
-    @Value("\${attendance.email.to:lo.wailun5@gmail.com}") private val toAddress: String = "lo.wailun5@gmail.com",
-    @Value("\${attendance.email.grace-minutes:5}") private val graceMinutes: Long = 5,
+    @Value("\${attendance.email.send-time:11:00}") private val sendTime: String = "11:00",
     /** Only auto-email events that ended within this lookback window (avoids flooding old history). */
     @Value("\${attendance.email.lookback-hours:12}") private val lookbackHours: Long = 12
 ) {
@@ -51,7 +51,7 @@ class EventAttendanceEmailService(
     fun isReady(): Boolean = resendEmailService.isConfigured()
 
     /**
-     * Find ACTIVE events whose end time (+ grace) has passed, that have not been emailed yet,
+     * Find ACTIVE events whose scheduled 11:00 HKT send time has passed, that have not been emailed yet,
      * and that ended within [lookbackHours] (so historical events are never bulk-emailed).
      */
     fun findEventsDueForAttendanceEmail(now: ZonedDateTime = ZonedDateTime.now(hkt)): List<com.example.bnianchorcheckinbackend.entities.Event> {
@@ -65,9 +65,9 @@ class EventAttendanceEmailService(
             val endBase = event.endTime ?: event.startTime.plusHours(2)
             val endDate = if (!endBase.isAfter(event.startTime)) event.eventDate.plusDays(1) else event.eventDate
             val endAt = ZonedDateTime.of(endDate, endBase, hkt)
-            val dueAt = endAt.plusMinutes(graceMinutes)
-            // Ended recently enough, and past grace window
-            !endAt.isBefore(lookbackStart) && !now.isBefore(dueAt) && id > 0
+            val dueAt = ZonedDateTime.of(event.eventDate, LocalTime.parse(sendTime, hhmm), hkt)
+            // Event ended recently enough, and the configured send time has arrived.
+            !endAt.isBefore(lookbackStart) && !now.isBefore(endAt) && !now.isBefore(dueAt) && id > 0
         }
     }
 
@@ -101,7 +101,7 @@ class EventAttendanceEmailService(
         }
 
         val csv = csvExportService.buildCsvForEvent(eventId)
-        val recipients = toAddress.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        val recipients = attendanceEmailSettingsService.getSettings(event.chapterId).recipients
         val subject = "EventXP 出席記錄 — ${csv.eventName} (${csv.eventDate})"
         val body = buildString {
             appendLine("活動已結束，附件為出席記錄 CSV。")

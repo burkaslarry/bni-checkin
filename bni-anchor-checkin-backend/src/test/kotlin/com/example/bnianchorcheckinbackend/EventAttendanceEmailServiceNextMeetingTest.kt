@@ -12,6 +12,8 @@ import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.ZoneId
+import java.time.ZonedDateTime
 
 @ExtendWith(MockitoExtension::class)
 class EventAttendanceEmailServiceNextMeetingTest {
@@ -30,6 +32,9 @@ class EventAttendanceEmailServiceNextMeetingTest {
 
     @Mock
     lateinit var chapterService: ChapterService
+
+    @Mock
+    lateinit var attendanceEmailSettingsService: AttendanceEmailSettingsService
 
     private lateinit var service: EventAttendanceEmailService
 
@@ -63,7 +68,8 @@ class EventAttendanceEmailServiceNextMeetingTest {
             csvExportService = csvExportService,
             resendEmailService = resendEmailService,
             eventDbService = eventDbService,
-            chapterService = chapterService
+            chapterService = chapterService,
+            attendanceEmailSettingsService = attendanceEmailSettingsService
         )
         `when`(chapterService.findInfoById(1)).thenReturn(chapter)
     }
@@ -103,6 +109,26 @@ class EventAttendanceEmailServiceNextMeetingTest {
         assertEquals(99, result?.id)
         assertEquals("2026-08-20", result?.date)
         verify(eventDbService).setEventActive(99, true, "anchor")
+    }
+
+    @Test
+    fun `attendance email becomes due at eleven in Hong Kong`() {
+        `when`(eventRepository.findAllByStatusAndDeletedAtIsNullOrderByEventDateAscStartTimeAsc("ACTIVE"))
+            .thenReturn(listOf(finished))
+        val zone = ZoneId.of("Asia/Hong_Kong")
+
+        assertEquals(
+            0,
+            service.findEventsDueForAttendanceEmail(
+                ZonedDateTime.of(finished.eventDate, LocalTime.of(10, 59), zone)
+            ).size
+        )
+        assertEquals(
+            listOf(finished),
+            service.findEventsDueForAttendanceEmail(
+                ZonedDateTime.of(finished.eventDate, LocalTime.of(11, 0), zone)
+            )
+        )
     }
 
     @Test
