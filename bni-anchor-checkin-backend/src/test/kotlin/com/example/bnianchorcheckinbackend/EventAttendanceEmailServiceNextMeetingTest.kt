@@ -9,6 +9,7 @@ import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
+import org.mockito.Mockito.lenient
 import org.mockito.junit.jupiter.MockitoExtension
 import java.time.LocalDate
 import java.time.LocalTime
@@ -71,7 +72,7 @@ class EventAttendanceEmailServiceNextMeetingTest {
             chapterService = chapterService,
             attendanceEmailSettingsService = attendanceEmailSettingsService
         )
-        `when`(chapterService.findInfoById(1)).thenReturn(chapter)
+        lenient().`when`(chapterService.findInfoById(1)).thenReturn(chapter)
     }
 
     @Test
@@ -127,6 +128,28 @@ class EventAttendanceEmailServiceNextMeetingTest {
             listOf(finished),
             service.findEventsDueForAttendanceEmail(
                 ZonedDateTime.of(finished.eventDate, LocalTime.of(11, 0), zone)
+            )
+        )
+    }
+
+    @Test
+    fun `automatic attendance email only includes a current Thursday event`() {
+        val notCurrent = finished.copy(id = 42L, isActive = false)
+        `when`(eventRepository.findAllByStatusAndDeletedAtIsNullOrderByEventDateAscStartTimeAsc("ACTIVE"))
+            .thenReturn(listOf(notCurrent))
+        val zone = ZoneId.of("Asia/Hong_Kong")
+
+        assertEquals(
+            emptyList<Event>(),
+            service.findEventsDueForAttendanceEmail(
+                ZonedDateTime.of(finished.eventDate, LocalTime.of(11, 0), zone)
+            )
+        )
+
+        assertEquals(
+            emptyList<Event>(),
+            service.findEventsDueForAttendanceEmail(
+                ZonedDateTime.of(finished.eventDate.plusDays(1), LocalTime.of(11, 0), zone)
             )
         )
     }

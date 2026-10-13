@@ -356,7 +356,7 @@ Apply DB migrations for chapters: `migrations/add_chapters_and_member_chapter_id
 - **Admin → 嘉賓管理** supports adding and editing guests with phone numbers, guest CSV import/export, **篩選活動 / Filter by Event**, and **篩選屆數 / Filter by LT** (`lt_term`, shown as 第 N 屆 LT). Name and phone search work with either filter. Export CSV follows the visible list and includes phone number.
 - All shared API calls display one loading dialog; concurrent requests keep it visible until every request completes.
 - **Admin → 活動管理** can set 1–3 chapter-specific recipients for Resend attendance CSV emails. Anchor defaults to `Raymondkuo88@gmail.com`; settings persist in `bni_eventxp_chapter_email_settings`.
-- Automatic attendance CSV email is scheduled for **11:00 HKT on the event date**. Manual send and resend remain immediate.
+- Automatic attendance CSV email runs **every Thursday at or after 11:00 HKT** and sends only when that Thursday has a current event. Manual send and resend remain immediate.
 - Member sync scripts: `scripts/import-members-from-poster-2026-07.py`, `scripts/sync-local-members-from-poster.sh`, `scripts/update-production-members-2026-07-10.py`.
 - Chapter member scripts: `scripts/convert-member-csv-to-chapter-format.py`, `scripts/import-member-csv-chapter.py`.
 - Operational scripts: `scripts/cleanup-test-events.sh` (soft-delete events whose name contains `TEST`), `scripts/deploy-vercel-production.sh` (SRAA pre-deploy gate).

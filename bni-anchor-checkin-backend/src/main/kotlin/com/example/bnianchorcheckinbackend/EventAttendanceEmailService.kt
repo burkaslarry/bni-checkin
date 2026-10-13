@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.OffsetDateTime
+import java.time.DayOfWeek
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
@@ -51,13 +52,17 @@ class EventAttendanceEmailService(
     fun isReady(): Boolean = resendEmailService.isConfigured()
 
     /**
-     * Find ACTIVE events whose scheduled 11:00 HKT send time has passed, that have not been emailed yet,
-     * and that ended within [lookbackHours] (so historical events are never bulk-emailed).
+     * On Thursday only, find the current event for today once the configured 11:00 HKT send time
+     * has passed. Historical and non-current events are never included in the automatic send.
      */
     fun findEventsDueForAttendanceEmail(now: ZonedDateTime = ZonedDateTime.now(hkt)): List<com.example.bnianchorcheckinbackend.entities.Event> {
+        if (now.dayOfWeek != DayOfWeek.THURSDAY) return emptyList()
+
+        val today = now.toLocalDate()
         val lookbackStart = now.minusHours(lookbackHours)
         val candidates = eventRepository.findAllByStatusAndDeletedAtIsNullOrderByEventDateAscStartTimeAsc("ACTIVE")
         return candidates.filter { event ->
+            if (!event.isActive || event.eventDate != today) return@filter false
             if (event.attendanceEmailSentAt != null) return@filter false
             val id = event.id ?: return@filter false
             val chapterTag = chapterService.findInfoById(event.chapterId)?.tag
