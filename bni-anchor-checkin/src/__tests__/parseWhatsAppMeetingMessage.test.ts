@@ -159,6 +159,25 @@ describe("parseWhatsAppMeetingMessage", () => {
     expect(result.errors).toEqual([]);
   });
 
+
+  it("discards guest status keycaps and skips empty numbered slots", () => {
+    const message = 'Anchor meeting\n日期：2026年10月22日 (星期四)\n嘉賓名單 (姓名/專業領域/介紹人)\n嘉賓狀態(可選多項)3️⃣ 前BNI會員 2️⃣ 初步瞭解BNI\n嘉賓名單 (姓名/專業領域/介紹人)\n1.3️⃣ Dr Jane Li /牙醫/CK💰\n2.2️⃣ 張女士/民間仙姑/ Raymond 💰\n3.2️⃣黑貓/ 教育及升學/ Richard💰\n4.3️⃣ Dicky Ying / Digital Coupon Exchange / Peter💰\n5.2️⃣Kenji Leung/ 跆拳道教練/ Richard\n觀察員\n1 . Po Man/ Summit/ Richard\n2.\n替代人名單\n (替代人姓名/會員姓名)\n1.';
+    const result = parseWhatsAppMeetingMessage(message);
+    expect(result.eventDate).toBe("2026-10-22");
+    expect(result.errors).toEqual([]);
+    expect(result.substitutes).toEqual([]);
+    expect(result.guests).toEqual([
+      { name: "Dr Jane Li", profession: "牙醫", referrer: "CK", eventDate: "2026-10-22" },
+      { name: "張女士", profession: "民間仙姑", referrer: "Raymond", eventDate: "2026-10-22" },
+      { name: "黑貓", profession: "教育及升學", referrer: "Richard", eventDate: "2026-10-22" },
+      { name: "Dicky Ying", profession: "Digital Coupon Exchange", referrer: "Peter", eventDate: "2026-10-22" },
+      { name: "Kenji Leung", profession: "跆拳道教練", referrer: "Richard", eventDate: "2026-10-22" },
+    ]);
+    expect(result.observers).toEqual([
+      { name: "Po Man", profession: "Summit", eventDate: "2026-10-22" },
+    ]);
+  });
+
   it("exports CSV matching guest and observer templates", () => {
     const result = parseWhatsAppMeetingMessage(SAMPLE_MESSAGE);
     const guestCsv = guestListToCsv(result.guests);

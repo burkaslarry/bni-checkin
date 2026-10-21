@@ -33,14 +33,20 @@ const NBSP_CHARS = /[\u00A0\u202F\u2007]/g;
 const EMOJI_CHARS = /[\u{1F300}-\u{1FAFF}\u2600-\u27BF]/gu;
 /** Numbered list: 1.  1．  1、  1)  1） */
 const LINE_NUMBER_PREFIX = /^\d+\s*[.．、)）]\s*/;
+/** Guest status markers to ignore: 1️⃣ 2️⃣ 3️⃣ 4️⃣ 5️⃣ */
+const GUEST_STATUS_KEYCAPS = /[1-5]\uFE0F?\u20E3/g;
 
 export function normalizeMeetingLine(raw: string): string {
   return raw.replace(INVISIBLE_CHARS, "").replace(NBSP_CHARS, " ").trim();
 }
 
-/** Strip WhatsApp / copy-paste invisible characters and list numbering. */
+/** Strip WhatsApp / copy-paste invisible characters, guest-status keycaps, and list numbering. */
 export function cleanMeetingLine(raw: string): string {
-  return normalizeMeetingLine(raw).replace(LINE_NUMBER_PREFIX, "").trim();
+  return normalizeMeetingLine(raw)
+    .replace(GUEST_STATUS_KEYCAPS, " ")
+    .replace(LINE_NUMBER_PREFIX, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
 }
 
 function isNumberedMeetingLine(line: string): boolean {
@@ -170,6 +176,7 @@ export function parseWhatsAppMeetingMessage(
 
   const guests: ParsedGuest[] = [];
   for (const line of guestLines) {
+    if (!cleanMeetingLine(line)) continue;
     const parts = splitPersonLine(line);
     if (!parts?.name || !parts.profession) {
       errors.push(`無法解析嘉賓行：${cleanMeetingLine(line)}`);
@@ -185,6 +192,7 @@ export function parseWhatsAppMeetingMessage(
 
   const observers: ParsedObserver[] = [];
   for (const line of observerLines) {
+    if (!cleanMeetingLine(line)) continue;
     const parts = splitPersonLine(line);
     if (!parts?.name || !parts.profession) {
       errors.push(`無法解析觀察員行：${cleanMeetingLine(line)}`);
@@ -199,6 +207,7 @@ export function parseWhatsAppMeetingMessage(
 
   const substitutes: ParsedSubstitute[] = [];
   for (const line of substituteLines) {
+    if (!cleanMeetingLine(line)) continue;
     const parts = splitSubstituteLine(line);
     if (!parts) {
       errors.push(`無法解析替代人行：${cleanMeetingLine(line)}`);
